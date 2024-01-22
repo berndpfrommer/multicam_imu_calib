@@ -18,11 +18,29 @@
 
 namespace multicam_imu_calib
 {
+static rclcpp::Logger get_logger() { return (rclcpp::get_logger("camera")); }
+
 void Camera::setPoseWithNoise(
   const gtsam::Pose3 & pose, const gtsam::SharedNoiseModel & noise)
 {
   pose_noise_ = noise;
   pose_ = pose;
 }
-
+void Camera::setIntrinsics(double fx, double fy, double cx, double cy)
+{
+  intrinsics_[0] = fx;
+  intrinsics_[1] = fy;
+  intrinsics_[2] = cx;
+  intrinsics_[3] = cy;
+}
+void Camera::setDistortionModel(const std::string & model)
+{
+  if (model == "radtan" || model == "plumb_bob") {
+    distortion_model_ = RADTAN;
+  } else if (model == "equidistant" || model == "fisheye") {
+    distortion_model_ = EQUIDISTANT;
+  } else {
+    BOMB_OUT("bad distortion model: " << model);
+  }
+}
 }  // namespace multicam_imu_calib

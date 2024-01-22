@@ -47,8 +47,11 @@ endif()
 #
 add_library(${PROJECT_NAME} SHARED
   src/multicam_imu_calib.cpp
+  src/calibration.cpp
   src/camera.cpp
   src/optimizer.cpp
+  src/gtsam_extensions/Cal3DS3.cpp
+  src/gtsam_extensions/Cal3FS2.cpp
 )
 
 ament_target_dependencies(${PROJECT_NAME} ${ament_dependencies})

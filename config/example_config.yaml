@@ -7,9 +7,14 @@
 
 cameras:
   - name: "camera_0"
+    intrinsics:
+      fx: 500.0
+      fy: 600.0
+      cx: 320
+      cy: 240
     distortion_model:
       type: "radtan" # make sure to have this correct
-      distortion_coefficients: [0.0, 0.0, 0.0, 0.0, 0.0]
+      coefficients: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     pose:
       position:
         x: 0.0
@@ -29,9 +34,14 @@ cameras:
         z: 10.0
 
   - name: "camera_1"
+    intrinsics:
+      fx: 700.0
+      fy: 800.0
+      cx: 330
+      cy: 250
     distortion_model:
       type: "radtan" # make sure to have this correct
-      distortion_coefficients: [0.0, 0.0, 0.0, 0.0, 0.0]
+      coefficients: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     pose:
       position:
         x: -0.2

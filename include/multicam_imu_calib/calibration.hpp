@@ -13,36 +13,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef MULTICAM_IMU_CALIB__MULTICAM_IMU_CALIB_HPP_
-#define MULTICAM_IMU_CALIB__MULTICAM_IMU_CALIB_HPP_
+#ifndef MULTICAM_IMU_CALIB__CALIBRATION_HPP_
+#define MULTICAM_IMU_CALIB__CALIBRATION_HPP_
+
+#include <yaml-cpp/yaml.h>
 
 #include <apriltag_msgs/msg/april_tag_detection_array.hpp>
 #include <memory>
+#include <multicam_imu_calib/optimizer.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <string>
 
 namespace multicam_imu_calib
 {
-class Calibration;  // forward decl
-class MulticamIMUCalib : public rclcpp::Node
+class Calibration
 {
 public:
-  explicit MulticamIMUCalib(const rclcpp::NodeOptions & options);
-  ~MulticamIMUCalib();
+  using SharedPtr = std::shared_ptr<Calibration>;
+
+  Calibration();
+  ~Calibration() = default;
+  void readConfigFile(const std::string & file);
 
 private:
-  using ApriltagArray = apriltag_msgs::msg::AprilTagDetectionArray;
-  template <class T>
-  T safe_declare(const std::string & name, const T & def)
-  {
-    try {
-      return (this->declare_parameter<T>(name, def));
-    } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & e) {
-      return (this->get_parameter_or<T>(name, def));
-    }
-  }
+  void parseIntrinsicsAndDistortionModel(
+    const Camera::SharedPtr & cam, const YAML::Node & intr,
+    const YAML::Node & dist);
   // ------------- variables -------------
-  std::shared_ptr<Calibration> calibration_;
+  Optimizer::SharedPtr optimizer_;
 };
 }  // namespace multicam_imu_calib
-#endif  // MULTICAM_IMU_CALIB__MULTICAM_IMU_CALIB_HPP_
+#endif  // MULTICAM_IMU_CALIB__CALIBRATION_HPP_

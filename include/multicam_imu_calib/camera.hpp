@@ -16,6 +16,7 @@
 #ifndef MULTICAM_IMU_CALIB__CAMERA_HPP_
 #define MULTICAM_IMU_CALIB__CAMERA_HPP_
 
+#include <gtsam/base/Vector.h>
 #include <gtsam/geometry/Pose3.h>
 #include <gtsam/linear/NoiseModel.h>
 
@@ -25,23 +26,54 @@
 
 namespace multicam_imu_calib
 {
+enum DistortionModel { INVALID = 0, RADTAN, EQUIDISTANT };
 class Camera
 {
 public:
   using SharedPtr = std::shared_ptr<Camera>;
+  using KMatrix = Eigen::Matrix3d;
   explicit Camera(const std::string & name) : name_(name) {}
+
+  // ------------ getters
+  const auto & getName() const { return (name_); }
+  const auto & getPose() const { return (pose_); }
+  const auto & getPoseNoise() const { return (pose_noise_); }
+  const auto & getCalibNoise() const { return (calibration_noise_); }
+  DistortionModel getDistortionModel() const { return (distortion_model_); }
+  const auto & getDistortionCoefficients() const
+  {
+    return (distortion_coefficients_);
+  }
+  const auto & getIntrinsics() const { return (intrinsics_); }
+  value_key_t getPoseKey() const { return (pose_key_); }
+  value_key_t getCalibKey() const { return (calib_key_); }
+
+  // ------------ setters
   void setPoseWithNoise(
     const gtsam::Pose3 & pose, const gtsam::SharedNoiseModel & noise);
   void setPoseKey(value_key_t k) { pose_key_ = k; }
-  const std::string & getName() const { return (name_); }
-  const gtsam::Pose3 & getPose() const { return (pose_); }
-  const gtsam::SharedNoiseModel & getPoseNoise() const { return (pose_noise_); }
+  void setCalibKey(value_key_t k) { calib_key_ = k; }
+  void setIntrinsics(double fx, double fy, double cx, double cy);
+  void setDistortionCoefficients(const std::vector<double> & dc)
+  {
+    distortion_coefficients_ = dc;
+  }
+  void setCalibNoise(const gtsam::SharedNoiseModel & noise)
+  {
+    calibration_noise_ = noise;
+  }
+  void setDistortionModel(const std::string & model);
 
 private:
   std::string name_;
   gtsam::Pose3 pose_;
   gtsam::SharedNoiseModel pose_noise_;
-  size_t pose_key_{0};
+  gtsam::SharedNoiseModel calibration_noise_;
+  value_key_t pose_key_{0};
+  value_key_t calib_key_{0};
+  std::array<double, 4> intrinsics_{{0, 0, 0, 0}};
+  DistortionModel distortion_model_{INVALID};
+  std::vector<double> distortion_coefficients_;
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__CAMERA_HPP_
