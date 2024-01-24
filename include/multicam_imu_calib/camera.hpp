@@ -33,13 +33,14 @@ public:
   using SharedPtr = std::shared_ptr<Camera>;
   using KMatrix = Eigen::Matrix3d;
   using SharedNoiseModel = gtsam::SharedNoiseModel;
+  using Intrinsics = std::array<double, 4>;
   explicit Camera(const std::string & name) : name_(name) {}
 
   // ------------ getters
   const auto & getName() const { return (name_); }
   const auto & getPose() const { return (pose_); }
   const auto & getPoseNoise() const { return (pose_noise_); }
-  const auto & getCalibNoise() const { return (calibration_noise_); }
+  const auto & getIntrinsicsNoise() const { return (intrinsics_noise_); }
   const auto & getPixelNoise() const { return (pixel_noise_); }
   DistortionModel getDistortionModel() const { return (distortion_model_); }
   const auto & getDistortionCoefficients() const
@@ -48,19 +49,19 @@ public:
   }
   const auto & getIntrinsics() const { return (intrinsics_); }
   value_key_t getPoseKey() const { return (pose_key_); }
-  value_key_t getCalibKey() const { return (calib_key_); }
+  value_key_t getIntrinsicsKey() const { return (intrinsics_key_); }
 
   // ------------ setters
   void setPoseWithNoise(
     const gtsam::Pose3 & pose, const SharedNoiseModel & noise);
   void setPoseKey(value_key_t k) { pose_key_ = k; }
-  void setCalibKey(value_key_t k) { calib_key_ = k; }
+  void setIntrinsicsKey(value_key_t k) { intrinsics_key_ = k; }
   void setIntrinsics(double fx, double fy, double cx, double cy);
   void setDistortionCoefficients(const std::vector<double> & dc)
   {
     distortion_coefficients_ = dc;
   }
-  void setCalibNoise(const SharedNoiseModel & n) { calibration_noise_ = n; }
+  void setIntrinsicsNoise(const SharedNoiseModel & n) { intrinsics_noise_ = n; }
   void setPixelNoise(const SharedNoiseModel & n) { pixel_noise_ = n; }
   void setDistortionModel(const std::string & model);
 
@@ -68,11 +69,11 @@ private:
   std::string name_;
   gtsam::Pose3 pose_;
   SharedNoiseModel pose_noise_;
-  SharedNoiseModel calibration_noise_;
+  SharedNoiseModel intrinsics_noise_;
   SharedNoiseModel pixel_noise_;
   value_key_t pose_key_{0};
-  value_key_t calib_key_{0};
-  std::array<double, 4> intrinsics_{{0, 0, 0, 0}};
+  value_key_t intrinsics_key_{0};
+  Intrinsics intrinsics_{{0, 0, 0, 0}};
   DistortionModel distortion_model_{INVALID};
   std::vector<double> distortion_coefficients_;
 };

@@ -32,18 +32,25 @@ class Optimizer
 {
 public:
   using SharedPtr = std::shared_ptr<Optimizer>;
+  using Intrinsics = Camera::Intrinsics;
   Optimizer();
   void addCamera(const Camera::SharedPtr & cam);
   void optimize();
-  value_key_t addRigPoseEstimate(uint64_t t, const gtsam::Pose3 & pose);
   void setPixelNoise(double noise);
+  void addCameraPose(const Camera::SharedPtr & cam, const gtsam::Pose3 & T_r_c);
+  void addCameraIntrinsics(
+    const Camera::SharedPtr & cam, const Intrinsics & intr,
+    const DistortionModel & distortion_model,
+    const std::vector<double> & distortion_coefficients);
   void addProjectionFactor(
     const Camera::SharedPtr & camera, uint64_t t,
     const std::vector<std::array<double, 3>> & wc,
     const std::vector<std::array<double, 2>> & ic);
+  value_key_t addRigPose(uint64_t t, const gtsam::Pose3 & pose);
+
   gtsam::Pose3 getOptimizedPose(value_key_t k) const;
   template <class T>
-  T getOptimizedCalibration(value_key_t key)
+  T getOptimizedIntrinsics(value_key_t key)
   {
     return (optimized_values_.at<T>(key));
   }

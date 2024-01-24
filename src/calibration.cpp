@@ -16,6 +16,7 @@
 #include <gtsam/geometry/Pose3.h>
 #include <gtsam/linear/NoiseModel.h>
 #include <multicam_imu_calib/gtsam_extensions/Cal3DS3.h>
+#include <multicam_imu_calib/gtsam_extensions/Cal3FS2.h>
 
 #include <multicam_imu_calib/calibration.hpp>
 #include <multicam_imu_calib/logging.hpp>
@@ -64,11 +65,20 @@ void Calibration::parseIntrinsicsAndDistortionModel(
   switch (cam->getDistortionModel()) {
     case RADTAN: {
       Eigen::Matrix<double, 12, 1> sig;
-      const auto noise_dist = Eigen::Matrix<double, 8, 1>::Ones() * 5.0;
+      const auto noise_dist = Eigen::Matrix<double, 8, 1>::Ones() * 0.01;
       // fx,fy,cx,cy, px, py, K1-6
-      const double nf = 10.0;  // noise factor
+      const double nf = 0.1;  // noise factor
       sig << fx * nf, fy * nf, cx * nf, cy * nf, noise_dist;
-      cam->setCalibNoise(gtsam::noiseModel::Diagonal::Sigmas(sig));
+      cam->setIntrinsicsNoise(gtsam::noiseModel::Diagonal::Sigmas(sig));
+      break;
+    }
+    case EQUIDISTANT: {
+      Eigen::Matrix<double, 8, 1> sig;
+      const auto noise_dist = Eigen::Matrix<double, 4, 1>::Ones() * 0.5;
+      // fx,fy,cx,cy, K1-4
+      const double nf = 0.1;  // noise factor
+      sig << fx * nf, fy * nf, cx * nf, cy * nf, noise_dist;
+      cam->setIntrinsicsNoise(gtsam::noiseModel::Diagonal::Sigmas(sig));
       break;
     }
     default:
@@ -125,9 +135,23 @@ void Calibration::readConfigFile(const std::string & file)
     cameras_.push_back(cam);
   }
 }
-void Calibration::addRigPoseEstimate(uint64_t t, const gtsam::Pose3 & pose)
+
+void Calibration::addIntrinsics(
+  const Camera::SharedPtr & cam, const Intrinsics & intr,
+  const std::vector<double> & dist)
 {
-  rig_pose_keys_.push_back(optimizer_->addRigPoseEstimate(t, pose));
+  optimizer_->addCameraIntrinsics(cam, intr, cam->getDistortionModel(), dist);
+}
+
+void Calibration::addCameraPose(
+  const Camera::SharedPtr & cam, const gtsam::Pose3 & T_r_c)
+{
+  optimizer_->addCameraPose(cam, T_r_c);
+}
+
+void Calibration::addRigPose(uint64_t t, const gtsam::Pose3 & pose)
+{
+  rig_pose_keys_.push_back(optimizer_->addRigPose(t, pose));
 }
 
 void Calibration::addProjectionFactor(
@@ -153,19 +177,23 @@ gtsam::Pose3 Calibration::getOptimizedCameraPose(
   return (optimizer_->getOptimizedPose(cam->getPoseKey()));
 }
 
-std::array<double, 4> Calibration::getOptimizedIntrinsics(
+Calibration::Intrinsics Calibration::getOptimizedIntrinsics(
   const Camera::SharedPtr & cam) const
 {
-  std::array<double, 4> intr;
+  Intrinsics intr;
   switch (cam->getDistortionModel()) {
     case RADTAN: {
       const auto calib =
-        optimizer_->getOptimizedCalibration<Cal3DS3>(cam->getCalibKey());
+        optimizer_->getOptimizedIntrinsics<Cal3DS3>(cam->getIntrinsicsKey());
       const auto v = calib.vector();
-      intr[0] = v(0);
-      intr[1] = v(1);
-      intr[2] = v(2);
-      intr[3] = v(3);
+      intr = {v(0), v(1), v(2), v(3)};
+      break;
+    }
+    case EQUIDISTANT: {
+      const auto calib =
+        optimizer_->getOptimizedIntrinsics<Cal3FS2>(cam->getIntrinsicsKey());
+      const auto v = calib.vector();
+      intr = {v(0), v(1), v(2), v(3)};
       break;
     }
     default:
@@ -181,7 +209,16 @@ std::vector<double> Calibration::getOptimizedDistortionCoefficients(
   switch (cam->getDistortionModel()) {
     case RADTAN: {
       const auto calib =
-        optimizer_->getOptimizedCalibration<Cal3DS3>(cam->getCalibKey());
+        optimizer_->getOptimizedIntrinsics<Cal3DS3>(cam->getIntrinsicsKey());
+      const auto v = calib.vector();
+      for (size_t i = 4; i < static_cast<size_t>(v.size()); i++) {
+        dist.push_back(v(i));
+      }
+      break;
+    }
+    case EQUIDISTANT: {
+      const auto calib =
+        optimizer_->getOptimizedIntrinsics<Cal3FS2>(cam->getIntrinsicsKey());
       const auto v = calib.vector();
       for (size_t i = 4; i < static_cast<size_t>(v.size()); i++) {
         dist.push_back(v(i));

@@ -14,8 +14,8 @@ cameras:
       cx: 500
       cy: 500
     distortion_model:
-      type: "radtan" # make sure to have this correct
-      coefficients: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      type: "equidistant" # make sure to have this correct
+      coefficients: [0.0, 0.0, 0.0, 0.0] # [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     pose:
       position:
         x: 0.0

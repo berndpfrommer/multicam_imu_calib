@@ -143,10 +143,16 @@ public:
   /// @{
 
   /// Given delta vector, update calibration
-  Cal3FS2 retract(const gtsam::Vector & d) const;
+  inline Cal3FS2 retract(const gtsam::Vector & d) const
+  {
+    return Cal3FS2(vector() + d);
+  }
 
   /// Given a different calibration, calculate update to obtain it
-  gtsam::Vector localCoordinates(const Cal3FS2 & T2) const;
+  gtsam::Vector localCoordinates(const Cal3FS2 & T2) const
+  {
+    return T2.vector() - vector();
+  }
 
   /// Return dimensions of calibration manifold object
   virtual size_t dim() const { return dimension; }

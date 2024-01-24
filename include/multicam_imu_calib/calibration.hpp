@@ -31,13 +31,17 @@ class Calibration
 {
 public:
   using SharedPtr = std::shared_ptr<Calibration>;
-
+  using Intrinsics = Camera::Intrinsics;
   Calibration();
   ~Calibration() = default;
   void readConfigFile(const std::string & file);
   const auto & getCameras() { return (cameras_); }
   void runOptimizer();
-  void addRigPoseEstimate(uint64_t t, const gtsam::Pose3 & pose);
+  void addIntrinsics(
+    const Camera::SharedPtr & cam, const Intrinsics & intr,
+    const std::vector<double> & dist);
+  void addCameraPose(const Camera::SharedPtr & cam, const gtsam::Pose3 & T_r_c);
+  void addRigPose(uint64_t t, const gtsam::Pose3 & pose);
   void addProjectionFactor(
     const Camera::SharedPtr & camera, uint64_t t,
     const std::vector<std::array<double, 3>> & wc,
@@ -45,8 +49,7 @@ public:
 
   std::vector<gtsam::Pose3> getOptimizedRigPoses() const;
   gtsam::Pose3 getOptimizedCameraPose(const Camera::SharedPtr & cam) const;
-  std::array<double, 4> getOptimizedIntrinsics(
-    const Camera::SharedPtr & cam) const;
+  Intrinsics getOptimizedIntrinsics(const Camera::SharedPtr & cam) const;
   std::vector<double> getOptimizedDistortionCoefficients(
     const Camera::SharedPtr & cam) const;
 

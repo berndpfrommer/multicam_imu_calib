@@ -13,9 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <gtsam/nonlinear/LevenbergMarquardtOptimizer.h>
 #include <gtsam/slam/GeneralSFMFactor.h>
 #include <gtsam/slam/expressions.h>
 #include <multicam_imu_calib/gtsam_extensions/Cal3DS3.h>
+#include <multicam_imu_calib/gtsam_extensions/Cal3FS2.h>
 
 #include <multicam_imu_calib/logging.hpp>
 #include <multicam_imu_calib/optimizer.hpp>
@@ -36,33 +38,50 @@ Optimizer::Optimizer()
   isam2_ = std::make_shared<gtsam::ISAM2>(p);
 }
 
-void Optimizer::addCamera(const Camera::SharedPtr & cam)
+void Optimizer::addCameraPose(
+  const Camera::SharedPtr & cam, const gtsam::Pose3 & T_r_c)
 {
-  cameras_.insert({cam->getName(), cam});
   const auto pose_key = getNextKey();
   cam->setPoseKey(pose_key);
-  values_.insert(pose_key, cam->getPose());
-  graph_.push_back(gtsam::PriorFactor<gtsam::Pose3>(
-    pose_key, cam->getPose(), cam->getPoseNoise()));
-  // add variable with camera calibration and prior
-  const auto calib_key = getNextKey();
-  cam->setCalibKey(calib_key);
-  switch (cam->getDistortionModel()) {
+  values_.insert(pose_key, T_r_c);
+  graph_.push_back(
+    gtsam::PriorFactor<gtsam::Pose3>(pose_key, T_r_c, cam->getPoseNoise()));
+}
+
+void Optimizer::addCameraIntrinsics(
+  const Camera::SharedPtr & cam, const Intrinsics & intr,
+  const DistortionModel & distortion_model,
+  const std::vector<double> & distortion_coefficients)
+{
+  const auto intr_key = getNextKey();
+  cam->setIntrinsicsKey(intr_key);
+  switch (distortion_model) {
     case RADTAN: {
       // fx, fy, u, v, p1, p2, k[1...6] (opencv)
-      const auto & dc = cam->getDistortionCoefficients();
+      const auto & dc = distortion_coefficients;
       if (dc.size() != 8) {
         BOMB_OUT("distortion model must have 8 coefficients!");
       }
       // coeff 2, 3 are p1, p2
       std::array<double, 6> d = {dc[0], dc[1], dc[4], dc[5], dc[6], dc[7]};
-      const auto & intr = cam->getIntrinsics();
-      Cal3DS3 calib_value(
+      Cal3DS3 intr_value(
         intr[0], intr[1], intr[2], intr[3], dc[2], dc[3], d.data());
-      values_.insert(calib_key, calib_value);
+      values_.insert(intr_key, intr_value);
       graph_.push_back(gtsam::PriorFactor<Cal3DS3>(
-        calib_key, calib_value, cam->getCalibNoise()));
-      // graph_.addPrior(calib_key, cam->getCalibNoise());
+        intr_key, intr_value, cam->getIntrinsicsNoise()));
+      break;
+    }
+    case EQUIDISTANT: {
+      // fx, fy, u, v, k[1...6] (opencv)
+      const auto & dc = distortion_coefficients;
+      if (dc.size() != 4) {
+        BOMB_OUT("distortion model must have 4 coefficients!");
+      }
+      Cal3FS2 intr_value(
+        intr[0], intr[1], intr[2], intr[3], dc[0], dc[1], dc[2], dc[3]);
+      values_.insert(intr_key, intr_value);
+      graph_.push_back(gtsam::PriorFactor<Cal3FS2>(
+        intr_key, intr_value, cam->getIntrinsicsNoise()));
       break;
     }
     default:
@@ -70,7 +89,12 @@ void Optimizer::addCamera(const Camera::SharedPtr & cam)
   }
 }
 
-value_key_t Optimizer::addRigPoseEstimate(uint64_t t, const gtsam::Pose3 & pose)
+void Optimizer::addCamera(const Camera::SharedPtr & cam)
+{
+  cameras_.insert({cam->getName(), cam});
+}
+
+value_key_t Optimizer::addRigPose(uint64_t t, const gtsam::Pose3 & pose)
 {
   if (t <= current_rig_pose_time_) {
     BOMB_OUT("repeated or late time for rig pose initialization!");
@@ -107,9 +131,29 @@ void Optimizer::addProjectionFactor(
     gtsam::Expression<gtsam::Point2> xp =
       gtsam::project(gtsam::transformTo(T_r_c, gtsam::transformTo(T_w_r, X_w)));
     switch (cam->getDistortionModel()) {
+        // #define FIX_INTRINSICS
       case RADTAN: {
-        gtsam::Expression<Cal3DS3> cK(cam->getCalibKey());
+#ifdef FIX_INTRINSICS
+        // fx, fy, u, v, p1, p2, k[1...6] (opencv)
+        const auto intr = cam->getIntrinsics();
+        const auto & dc = cam->getDistortionCoefficients();
+        if (dc.size() != 8) {
+          BOMB_OUT("distortion model must have 8 coefficients!");
+        }
+        std::array<double, 6> d = {dc[0], dc[1], dc[4], dc[5], dc[6], dc[7]};
+        const Cal3DS3 calib(
+          intr[0], intr[1], intr[2], intr[3], dc[2], dc[3], d.data());
+        gtsam::Expression<Cal3DS3> cK(calib);
+#else
+        gtsam::Expression<Cal3DS3> cK(cam->getIntrinsicsKey());
+#endif
         gtsam::Expression<gtsam::Point2> predict(cK, &Cal3DS3::uncalibrate, xp);
+        graph_.addExpressionFactor(predict, img_point, cam->getPixelNoise());
+        break;
+      }
+      case EQUIDISTANT: {
+        gtsam::Expression<Cal3FS2> cK(cam->getIntrinsicsKey());
+        gtsam::Expression<gtsam::Point2> predict(cK, &Cal3FS2::uncalibrate, xp);
         graph_.addExpressionFactor(predict, img_point, cam->getPixelNoise());
         break;
       }
@@ -123,10 +167,23 @@ void Optimizer::optimize()
 {
   if (!graph_.empty()) {
     LOG_INFO("running optimizer");
+#ifdef USE_ISAM
     // values_.print();
     // graph_.print();
     auto result = isam2_->update(graph_, values_);
     optimized_values_ = isam2_->calculateEstimate();
+#else
+    gtsam::LevenbergMarquardtParams lmp;
+    lmp.setVerbosity("SUMMARY");
+    lmp.setMaxIterations(100);
+    lmp.setAbsoluteErrorTol(1e-7);
+    lmp.setRelativeErrorTol(0);
+    gtsam::LevenbergMarquardtOptimizer lmo(graph_, values_, lmp);
+    LOG_INFO("start error: " << lmo.error());
+    optimized_values_ = lmo.optimize();
+    LOG_INFO(
+      "final error: " << lmo.error() << " after iter: " << lmo.iterations());
+#endif
 #if 0
     LOG_INFO("optimized values: ");
     for (const auto & v : optimized_values_) {
