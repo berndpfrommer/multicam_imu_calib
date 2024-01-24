@@ -32,6 +32,7 @@ class Camera
 public:
   using SharedPtr = std::shared_ptr<Camera>;
   using KMatrix = Eigen::Matrix3d;
+  using SharedNoiseModel = gtsam::SharedNoiseModel;
   explicit Camera(const std::string & name) : name_(name) {}
 
   // ------------ getters
@@ -39,6 +40,7 @@ public:
   const auto & getPose() const { return (pose_); }
   const auto & getPoseNoise() const { return (pose_noise_); }
   const auto & getCalibNoise() const { return (calibration_noise_); }
+  const auto & getPixelNoise() const { return (pixel_noise_); }
   DistortionModel getDistortionModel() const { return (distortion_model_); }
   const auto & getDistortionCoefficients() const
   {
@@ -50,7 +52,7 @@ public:
 
   // ------------ setters
   void setPoseWithNoise(
-    const gtsam::Pose3 & pose, const gtsam::SharedNoiseModel & noise);
+    const gtsam::Pose3 & pose, const SharedNoiseModel & noise);
   void setPoseKey(value_key_t k) { pose_key_ = k; }
   void setCalibKey(value_key_t k) { calib_key_ = k; }
   void setIntrinsics(double fx, double fy, double cx, double cy);
@@ -58,17 +60,16 @@ public:
   {
     distortion_coefficients_ = dc;
   }
-  void setCalibNoise(const gtsam::SharedNoiseModel & noise)
-  {
-    calibration_noise_ = noise;
-  }
+  void setCalibNoise(const SharedNoiseModel & n) { calibration_noise_ = n; }
+  void setPixelNoise(const SharedNoiseModel & n) { pixel_noise_ = n; }
   void setDistortionModel(const std::string & model);
 
 private:
   std::string name_;
   gtsam::Pose3 pose_;
-  gtsam::SharedNoiseModel pose_noise_;
-  gtsam::SharedNoiseModel calibration_noise_;
+  SharedNoiseModel pose_noise_;
+  SharedNoiseModel calibration_noise_;
+  SharedNoiseModel pixel_noise_;
   value_key_t pose_key_{0};
   value_key_t calib_key_{0};
   std::array<double, 4> intrinsics_{{0, 0, 0, 0}};

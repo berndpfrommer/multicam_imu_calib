@@ -20,6 +20,7 @@
 
 #include <apriltag_msgs/msg/april_tag_detection_array.hpp>
 #include <memory>
+#include <multicam_imu_calib/camera.hpp>
 #include <multicam_imu_calib/optimizer.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <string>
@@ -34,6 +35,20 @@ public:
   Calibration();
   ~Calibration() = default;
   void readConfigFile(const std::string & file);
+  const auto & getCameras() { return (cameras_); }
+  void runOptimizer();
+  void addRigPoseEstimate(uint64_t t, const gtsam::Pose3 & pose);
+  void addProjectionFactor(
+    const Camera::SharedPtr & camera, uint64_t t,
+    const std::vector<std::array<double, 3>> & wc,
+    const std::vector<std::array<double, 2>> & ic);
+
+  std::vector<gtsam::Pose3> getOptimizedRigPoses() const;
+  gtsam::Pose3 getOptimizedCameraPose(const Camera::SharedPtr & cam) const;
+  std::array<double, 4> getOptimizedIntrinsics(
+    const Camera::SharedPtr & cam) const;
+  std::vector<double> getOptimizedDistortionCoefficients(
+    const Camera::SharedPtr & cam) const;
 
 private:
   void parseIntrinsicsAndDistortionModel(
@@ -41,6 +56,8 @@ private:
     const YAML::Node & dist);
   // ------------- variables -------------
   Optimizer::SharedPtr optimizer_;
+  std::vector<Camera::SharedPtr> cameras_;
+  std::vector<value_key_t> rig_pose_keys_;
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__CALIBRATION_HPP_

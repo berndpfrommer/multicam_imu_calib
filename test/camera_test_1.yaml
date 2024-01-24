@@ -1,0 +1,35 @@
+#
+# example configuration file
+#
+# The initial camera poses are given with respect to a fixed coordinate system on the
+# calibration rig, e.g. one of the camera poses. The covariance must be large enough
+# to allow for the camera poses to adjust during intrinsic calibration.
+
+cameras:
+  - name: "camera_0"
+    pixel_noise: 1.0
+    intrinsics:
+      fx: 300.0
+      fy: 300.0
+      cx: 500
+      cy: 500
+    distortion_model:
+      type: "radtan" # make sure to have this correct
+      coefficients: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    pose:
+      position:
+        x: 0.0
+        y: 0.0
+        z: 0.0
+      orientation:
+        x: 0.0
+        y: 0.0
+        z: 0.0
+        w: 1.0
+      sigma_diagonal:
+        angle_x: 6.28
+        angle_y: 6.28
+        angle_z: 6.28
+        x: 10.0
+        y: 10.0
+        z: 10.0

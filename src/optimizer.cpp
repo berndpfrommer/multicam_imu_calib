@@ -34,14 +34,6 @@ Optimizer::Optimizer()
   p.relinearizeThreshold = 0.01;  // default is 0.1
   p.relinearizeSkip = 1;  // don't skip. Set this to 10 (default) for speed
   isam2_ = std::make_shared<gtsam::ISAM2>(p);
-  // XXX fix this later!
-  addRigPoseEstimate(1, gtsam::Pose3());
-  values_.insert(current_rig_pose_key_, current_rig_pose_);
-  Eigen::Matrix<double, 6, 1> sig;
-  sig << 0.1, 0.1, 0.1, 0.1, 0.1, 0.1;
-  graph_.push_back(gtsam::PriorFactor<gtsam::Pose3>(
-    current_rig_pose_key_, gtsam::Pose3(),
-    gtsam::noiseModel::Diagonal::Sigmas(sig)));
 }
 
 void Optimizer::addCamera(const Camera::SharedPtr & cam)
@@ -68,6 +60,9 @@ void Optimizer::addCamera(const Camera::SharedPtr & cam)
       Cal3DS3 calib_value(
         intr[0], intr[1], intr[2], intr[3], dc[2], dc[3], d.data());
       values_.insert(calib_key, calib_value);
+      graph_.push_back(gtsam::PriorFactor<Cal3DS3>(
+        calib_key, calib_value, cam->getCalibNoise()));
+      // graph_.addPrior(calib_key, cam->getCalibNoise());
       break;
     }
     default:
@@ -75,7 +70,7 @@ void Optimizer::addCamera(const Camera::SharedPtr & cam)
   }
 }
 
-void Optimizer::addRigPoseEstimate(uint64_t t, const gtsam::Pose3 & pose)
+value_key_t Optimizer::addRigPoseEstimate(uint64_t t, const gtsam::Pose3 & pose)
 {
   if (t <= current_rig_pose_time_) {
     BOMB_OUT("repeated or late time for rig pose initialization!");
@@ -83,11 +78,8 @@ void Optimizer::addRigPoseEstimate(uint64_t t, const gtsam::Pose3 & pose)
   current_rig_pose_time_ = t;
   current_rig_pose_ = pose;
   current_rig_pose_key_ = getNextKey();
-}
-
-void Optimizer::setPixelNoise(double noise)
-{
-  pixel_noise_ = gtsam::noiseModel::Isotropic::Sigma(2, noise);
+  values_.insert(current_rig_pose_key_, pose);
+  return (current_rig_pose_key_);
 }
 
 void Optimizer::addProjectionFactor(
@@ -104,7 +96,6 @@ void Optimizer::addProjectionFactor(
   gtsam::Expression<gtsam::Pose3> T_r_c(cam->getPoseKey());
   gtsam::Expression<gtsam::Pose3> T_w_r(current_rig_pose_key_);
 
-  const auto & intr = cam->getIntrinsics();
   for (size_t i = 0; i < wc.size(); i++) {
     const gtsam::Point2 img_point(ic[i][0], ic[i][1]);
     gtsam::Point3 wp;
@@ -112,23 +103,14 @@ void Optimizer::addProjectionFactor(
     gtsam::Expression<gtsam::Point3> X_w(wp);
     // transformFrom does X_A = T_AB * X_B
     // transformTo   does X_A = T_BA * X_B
-    // So the below transforms from world to camera
+    // So the below transforms from world to camera coordinates
     gtsam::Expression<gtsam::Point2> xp =
       gtsam::project(gtsam::transformTo(T_r_c, gtsam::transformTo(T_w_r, X_w)));
     switch (cam->getDistortionModel()) {
       case RADTAN: {
-        const auto & dc = cam->getDistortionCoefficients();
-        if (dc.size() != 6) {
-          BOMB_OUT("distortion model must have 6 coefficients!");
-        }
-        // fx, fy, u, v, p1, p2, k[1...4] (opencv)
-        std::array<double, 4> d = {dc[0], dc[1], dc[4], dc[5]};
-        auto distModel = std::make_shared<Cal3DS3>(
-          intr[0], intr[1], intr[2], intr[3], dc[2], dc[3], d.data());
-
-        gtsam::Expression<Cal3DS3> cK(*distModel);
+        gtsam::Expression<Cal3DS3> cK(cam->getCalibKey());
         gtsam::Expression<gtsam::Point2> predict(cK, &Cal3DS3::uncalibrate, xp);
-        graph_.addExpressionFactor(predict, img_point, pixel_noise_);
+        graph_.addExpressionFactor(predict, img_point, cam->getPixelNoise());
         break;
       }
       default:
@@ -141,13 +123,22 @@ void Optimizer::optimize()
 {
   if (!graph_.empty()) {
     LOG_INFO("running optimizer");
+    // values_.print();
+    // graph_.print();
     auto result = isam2_->update(graph_, values_);
-    auto optimizedValues = isam2_->calculateEstimate();
+    optimized_values_ = isam2_->calculateEstimate();
+#if 0
     LOG_INFO("optimized values: ");
-    for (const auto & v : optimizedValues) {
+    for (const auto & v : optimized_values_) {
       v.value.print();
     }
+#endif
   }
+}
+
+gtsam::Pose3 Optimizer::getOptimizedPose(value_key_t k) const
+{
+  return (optimized_values_.at<gtsam::Pose3>(k));
 }
 
 }  // namespace multicam_imu_calib

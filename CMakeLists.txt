@@ -56,6 +56,7 @@ add_library(${PROJECT_NAME} SHARED
 
 ament_target_dependencies(${PROJECT_NAME} ${ament_dependencies})
 target_link_libraries(${PROJECT_NAME} opencv_core opencv_imgproc yaml-cpp gtsam)
+target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
 
 target_include_directories(
     ${PROJECT_NAME}
@@ -70,6 +71,7 @@ rclcpp_components_register_nodes(${PROJECT_NAME} "${PROJECT_NAME}_ros::MulticamI
 #
 add_executable(${PROJECT_NAME}_node src/multicam_imu_calib_node.cpp)
 target_link_libraries(${PROJECT_NAME}_node ${PROJECT_NAME})
+target_compile_features(${PROJECT_NAME}_node PRIVATE cxx_std_17)
 
 # the node must go into the project specific lib directory or else
 # the launch file will not find it
@@ -110,6 +112,19 @@ if(BUILD_TESTING)
   ament_lint_cmake()
   ament_pep257()
   ament_xmllint()
+
+  # ----------- setup gtests
+  find_package(ament_cmake_gtest REQUIRED)
+  set(CAMERA_TEST "${PROJECT_NAME}_camera_test")
+  ament_add_gtest(${CAMERA_TEST} test/camera_test.cpp
+  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/test)
+  target_include_directories(${CAMERA_TEST} PUBLIC
+  target_compile_features(${CAMERA_TEST} PRIVATE cxx_std_17)
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+  ament_target_dependencies(${CAMERA_TEST} rclcpp)
+  target_link_libraries(${CAMERA_TEST} ${PROJECT_NAME} opencv_core opencv_calib3d yaml-cpp gtsam)
+
 endif()
 
 ament_package()

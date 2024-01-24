@@ -15,6 +15,7 @@
 
 #include <gtsam/geometry/Pose3.h>
 #include <gtsam/linear/NoiseModel.h>
+#include <multicam_imu_calib/gtsam_extensions/Cal3DS3.h>
 
 #include <multicam_imu_calib/calibration.hpp>
 #include <multicam_imu_calib/logging.hpp>
@@ -115,12 +116,84 @@ void Calibration::readConfigFile(const std::string & file)
     }
     auto cam = std::make_shared<Camera>(c["name"].as<std::string>());
     cam->setPoseWithNoise(pose, noise);
+    cam->setPixelNoise(gtsam::noiseModel::Diagonal::Sigmas(
+      gtsam::Vector2::Constant(c["pixel_noise"].as<double>())));
     parseIntrinsicsAndDistortionModel(
       cam, c["intrinsics"], c["distortion_model"]);
     optimizer_->addCamera(cam);
     LOG_INFO("found camera: " << c["name"]);
+    cameras_.push_back(cam);
   }
-  optimizer_->optimize();
 }
+void Calibration::addRigPoseEstimate(uint64_t t, const gtsam::Pose3 & pose)
+{
+  rig_pose_keys_.push_back(optimizer_->addRigPoseEstimate(t, pose));
+}
+
+void Calibration::addProjectionFactor(
+  const Camera::SharedPtr & camera, uint64_t t,
+  const std::vector<std::array<double, 3>> & wc,
+  const std::vector<std::array<double, 2>> & ic)
+{
+  optimizer_->addProjectionFactor(camera, t, wc, ic);
+}
+
+std::vector<gtsam::Pose3> Calibration::getOptimizedRigPoses() const
+{
+  std::vector<gtsam::Pose3> poses;
+  for (const auto & key : rig_pose_keys_) {
+    poses.push_back(optimizer_->getOptimizedPose(key));
+  }
+  return (poses);
+}
+
+gtsam::Pose3 Calibration::getOptimizedCameraPose(
+  const Camera::SharedPtr & cam) const
+{
+  return (optimizer_->getOptimizedPose(cam->getPoseKey()));
+}
+
+std::array<double, 4> Calibration::getOptimizedIntrinsics(
+  const Camera::SharedPtr & cam) const
+{
+  std::array<double, 4> intr;
+  switch (cam->getDistortionModel()) {
+    case RADTAN: {
+      const auto calib =
+        optimizer_->getOptimizedCalibration<Cal3DS3>(cam->getCalibKey());
+      const auto v = calib.vector();
+      intr[0] = v(0);
+      intr[1] = v(1);
+      intr[2] = v(2);
+      intr[3] = v(3);
+      break;
+    }
+    default:
+      BOMB_OUT("invalid distortion model!");
+  }
+  return (intr);
+}
+
+std::vector<double> Calibration::getOptimizedDistortionCoefficients(
+  const Camera::SharedPtr & cam) const
+{
+  std::vector<double> dist;
+  switch (cam->getDistortionModel()) {
+    case RADTAN: {
+      const auto calib =
+        optimizer_->getOptimizedCalibration<Cal3DS3>(cam->getCalibKey());
+      const auto v = calib.vector();
+      for (size_t i = 4; i < static_cast<size_t>(v.size()); i++) {
+        dist.push_back(v(i));
+      }
+      break;
+    }
+    default:
+      BOMB_OUT("invalid distortion model!");
+  }
+  return (dist);
+}
+
+void Calibration::runOptimizer() { optimizer_->optimize(); }
 
 }  // namespace multicam_imu_calib

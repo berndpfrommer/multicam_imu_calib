@@ -35,18 +35,25 @@ public:
   Optimizer();
   void addCamera(const Camera::SharedPtr & cam);
   void optimize();
-  void addRigPoseEstimate(uint64_t t, const gtsam::Pose3 & pose);
+  value_key_t addRigPoseEstimate(uint64_t t, const gtsam::Pose3 & pose);
   void setPixelNoise(double noise);
   void addProjectionFactor(
     const Camera::SharedPtr & camera, uint64_t t,
     const std::vector<std::array<double, 3>> & wc,
     const std::vector<std::array<double, 2>> & ic);
+  gtsam::Pose3 getOptimizedPose(value_key_t k) const;
+  template <class T>
+  T getOptimizedCalibration(value_key_t key)
+  {
+    return (optimized_values_.at<T>(key));
+  }
 
 private:
   value_key_t getNextKey() { return (key_++); }
   std::map<std::string, Camera::SharedPtr> cameras_;
   gtsam::ExpressionFactorGraph graph_;
   gtsam::Values values_;
+  gtsam::Values optimized_values_;
   std::shared_ptr<gtsam::ISAM2> isam2_;
   value_key_t key_{0};
   uint64_t current_rig_pose_time_{0};
