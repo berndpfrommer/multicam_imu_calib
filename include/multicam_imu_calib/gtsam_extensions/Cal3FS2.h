@@ -42,7 +42,9 @@
 
 #include <gtsam/geometry/Point2.h>
 
+#include <array>
 #include <boost/shared_ptr.hpp>
+#include <vector>
 
 /**
  * @brief Calibration of a camera with fisheye (radtan) radial distortion
@@ -66,6 +68,7 @@ class Cal3FS2
 protected:
   double fx_, fy_, u0_, v0_;  // focal length,  and principal point
   double k1_, k2_, k3_, k4_;  // radial distortion coefficients of radtan model
+  std::array<double, 4> coefficient_mask_{1, 1, 1, 1};
 
 public:
   enum { dimension = 8 };
@@ -89,7 +92,7 @@ public:
   /// @name Advanced Constructors
   /// @{
 
-  explicit Cal3FS2(const gtsam::Vector & v);
+  explicit Cal3FS2(const gtsam::Vector & v, const std::array<double, 4> & cm);
 
   /// @}
   /// @name Testable
@@ -145,7 +148,7 @@ public:
   /// Given delta vector, update calibration
   inline Cal3FS2 retract(const gtsam::Vector & d) const
   {
-    return Cal3FS2(vector() + d);
+    return Cal3FS2(vector() + d, coefficient_mask_);
   }
 
   /// Given a different calibration, calculate update to obtain it
@@ -189,6 +192,7 @@ public:
   }
 
   /// @}
+  void setCoefficientMask(const std::vector<double> & mask);
 
 private:
   gtsam::Point2 uncalibrateNoIntrinsics(const gtsam::Point2 & p) const;

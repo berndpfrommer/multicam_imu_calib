@@ -46,7 +46,7 @@
 
 /* *****************************************************
 ******************** */
-Cal3FS2::Cal3FS2(const gtsam::Vector & v)
+Cal3FS2::Cal3FS2(const gtsam::Vector & v, const std::array<double, 4> & cm)
 : fx_(v[0]),
   fy_(v[1]),
   u0_(v[2]),
@@ -54,7 +54,8 @@ Cal3FS2::Cal3FS2(const gtsam::Vector & v)
   k1_(v[4]),
   k2_(v[5]),
   k3_(v[6]),
-  k4_(v[7])
+  k4_(v[7]),
+  coefficient_mask_(cm)
 {
 }
 
@@ -93,11 +94,19 @@ bool Cal3FS2::equals(const Cal3FS2 & K, double tol) const
   return true;
 }
 
+void Cal3FS2::setCoefficientMask(const std::vector<double> & mask)
+{
+  // disable any coefficients that have no mask value
+  for (size_t i = 0; i < coefficient_mask_.size(); i++) {
+    coefficient_mask_[i] = (i < mask.size()) ? mask[i] : 0;
+  }
+}
+
 /* ************************************************************************* */
 static gtsam::Matrix28 D2dcalibration(
   double x, double y, double xp, double yp, double x_r, double y_r,
   double theta3, double theta5, double theta7, double theta9,
-  const gtsam::Matrix2 & DK)
+  const gtsam::Matrix2 & DK, const std::array<double, 4> & mask)
 {
   (void)x;
   (void)y;
@@ -107,9 +116,14 @@ static gtsam::Matrix28 D2dcalibration(
     0.0, yp, 0.0, 1.0;       // dv/d
 
   gtsam::Matrix24 DR2;
-  //        k1              k2            k3          k4
-  DR2 << x_r * theta3, x_r * theta5, x_r * theta7, x_r * theta9,  // du/d
-    y_r * theta3, y_r * theta5, y_r * theta7, y_r * theta9;       // dv/d
+  DR2(0, 0) = mask[0] * x_r * theta3;
+  DR2(1, 0) = mask[0] * y_r * theta3;
+  DR2(0, 1) = mask[1] * x_r * theta5;
+  DR2(1, 1) = mask[1] * y_r * theta5;
+  DR2(0, 2) = mask[2] * x_r * theta7;
+  DR2(1, 2) = mask[2] * y_r * theta7;
+  DR2(0, 3) = mask[3] * x_r * theta9;
+  DR2(1, 3) = mask[3] * y_r * theta9;
 
   gtsam::Matrix28 D;
   D << DR1, DK * DR2;
@@ -187,7 +201,7 @@ gtsam::Point2 Cal3FS2::uncalibrate(
   if (H1)
     *H1 = D2dcalibration(
       gp.x, gp.y, gp.xp, gp.yp, gp.x_r, gp.y_r, gp.theta3, gp.theta5, gp.theta7,
-      gp.theta9, DK);
+      gp.theta9, DK, coefficient_mask_);
 
   // Derivative for points
   if (H2)
@@ -247,5 +261,5 @@ gtsam::Matrix28 Cal3FS2::D2d_calibration(const gtsam::Point2 & p) const
   // Derivative for calibration
   return (D2dcalibration(
     gp.x, gp.y, gp.xp, gp.yp, gp.x_r, gp.y_r, gp.theta3, gp.theta5, gp.theta7,
-    gp.theta9, DK));
+    gp.theta9, DK, coefficient_mask_));
 }

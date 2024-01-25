@@ -80,6 +80,7 @@ void Optimizer::addCameraIntrinsics(
       }
       Cal3FS2 intr_value(
         intr[0], intr[1], intr[2], intr[3], dc[0], dc[1], dc[2], dc[3]);
+      intr_value.setCoefficientMask(cam->getCoefficientMask());
       values_.insert(intr_key, intr_value);
       graph_.push_back(gtsam::PriorFactor<Cal3FS2>(
         intr_key, intr_value, cam->getIntrinsicsNoise()));
@@ -132,7 +133,6 @@ void Optimizer::addProjectionFactor(
     gtsam::Expression<gtsam::Point2> xp =
       gtsam::project(gtsam::transformTo(T_r_c, gtsam::transformTo(T_w_r, X_w)));
     switch (cam->getDistortionModel()) {
-        // #define FIX_INTRINSICS
       case RADTAN: {
         gtsam::Expression<Cal3DS3> cK(cam->getIntrinsicsKey());
         gtsam::Expression<gtsam::Point2> predict(cK, &Cal3DS3::uncalibrate, xp);

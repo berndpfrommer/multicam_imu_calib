@@ -11,22 +11,23 @@ cameras:
       coefficients:
         # radtan like opencv: k1, k2,  p1,  p2,  k3,  k4,  k5,  k6
         [-0.298866, 0.155338, 0.001388, -0.000423, 0.001, -0.003, 0.004, 0.001]
-      coefficients_mask: [1, 1, 1, 1, 1, 1, 1, 1]
-      coefficients_sigma: [0.5, 0.5, 0.5, 0.5, 0.01, 0.01, 0.01, 0.01]
+      coefficient_mask: [1, 1, 1, 1, 1, 1, 1, 1]
+      coefficient_sigma: [0.5, 0.5, 0.5, 0.5, 0.01, 0.01, 0.01, 0.01]
     pose:
       position:
         x: 0.0
         y: 0.0
         z: 0.0
+      position_sigma:
+        x: 10.0
+        y: 10.0
+        z: 10.0
       orientation:
         x: 0.0
         y: 0.0
         z: 0.0
         w: 1.0
-      sigma_diagonal:
-        angle_x: 6.28
-        angle_y: 6.28
-        angle_z: 6.28
-        x: 10.0
-        y: 10.0
-        z: 10.0
+      orientation_sigma:
+        x: 6.28
+        y: 6.28
+        z: 6.28

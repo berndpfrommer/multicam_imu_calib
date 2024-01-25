@@ -71,6 +71,7 @@ protected:
   double fx_, fy_, u0_, v0_;  // focal length,  and principal point
   double p1_, p2_,
     k_[num_coeff];  // radial distortion coefficients of radtan model
+  std::array<double, 8> coefficient_mask_{1, 1, 1, 1, 1, 1, 1, 1};
 
 public:
   /// @name Standard Constructors
@@ -201,8 +202,6 @@ public:
   void setCoefficientMask(const std::vector<double> & mask);
 
 private:
-  std::array<double, 8> coefficient_mask_{1, 1, 1, 1, 1, 1, 1, 1};
-
   gtsam::Point2 uncalibrateNoIntrinsics(const gtsam::Point2 & p) const;
   /// @name Advanced Interface
   /// @{

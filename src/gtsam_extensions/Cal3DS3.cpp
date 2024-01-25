@@ -111,7 +111,7 @@ bool Cal3DS3::equals(const Cal3DS3 & K, double tol) const
 void Cal3DS3::setCoefficientMask(const std::vector<double> & mask)
 {
   // disable any coefficients that have no mask value
-  for (size_t i = 0; i < 8; i++) {
+  for (size_t i = 0; i < coefficient_mask_.size(); i++) {
     coefficient_mask_[i] = (i < mask.size()) ? mask[i] : 0;
   }
 }

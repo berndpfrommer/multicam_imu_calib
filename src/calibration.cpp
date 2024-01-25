@@ -40,12 +40,22 @@ static gtsam::Pose3 parsePose(const YAML::Node & yn)
   return (gtsam::Pose3(orientation, position));
 }
 
-static gtsam::SharedNoiseModel parseDiagonalCovariance(const YAML::Node & yn)
+static gtsam::SharedNoiseModel parsePoseNoise(const YAML::Node & yn)
 {
   Eigen::Matrix<double, 6, 1> sig;
-  sig << yn["angle_x"].as<double>(), yn["angle_y"].as<double>(),
-    yn["angle_z"].as<double>(), yn["x"].as<double>(), yn["y"].as<double>(),
-    yn["z"].as<double>();
+  const auto o = yn["orientation_sigma"];
+  Eigen::Matrix<double, 3, 1> sig_angle =
+    Eigen::Matrix<double, 3, 1>::Ones() * 6.28;
+  if (o) {
+    sig_angle << o["x"].as<double>(), o["y"].as<double>(), o["z"].as<double>();
+  }
+  const auto p = yn["position_sigma"];
+  Eigen::Matrix<double, 3, 1> sig_pos =
+    Eigen::Matrix<double, 3, 1>::Ones() * 10;
+  if (p) {
+    sig_pos << p["x"].as<double>(), p["y"].as<double>(), p["z"].as<double>();
+  }
+  sig << sig_angle, sig_pos;
   return (gtsam::noiseModel::Diagonal::Sigmas(sig));
 }
 
@@ -56,19 +66,19 @@ void Calibration::parseIntrinsicsAndDistortionModel(
   YAML::Node coeffs = dist["coefficients"];
   std::vector<double> vd = coeffs.as<std::vector<double>>();
   std::vector<int> cm;
-  if (dist["coefficients_mask"]) {
-    cm = dist["coefficients_mask"].as<std::vector<int>>();
+  if (dist["coefficient_mask"]) {
+    cm = dist["coefficient_mask"].as<std::vector<int>>();
     if (vd.size() != cm.size()) {
-      BOMB_OUT("coefficients_mask must have same size as coefficients!");
+      BOMB_OUT("coefficient_mask must have same size as coefficients!");
     }
   } else {
     cm.resize(vd.size(), 1);
   }
   std::vector<double> cs;
-  if (dist["coefficients_sigma"]) {
-    cs = dist["coefficients_sigma"].as<std::vector<double>>();
+  if (dist["coefficient_sigma"]) {
+    cs = dist["coefficient_sigma"].as<std::vector<double>>();
     if (vd.size() != cs.size()) {
-      BOMB_OUT("coefficients_sigma must have same size as coefficients!");
+      BOMB_OUT("coefficient_sigma must have same size as coefficients!");
     }
     const double max = *std::max_element(cs.begin(), cs.end());
     const double min = *std::min_element(cs.begin(), cs.end());
@@ -146,23 +156,12 @@ void Calibration::readConfigFile(const std::string & file)
       continue;
     }
     const auto pose = parsePose(pp);
-    gtsam::SharedNoiseModel noise;
-    if (pp["covariance_diagonal"] && pp["covariance"]) {
-      LOG_WARN("ignoring camera with double covariance!");
-      continue;
-    } else if (pp["sigma_diagonal"]) {
-      noise = parseDiagonalCovariance(pp["sigma_diagonal"]);
-    } else if (pp["covariance"]) {
-      BOMB_OUT("not implemented yet!");
-      //      noise = parseCovariance(pp["covariance"]);
-    } else {
-      LOG_WARN("ignoring camera without covariance!");
-      continue;
-    }
+    gtsam::SharedNoiseModel poseNoise = parsePoseNoise(pp);
     auto cam = std::make_shared<Camera>(c["name"].as<std::string>());
-    cam->setPoseWithNoise(pose, noise);
-    cam->setPixelNoise(gtsam::noiseModel::Diagonal::Sigmas(
-      gtsam::Vector2::Constant(c["pixel_noise"].as<double>())));
+    cam->setPoseWithNoise(pose, poseNoise);
+    const double pxn = c["pixel_noise"] ? c["pixel_noise"].as<double>() : 1.0;
+    cam->setPixelNoise(
+      gtsam::noiseModel::Diagonal::Sigmas(gtsam::Vector2::Constant(pxn)));
     parseIntrinsicsAndDistortionModel(
       cam, c["intrinsics"], c["distortion_model"]);
     optimizer_->addCamera(cam);

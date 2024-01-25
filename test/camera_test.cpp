@@ -171,7 +171,7 @@ static void compareIntrinsics(
   const char * label[4] = {"fx", "fy", "cx", "cy"};
   for (size_t i = 0; i < intr.size(); i++) {
     printf(
-      "%-6s %10.5f %10.5f %10.5f %10.5f\n", label[i], start[i], opt[i], intr[i],
+      "%-6s %10.3f %10.3f %10.3f %10.3f\n", label[i], start[i], opt[i], intr[i],
       opt[i] - intr[i]);
   }
 }
