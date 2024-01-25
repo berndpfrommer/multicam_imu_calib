@@ -45,8 +45,14 @@
 #include <multicam_imu_calib/gtsam_extensions/Cal3DS3.h>
 
 /* ************************************************************************* */
-Cal3DS3::Cal3DS3(const gtsam::Vector & v)
-: fx_(v[0]), fy_(v[1]), u0_(v[2]), v0_(v[3]), p1_(v[4]), p2_(v[5])
+Cal3DS3::Cal3DS3(const gtsam::Vector & v, const std::array<double, 8> & mask)
+: fx_(v[0]),
+  fy_(v[1]),
+  u0_(v[2]),
+  v0_(v[3]),
+  p1_(v[4]),
+  p2_(v[5]),
+  coefficient_mask_(mask)
 {
   for (int i = 0; i < 6; i++) {
     k_[i] = v[6 + i];
@@ -73,12 +79,13 @@ Eigen::Matrix<double, 12, 1> Cal3DS3::vector() const
 void Cal3DS3::print(const std::string & s_) const
 {
   gtsam::print((gtsam::Matrix)K(), s_ + ".K");
+  gtsam::print(gtsam::Vector(gtsam::Vector2({p1_, p2_})), s_ + ".p1/p2");
   gtsam::print(gtsam::Vector(k()), s_ + ".k");
 }
 /* ************************************************************************* */
 Cal3DS3 Cal3DS3::retract(const gtsam::Vector & d) const
 {
-  return (Cal3DS3(vector() + d));
+  return (Cal3DS3(vector() + d, coefficient_mask_));
 }
 
 /* ************************************************************************* */
@@ -101,12 +108,19 @@ bool Cal3DS3::equals(const Cal3DS3 & K, double tol) const
   }
   return true;
 }
+void Cal3DS3::setCoefficientMask(const std::vector<double> & mask)
+{
+  // disable any coefficients that have no mask value
+  for (size_t i = 0; i < 8; i++) {
+    coefficient_mask_[i] = (i < mask.size()) ? mask[i] : 0;
+  }
+}
 
 /* ************************************************************************* */
 static Eigen::Matrix<double, 2, 12> D2dcalibration(
   double x, double y, double xp, double yp, double x2, double y2, double xy,
   double R, double R2, double R3, double num, double deninv,
-  const gtsam::Matrix2 & DK)
+  const gtsam::Matrix2 & DK, const std::array<double, 8> & mask)
 {
   gtsam::Matrix24 DR1;
   //     fx   fy   cx   cy
@@ -114,14 +128,27 @@ static Eigen::Matrix<double, 2, 12> D2dcalibration(
     0.0, yp, 0.0, 1.0;       // dv/d
 
   const double mnumdeninv2 = -num * deninv * deninv;
-  double xdinv(x * deninv), ydinv(y * deninv);
-  double xf(x * mnumdeninv2), yf(y * mnumdeninv2);
-  gtsam::Matrix28 DR2;
-  // p1       p2      k1        k2       k3       k4    k5     k6
-  DR2 << 2 * xy, R + 2 * x2, xdinv * R, xdinv * R2, xdinv * R3, xf * R, xf * R2,
-    xf * R3,  // u
-    R + 2 * y2, 2 * xy, ydinv * R, ydinv * R2, ydinv * R3, yf * R, yf * R2,
-    yf * R3;  // v
+  const double xdinv(x * deninv), ydinv(y * deninv);
+  const double xf(x * mnumdeninv2), yf(y * mnumdeninv2);
+
+  gtsam::Matrix28 DR2 = gtsam::Matrix28::Zero();
+  DR2(0, 0) = mask[0] * 2 * xy;        // du / d p1
+  DR2(1, 0) = mask[0] * (R + 2 * y2);  // dv / d p1
+  DR2(0, 1) = mask[1] * (R + 2 * x2);  // du / d p2
+  DR2(1, 1) = mask[1] * 2 * xy;        // dv / d p2
+  DR2(0, 2) = mask[2] * xdinv * R;     // du / d k1
+  DR2(1, 2) = mask[2] * ydinv * R;     // dv / d k1
+  DR2(0, 3) = mask[3] * xdinv * R2;    // du / d k2
+  DR2(1, 3) = mask[3] * ydinv * R2;    // dv / d k2
+  DR2(0, 4) = mask[4] * xdinv * R3;    // du / d k3
+  DR2(1, 4) = mask[4] * ydinv * R3;    // dv / d k3
+  DR2(0, 5) = mask[5] * xf * R;        // du / d k4
+  DR2(1, 5) = mask[5] * yf * R;        // dv / d k4
+  DR2(0, 6) = mask[6] * xf * R2;       // du / d k5
+  DR2(1, 6) = mask[6] * yf * R2;       // dv / d k5
+  DR2(0, 7) = mask[7] * xf * R3;       // du / d k6
+  DR2(1, 7) = mask[7] * yf * R3;       // dv / d k6
+
   Eigen::Matrix<double, 2, 12> D;
   D << DR1, DK * DR2;
   return D;
@@ -198,7 +225,7 @@ gtsam::Point2 Cal3DS3::uncalibrate(
   if (H1)
     *H1 = D2dcalibration(
       gp.x, gp.y, gp.xp, gp.yp, gp.x2, gp.y2, gp.xy, gp.R, gp.R2, gp.R3, gp.num,
-      gp.deninv, DK);
+      gp.deninv, DK, coefficient_mask_);
 
   // Derivative for points
   if (H2) {
@@ -260,5 +287,5 @@ Eigen::Matrix<double, 2, 12> Cal3DS3::D2d_calibration(
   DK << fx_, 0.0, 0.0, fy_;
   return (D2dcalibration(
     gp.x, gp.y, gp.xp, gp.yp, gp.x2, gp.y2, gp.xy, gp.R, gp.R2, gp.R3, gp.num,
-    gp.deninv, DK));
+    gp.deninv, DK, coefficient_mask_));
 }

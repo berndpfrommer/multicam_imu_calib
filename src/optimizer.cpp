@@ -57,22 +57,23 @@ void Optimizer::addCameraIntrinsics(
   cam->setIntrinsicsKey(intr_key);
   switch (distortion_model) {
     case RADTAN: {
-      // fx, fy, u, v, p1, p2, k[1...6] (opencv)
+      // optimizer layout: fx, fy, u, v, p1, p2, k[1...6]
+      // our dist coeffs (opencv): k1, k2, p1, p2, k[3..6]
       const auto & dc = distortion_coefficients;
       if (dc.size() != 8) {
         BOMB_OUT("distortion model must have 8 coefficients!");
       }
-      // coeff 2, 3 are p1, p2
       std::array<double, 6> d = {dc[0], dc[1], dc[4], dc[5], dc[6], dc[7]};
       Cal3DS3 intr_value(
         intr[0], intr[1], intr[2], intr[3], dc[2], dc[3], d.data());
+      intr_value.setCoefficientMask(cam->getCoefficientMask());
       values_.insert(intr_key, intr_value);
       graph_.push_back(gtsam::PriorFactor<Cal3DS3>(
         intr_key, intr_value, cam->getIntrinsicsNoise()));
       break;
     }
     case EQUIDISTANT: {
-      // fx, fy, u, v, k[1...6] (opencv)
+      // fx, fy, u, v, k[1..4]
       const auto & dc = distortion_coefficients;
       if (dc.size() != 4) {
         BOMB_OUT("distortion model must have 4 coefficients!");
@@ -133,20 +134,7 @@ void Optimizer::addProjectionFactor(
     switch (cam->getDistortionModel()) {
         // #define FIX_INTRINSICS
       case RADTAN: {
-#ifdef FIX_INTRINSICS
-        // fx, fy, u, v, p1, p2, k[1...6] (opencv)
-        const auto intr = cam->getIntrinsics();
-        const auto & dc = cam->getDistortionCoefficients();
-        if (dc.size() != 8) {
-          BOMB_OUT("distortion model must have 8 coefficients!");
-        }
-        std::array<double, 6> d = {dc[0], dc[1], dc[4], dc[5], dc[6], dc[7]};
-        const Cal3DS3 calib(
-          intr[0], intr[1], intr[2], intr[3], dc[2], dc[3], d.data());
-        gtsam::Expression<Cal3DS3> cK(calib);
-#else
         gtsam::Expression<Cal3DS3> cK(cam->getIntrinsicsKey());
-#endif
         gtsam::Expression<gtsam::Point2> predict(cK, &Cal3DS3::uncalibrate, xp);
         graph_.addExpressionFactor(predict, img_point, cam->getPixelNoise());
         break;

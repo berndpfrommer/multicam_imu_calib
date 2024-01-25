@@ -55,8 +55,31 @@ void Calibration::parseIntrinsicsAndDistortionModel(
 {
   YAML::Node coeffs = dist["coefficients"];
   std::vector<double> vd = coeffs.as<std::vector<double>>();
+  std::vector<int> cm;
+  if (dist["coefficients_mask"]) {
+    cm = dist["coefficients_mask"].as<std::vector<int>>();
+    if (vd.size() != cm.size()) {
+      BOMB_OUT("coefficients_mask must have same size as coefficients!");
+    }
+  } else {
+    cm.resize(vd.size(), 1);
+  }
+  std::vector<double> cs;
+  if (dist["coefficients_sigma"]) {
+    cs = dist["coefficients_sigma"].as<std::vector<double>>();
+    if (vd.size() != cs.size()) {
+      BOMB_OUT("coefficients_sigma must have same size as coefficients!");
+    }
+    const double max = *std::max_element(cs.begin(), cs.end());
+    const double min = *std::min_element(cs.begin(), cs.end());
+    if (min <= 1e-6 || min * 1000 < max) {
+      BOMB_OUT("whacky max/min ratio of coefficient sigma!");
+    }
+  }
   cam->setDistortionModel(dist["type"].as<std::string>());
   cam->setDistortionCoefficients(vd);
+  cam->setCoefficientMask(cm);
+  cam->setCoefficientSigma(cs);
   const double fx = intr["fx"].as<double>();
   const double fy = intr["fy"].as<double>();
   const double cx = intr["cx"].as<double>();
@@ -65,19 +88,31 @@ void Calibration::parseIntrinsicsAndDistortionModel(
   switch (cam->getDistortionModel()) {
     case RADTAN: {
       Eigen::Matrix<double, 12, 1> sig;
-      const auto noise_dist = Eigen::Matrix<double, 8, 1>::Ones() * 0.01;
-      // fx,fy,cx,cy, px, py, K1-6
-      const double nf = 0.1;  // noise factor
-      sig << fx * nf, fy * nf, cx * nf, cy * nf, noise_dist;
+      Eigen::Matrix<double, 8, 1> n = Eigen::Matrix<double, 8, 1>::Ones() * 0.5;
+      if (cs.size() > 8) {
+        BOMB_OUT("too many coefficient_sigmas specified!");
+      }
+      for (size_t i = 0; i < cs.size(); i++) {
+        n(i, 0) = cs[i];  // override default with user-specified sigma
+      }
+      // optimizer arrangement: fx, fy, cx, cy, p1, p2, k1-6
+      const double nf = 2.0;  // noise factor for intrinsics
+      sig << fx * nf, fy * nf, cx * nf, cy * nf, n;
       cam->setIntrinsicsNoise(gtsam::noiseModel::Diagonal::Sigmas(sig));
       break;
     }
     case EQUIDISTANT: {
       Eigen::Matrix<double, 8, 1> sig;
-      const auto noise_dist = Eigen::Matrix<double, 4, 1>::Ones() * 0.5;
-      // fx,fy,cx,cy, K1-4
-      const double nf = 0.1;  // noise factor
-      sig << fx * nf, fy * nf, cx * nf, cy * nf, noise_dist;
+      Eigen::Matrix<double, 4, 1> n = Eigen::Matrix<double, 4, 1>::Ones() * 0.5;
+      if (cs.size() > 4) {
+        BOMB_OUT("too many coefficient_sigmas specified!");
+      }
+      // optimizer arrangement: fx, fy, cx, cy, k1-4
+      const double nf = 2.0;  // noise factor for intrinsics
+      for (size_t i = 0; i < cs.size(); i++) {
+        n(i, 0) = cs[i];  // override default with user-specified sigma
+      }
+      sig << fx * nf, fy * nf, cx * nf, cy * nf, n;
       cam->setIntrinsicsNoise(gtsam::noiseModel::Diagonal::Sigmas(sig));
       break;
     }
@@ -211,8 +246,14 @@ std::vector<double> Calibration::getOptimizedDistortionCoefficients(
       const auto calib =
         optimizer_->getOptimizedIntrinsics<Cal3DS3>(cam->getIntrinsicsKey());
       const auto v = calib.vector();
-      for (size_t i = 4; i < static_cast<size_t>(v.size()); i++) {
-        dist.push_back(v(i));
+      for (size_t i = 6; i < 8; i++) {
+        dist.push_back(v(i));  // first come k1, k2
+      }
+      for (size_t i = 4; i < 6; i++) {
+        dist.push_back(v(i));  // then p1, p2
+      }
+      for (size_t i = 8; i < static_cast<size_t>(v.size()); i++) {
+        dist.push_back(v(i));  // now k3...k6
       }
       break;
     }

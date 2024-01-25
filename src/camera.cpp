@@ -43,4 +43,16 @@ void Camera::setDistortionModel(const std::string & model)
     BOMB_OUT("bad distortion model: " << model);
   }
 }
+
+std::vector<double> Camera::getCoefficientMask() const
+{
+  std::vector<double> cm;
+  for (size_t i = 0; i < mask_.size(); i++) {
+    cm.push_back(mask_[i] ? 1.0 : 0);
+  }
+  for (size_t i = mask_.size(); i < distortion_coefficients_.size(); i++) {
+    cm.push_back(1.0);  // enable coefficients that have no mask specified
+  }
+  return (cm);
+}
 }  // namespace multicam_imu_calib

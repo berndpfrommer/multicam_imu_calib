@@ -34,6 +34,7 @@ public:
   using KMatrix = Eigen::Matrix3d;
   using SharedNoiseModel = gtsam::SharedNoiseModel;
   using Intrinsics = std::array<double, 4>;
+  using DistortionCoefficients = std::vector<double>;
   explicit Camera(const std::string & name) : name_(name) {}
 
   // ------------ getters
@@ -50,6 +51,7 @@ public:
   const auto & getIntrinsics() const { return (intrinsics_); }
   value_key_t getPoseKey() const { return (pose_key_); }
   value_key_t getIntrinsicsKey() const { return (intrinsics_key_); }
+  std::vector<double> getCoefficientMask() const;
 
   // ------------ setters
   void setPoseWithNoise(
@@ -64,6 +66,11 @@ public:
   void setIntrinsicsNoise(const SharedNoiseModel & n) { intrinsics_noise_ = n; }
   void setPixelNoise(const SharedNoiseModel & n) { pixel_noise_ = n; }
   void setDistortionModel(const std::string & model);
+  void setCoefficientMask(const std::vector<int> & cm) { mask_ = cm; }
+  void setCoefficientSigma(const std::vector<double> & cs)
+  {
+    coefficientSigma_ = cs;
+  }
 
 private:
   std::string name_;
@@ -75,7 +82,9 @@ private:
   value_key_t intrinsics_key_{0};
   Intrinsics intrinsics_{{0, 0, 0, 0}};
   DistortionModel distortion_model_{INVALID};
-  std::vector<double> distortion_coefficients_;
+  DistortionCoefficients distortion_coefficients_;
+  std::vector<int> mask_;
+  std::vector<double> coefficientSigma_;  // coefficient noise
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__CAMERA_HPP_

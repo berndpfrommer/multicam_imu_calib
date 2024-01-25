@@ -1,0 +1,30 @@
+cameras:
+  - name: "camera_0"
+    pixel_noise: 1.0
+    intrinsics:
+      fx: 365.0
+      fy: 355.0
+      cx: 640
+      cy: 512
+    distortion_model:
+      type: "equidistant"
+      coefficients: [0.1, 0.1, -0.02, -0.01]
+      coefficients_mask: [1, 1, 1, 1]
+      coefficients_sigma: [0.5, 0.5, 0.5, 0.5]
+    pose:
+      position:
+        x: 0.0
+        y: 0.0
+        z: 0.0
+      orientation:
+        x: 0.0
+        y: 0.0
+        z: 0.0
+        w: 1.0
+      sigma_diagonal:
+        angle_x: 6.28
+        angle_y: 6.28
+        angle_z: 6.28
+        x: 10.0
+        y: 10.0
+        z: 10.0

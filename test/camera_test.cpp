@@ -19,7 +19,12 @@
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core/core.hpp>
 
-using Intrinsics = multicam_imu_calib::Camera::Intrinsics;
+using Camera = multicam_imu_calib::Camera;
+using DistortionCoefficients = Camera::DistortionCoefficients;
+using Intrinsics = Camera::Intrinsics;
+using Calibration = multicam_imu_calib::Calibration;
+
+static unsigned int seed(0);  // random seed
 
 static cv::Mat intrinsicsToK(const Intrinsics & intr)
 {
@@ -41,24 +46,23 @@ std::tuple<cv::Mat, cv::Mat> poseToRvecTvec(const gtsam::Pose3 & pose)
   return {rvec, tvec};
 }
 
-gtsam::Vector3 makeRandomVector(unsigned int * seed, double range)
+gtsam::Vector3 makeRandomVector(double range)
 {
   const int MAX_SIZE = 10000;
   gtsam::Vector3 a;
   for (size_t i = 0; i < 3; i++) {
-    a(i) = ((rand_r(seed) % (2 * MAX_SIZE)) - (MAX_SIZE)) * range / MAX_SIZE;
+    a(i) = ((rand_r(&seed) % (2 * MAX_SIZE)) - (MAX_SIZE)) * range / MAX_SIZE;
   }
   return (a);
 }
 
-std::vector<double> makeRandomVector(
-  size_t n, unsigned int * seed, double range)
+std::vector<double> makeRandomVector(size_t n, double range)
 {
   const int MAX_SIZE = 10000;
   std::vector<double> a;
   for (size_t i = 0; i < n; i++) {
     a.push_back(
-      ((rand_r(seed) % (2 * MAX_SIZE)) - (MAX_SIZE)) * range / MAX_SIZE);
+      ((rand_r(&seed) % (2 * MAX_SIZE)) - (MAX_SIZE)) * range / MAX_SIZE);
   }
   return (a);
 }
@@ -99,32 +103,27 @@ std::vector<std::array<double, 2>> makeProjectedPoints(
 }
 
 static gtsam::Pose3 disturbPose(
-  const gtsam::Pose3 & orig, double disturb_angle, double disturb_pos,
-  unsigned int * seed)
+  const gtsam::Pose3 & orig, double disturb_angle, double disturb_polar,
+  double disturb_pos)
 {
-  const auto d_angle = makeRandomVector(seed, disturb_angle);
-  const auto d_pos = makeRandomVector(seed, disturb_pos);
-  const gtsam::Pose3 dT(gtsam::Rot3::Expmap(d_angle), d_pos);
+  const auto d_polar = makeRandomVector(1, disturb_polar);
+  const auto d_angle = makeRandomVector(2, disturb_angle);
+  gtsam::Vector3 da(d_angle[0], d_angle[1], d_polar[0]);
+  const auto d_pos = makeRandomVector(disturb_pos);
+  const gtsam::Pose3 dT(gtsam::Rot3::Expmap(da), d_pos);
   return (dT * orig);
 }
-
-static Intrinsics disturbIntrinsics(
-  const Intrinsics & intr, unsigned int * seed)
+static gtsam::Pose3 disturbPose(
+  const gtsam::Pose3 & orig, double disturb_angle, double disturb_pos)
 {
-  const auto rv = makeRandomVector(4, seed, 0.1 * intr[0]);
-  return (Intrinsics(
-    {intr[0] + rv[0], intr[1] + rv[1], intr[2] + rv[2], intr[3] + rv[3]}));
+  return (disturbPose(orig, disturb_angle, disturb_angle, disturb_pos));
 }
 
-static std::vector<double> disturbDistortionCoefficients(
-  const std::vector<double> & dist, unsigned int * seed)
+static Intrinsics disturbIntrinsics(const Intrinsics & intr, double mag)
 {
-  const auto rv = makeRandomVector(dist.size(), seed, 0.5);
-  std::vector<double> d;
-  for (size_t i = 0; i < dist.size(); i++) {
-    d.push_back(dist[i] + rv[i]);
-  }
-  return (d);
+  const auto rv = makeRandomVector(4, mag * intr[0]);
+  return (Intrinsics(
+    {intr[0] + rv[0], intr[1] + rv[1], intr[2] + rv[2], intr[3] + rv[3]}));
 }
 
 static std::tuple<double, double> computeProjectionError(
@@ -134,7 +133,7 @@ static std::tuple<double, double> computeProjectionError(
   const Intrinsics & intrinsics,
   multicam_imu_calib::DistortionModel distortion_model,
   const std::vector<double> & distortion_coefficients,
-  const std::string & fname)
+  const std::string & fname = std::string())
 {
   std::ofstream debug_file;
   if (!fname.empty()) {
@@ -143,6 +142,7 @@ static std::tuple<double, double> computeProjectionError(
 
   double sum_err{0};
   double max_err{-1e10};
+
   for (size_t i = 0; i < cam_world_poses.size(); i++) {
     const auto & T_w_c = cam_world_poses[i];
     const auto ic = makeProjectedPoints(
@@ -156,12 +156,9 @@ static std::tuple<double, double> computeProjectionError(
       }
       const double err = res[0] * res[0] + res[1] * res[1];
       sum_err += err;
-      max_err = std::max(max_err, err);
-#if 0
-      printf(
-        "orig: %10.5f %10.5f ->  %10.5f  %10.5f err: %10.4e\n",
-        img_pts[i][k][0], img_pts[i][k][1], ic[k][0], ic[k][1], err);
-#endif
+      if (err > max_err) {
+        max_err = err;
+      }
     }
   }
   return {sum_err, max_err};
@@ -174,8 +171,17 @@ static void compareIntrinsics(
   const char * label[4] = {"fx", "fy", "cx", "cy"};
   for (size_t i = 0; i < intr.size(); i++) {
     printf(
-      "%2s %10.5f %10.5f %10.5f %10.5f\n", label[i], start[i], opt[i], intr[i],
+      "%-6s %10.5f %10.5f %10.5f %10.5f\n", label[i], start[i], opt[i], intr[i],
       opt[i] - intr[i]);
+  }
+}
+
+static void checkIntrinsics(
+  const Intrinsics & intr, const Intrinsics & opt, const double thresh)
+{
+  for (size_t i = 0; i < intr.size(); i++) {
+    EXPECT_LE(std::abs(opt[i] - intr[i]), thresh)
+      << " intrinsic " << i << " is off!";
   }
 }
 
@@ -183,81 +189,95 @@ static void compareDistortionCoefficients(
   const std::vector<double> & start, const std::vector<double> & dc,
   const std::vector<double> & opt)
 {
-  printf("start: ");
   for (size_t i = 0; i < start.size(); i++) {
-    printf(" %10.5f", start[i]);
+    printf(
+      "d[%1zu] %10.5f %10.5f %10.5f %10.5f\n", i, start[i], opt[i], dc[i],
+      opt[i] - dc[i]);
   }
-  printf("\nopt:   ");
-  for (size_t i = 0; i < opt.size(); i++) {
-    printf(" %10.5f", opt[i]);
-  }
-  printf("\ntrue:  ");
-  for (size_t i = 0; i < dc.size(); i++) {
-    printf(" %10.5f", dc[i]);
-  }
-  printf("\nerr:   ");
-  for (size_t i = 0; i < opt.size(); i++) {
-    printf(" %10.5f", opt[i] - dc[i]);
-  }
-  printf("\n");
 }
 
-TEST(multicam_imu_calib, tag_projection_single_cam)
+static void checkDistortionCoefficients(
+  const DistortionCoefficients & dc, const DistortionCoefficients & opt,
+  const double thresh)
 {
-  multicam_imu_calib::Calibration calib;
-  calib.readConfigFile("camera_test_1.yaml");
-  const auto cam = calib.getCameras()[0];  // first camera
+  for (size_t i = 0; i < dc.size(); i++) {
+    EXPECT_LE(std::abs(opt[i] - dc[i]), thresh)
+      << " distortion coefficient " << i << " is off!";
+  }
+}
 
-  srand(1);
-  unsigned int seed(0);  // random seed
+static bool pointsAreWithinFrame(
+  const std::vector<std::array<double, 2>> ip, const Intrinsics & intr,
+  double fac)
+{
+  const double x_min = intr[2] - intr[0] * fac;
+  const double x_max = intr[2] + intr[0] * fac;
+  const double y_min = intr[3] - intr[1] * fac;
+  const double y_max = intr[3] + intr[1] * fac;
+  for (const auto & p : ip) {
+    if (p[0] > x_max || p[0] < x_min || p[1] > y_max || p[1] < y_min) {
+      return (false);
+    }
+  }
+  return (true);
+}
 
-  // disturb the true camera pose. This should make no
-  // difference since this is a monocular setup.
-  const auto Td_r_c = disturbPose(cam->getPose(), 0.1, 0.1, &seed);
-  calib.addCameraPose(cam, Td_r_c);  // imperfect init
-  const auto intr_start = disturbIntrinsics(cam->getIntrinsics(), &seed);
-  const auto dist_start =
-    disturbDistortionCoefficients(cam->getDistortionCoefficients(), &seed);
-  calib.addIntrinsics(cam, intr_start, dist_start);
-
+std::tuple<
+  std::vector<std::vector<std::array<double, 2>>>, std::vector<gtsam::Pose3>,
+  std::vector<gtsam::Pose3>>
+generatePosesAndPoints(
+  const multicam_imu_calib::Camera::SharedPtr & cam,
+  multicam_imu_calib::Calibration * calib,
+  const std::vector<std::array<double, 3>> & wc,
+  const double pointsCutoffFactor)
+{
   // rig starting position is rotated along x axis by pi
   // such that the camera is facing straight down.
   // Additionally there is a shift along the z axis (elevation)
+
   const gtsam::Quaternion q0(0, 1.0, 0, 0);  // w, x, y, z
-  const gtsam::Pose3 T_w_r0(gtsam::Rot3(q0), gtsam::Point3(0, 0, 1.0));
+  const gtsam::Pose3 T_w_r0(gtsam::Rot3(q0), gtsam::Point3(0, 0, 0.8));
 
-  // world points form a square in the x/y plane
-  std::vector<std::array<double, 3>> wc = {
-    {1, 1, 0}, {-1, 1, 0}, {-1, -1, 0}, {1, -1, 0}};
+  const size_t num_poses = 10000;
 
-  const size_t num_poses = 200;
   std::vector<std::vector<std::array<double, 2>>> img_pts;
-
-  std::vector<gtsam::Pose3> cam_world_poses;
+  std::vector<gtsam::Pose3> cam_world_poses_true;
   std::vector<gtsam::Pose3> cam_world_poses_unopt;
 
-  uint64_t t = 1;
-  for (size_t i = 0; i < num_poses; i++, t++) {
+  for (size_t i = 0; img_pts.size() < num_poses; i++) {
     // jiggle the rig to get diverse points
-    const auto T_w_r = disturbPose(T_w_r0, 0.2, 0.5, &seed);
-    cam_world_poses.push_back(T_w_r * cam->getPose());
-    const auto T_w_c = cam_world_poses.back();
-    const auto ic = makeProjectedPoints(
+    const auto T_w_r = disturbPose(T_w_r0, 0.2, 1.0, 0.5);
+    // now get the camera pose from it
+    const auto T_w_c = T_w_r * cam->getPose();
+
+    const auto ip = makeProjectedPoints(
       cam->getIntrinsics(), cam->getDistortionModel(),
       cam->getDistortionCoefficients(), T_w_c, wc);
-    img_pts.push_back(ic);
-    // initialize rig with pose distorted from true value
-    const auto T_w_r_guess = disturbPose(T_w_r, 0.0, 0.1, &seed);
-    cam_world_poses_unopt.push_back(T_w_r_guess * cam->getPose());
-    calib.addRigPose(t, T_w_r_guess);
-    calib.addProjectionFactor(cam, t, wc, ic);
+    if (pointsAreWithinFrame(ip, cam->getIntrinsics(), pointsCutoffFactor)) {
+      cam_world_poses_true.push_back(T_w_r * cam->getPose());
+      img_pts.push_back(ip);
+      const auto t = img_pts.size();
+      // initialize rig with pose distorted from true value
+      // const auto T_w_r_guess = disturbPose(T_w_r, 0.0, 0.0);
+      const auto T_w_r_guess = disturbPose(T_w_r, 0.001, 0.001);
+      cam_world_poses_unopt.push_back(T_w_r_guess * cam->getPose());
+      calib->addRigPose(t, T_w_r_guess);
+      calib->addProjectionFactor(cam, t, wc, ip);
+    }
   }
+  return {img_pts, cam_world_poses_true, cam_world_poses_unopt};
+}
+
+static void printSummary(
+  const Camera::SharedPtr & cam, const Calibration & calib,
+  const std::vector<std::array<double, 3>> & wc,
+  const std::vector<std::vector<std::array<double, 2>>> & img_pts,
+  const Intrinsics & intr_start, const DistortionCoefficients & dist_start,
+  const std::vector<gtsam::Pose3> & cam_world_poses_unopt)
+{
   auto [sum_err_unopt, max_err_unopt] = computeProjectionError(
     wc, img_pts, cam_world_poses_unopt, cam->getIntrinsics(),
-    cam->getDistortionModel(), cam->getDistortionCoefficients(),
-    "unoptimized.txt");
-
-  calib.runOptimizer();
+    cam->getDistortionModel(), cam->getDistortionCoefficients());
 
   std::vector<gtsam::Pose3> cam_world_poses_opt;
   const auto T_r_c = calib.getOptimizedCameraPose(cam);
@@ -267,10 +287,9 @@ TEST(multicam_imu_calib, tag_projection_single_cam)
 
   auto [sum_err, max_err] = computeProjectionError(
     wc, img_pts, cam_world_poses_opt, calib.getOptimizedIntrinsics(cam),
-    cam->getDistortionModel(), calib.getOptimizedDistortionCoefficients(cam),
-    "optimized.txt");
+    cam->getDistortionModel(), calib.getOptimizedDistortionCoefficients(cam));
 
-  printf("num poses: %zu\n", num_poses);
+  printf("num poses: %zu\n", img_pts.size());
   printf(
     "unopt: sum of errors: %.5e, max_error: %.5e\n", sum_err_unopt,
     max_err_unopt);
@@ -280,8 +299,66 @@ TEST(multicam_imu_calib, tag_projection_single_cam)
   compareDistortionCoefficients(
     dist_start, cam->getDistortionCoefficients(),
     calib.getOptimizedDistortionCoefficients(cam));
+}
 
-  ASSERT_EQ(0, 1);
+TEST(multicam_imu_calib, single_cam_equidistant)
+{
+  multicam_imu_calib::Calibration calib;
+  calib.readConfigFile("single_cam_equidistant.yaml");
+  const auto cam = calib.getCameras()[0];  // first camera
+  srand(1);
+
+  calib.addCameraPose(cam, cam->getPose());  // perfect init
+  const auto intr_start = disturbIntrinsics(cam->getIntrinsics(), 0.2);
+  // start with zero distortion coefficients
+  DistortionCoefficients dist_start(4, 0.0);
+  calib.addIntrinsics(cam, intr_start, dist_start);
+
+  // world points form a square in the x/y plane
+  std::vector<std::array<double, 3>> wc = {
+    {1, 1, 0}, {-1, 1, 0}, {-1, -1, 0}, {1, -1, 0}};
+
+  auto [img_pts, cam_world_poses_true, cam_world_poses_unopt] =
+    generatePosesAndPoints(cam, &calib, wc, 1.5 /*pointcutoff*/);
+
+  calib.runOptimizer();
+  printSummary(
+    cam, calib, wc, img_pts, intr_start, dist_start, cam_world_poses_unopt);
+  checkIntrinsics(
+    cam->getIntrinsics(), calib.getOptimizedIntrinsics(cam), 0.014);
+  checkDistortionCoefficients(
+    cam->getDistortionCoefficients(),
+    calib.getOptimizedDistortionCoefficients(cam), 0.001);
+}
+
+TEST(multicam_imu_calib, single_cam_radtan)
+{
+  multicam_imu_calib::Calibration calib;
+  calib.readConfigFile("single_cam_radtan.yaml");
+  const auto cam = calib.getCameras()[0];  // first camera
+  srand(1);
+
+  calib.addCameraPose(cam, cam->getPose());  // perfect init
+  const auto intr_start = disturbIntrinsics(cam->getIntrinsics(), 0.2);
+  // start with zero distortion coefficients
+  DistortionCoefficients dist_start(8, 0.0);
+  calib.addIntrinsics(cam, intr_start, dist_start);
+
+  // world points form a square in the x/y plane
+  std::vector<std::array<double, 3>> wc = {
+    {1, 1, 0}, {-1, 1, 0}, {-1, -1, 0}, {1, -1, 0}};
+
+  auto [img_pts, cam_world_poses_true, cam_world_poses_unopt] =
+    generatePosesAndPoints(cam, &calib, wc, 1.5 /*pointcutoff*/);
+
+  calib.runOptimizer();
+  printSummary(
+    cam, calib, wc, img_pts, intr_start, dist_start, cam_world_poses_unopt);
+  checkIntrinsics(
+    cam->getIntrinsics(), calib.getOptimizedIntrinsics(cam), 0.16);
+  checkDistortionCoefficients(
+    cam->getDistortionCoefficients(),
+    calib.getOptimizedDistortionCoefficients(cam), 0.005);
 }
 
 int main(int argc, char ** argv)

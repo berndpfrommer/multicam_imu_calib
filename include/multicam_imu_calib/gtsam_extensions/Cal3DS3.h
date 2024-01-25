@@ -43,6 +43,7 @@
 #include <gtsam/geometry/Point2.h>
 
 #include <boost/shared_ptr.hpp>
+#include <vector>
 
 /**
  * @brief Calibration of a camera with radtan distortion
@@ -99,7 +100,7 @@ public:
   /// @name Advanced Constructors
   /// @{
 
-  explicit Cal3DS3(const gtsam::Vector & v);
+  explicit Cal3DS3(const gtsam::Vector & v, const std::array<double, 8> & mask);
 
   /// @}
   /// @name Testable
@@ -197,7 +198,11 @@ public:
 
   /// @}
 
+  void setCoefficientMask(const std::vector<double> & mask);
+
 private:
+  std::array<double, 8> coefficient_mask_{1, 1, 1, 1, 1, 1, 1, 1};
+
   gtsam::Point2 uncalibrateNoIntrinsics(const gtsam::Point2 & p) const;
   /// @name Advanced Interface
   /// @{
