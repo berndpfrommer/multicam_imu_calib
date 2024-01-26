@@ -31,6 +31,7 @@ class Calibration
 {
 public:
   using SharedPtr = std::shared_ptr<Calibration>;
+  using SharedNoiseModel = gtsam::SharedNoiseModel;
   using Intrinsics = Camera::Intrinsics;
   Calibration();
   ~Calibration() = default;
@@ -41,6 +42,9 @@ public:
     const Camera::SharedPtr & cam, const Intrinsics & intr,
     const std::vector<double> & dist);
   void addCameraPose(const Camera::SharedPtr & cam, const gtsam::Pose3 & T_r_c);
+  void addCameraPosePrior(
+    const Camera::SharedPtr & cam, const gtsam::Pose3 & T_r_c,
+    const SharedNoiseModel & noise);
   void addRigPose(uint64_t t, const gtsam::Pose3 & pose);
   void addProjectionFactor(
     const Camera::SharedPtr & camera, uint64_t t,

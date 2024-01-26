@@ -22,6 +22,7 @@
 #include <array>
 #include <map>
 #include <multicam_imu_calib/camera.hpp>
+#include <multicam_imu_calib/factor_key.hpp>
 #include <multicam_imu_calib/value_key.hpp>
 #include <string>
 #include <vector>
@@ -33,11 +34,16 @@ class Optimizer
 public:
   using SharedPtr = std::shared_ptr<Optimizer>;
   using Intrinsics = Camera::Intrinsics;
+  using SharedNoiseModel = gtsam::SharedNoiseModel;
   Optimizer();
   void addCamera(const Camera::SharedPtr & cam);
   void optimize();
   void setPixelNoise(double noise);
   void addCameraPose(const Camera::SharedPtr & cam, const gtsam::Pose3 & T_r_c);
+  value_key_t addCameraPosePrior(
+    value_key_t pose_key, const gtsam::Pose3 & T_r_c,
+    const SharedNoiseModel & noise);
+
   void addCameraIntrinsics(
     const Camera::SharedPtr & cam, const Intrinsics & intr,
     const DistortionModel & distortion_model,
@@ -54,6 +60,7 @@ public:
   {
     return (optimized_values_.at<T>(key));
   }
+  double getOptimizedError(factor_key_t k) const;
 
 private:
   value_key_t getNextKey() { return (key_++); }

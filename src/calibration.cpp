@@ -183,6 +183,14 @@ void Calibration::addCameraPose(
   optimizer_->addCameraPose(cam, T_r_c);
 }
 
+void Calibration::addCameraPosePrior(
+  const Camera::SharedPtr & cam, const gtsam::Pose3 & T_r_c,
+  const SharedNoiseModel & noise)
+{
+  cam->setPosePriorKey(
+    optimizer_->addCameraPosePrior(cam->getPoseKey(), T_r_c, noise));
+}
+
 void Calibration::addRigPose(uint64_t t, const gtsam::Pose3 & pose)
 {
   rig_pose_keys_.push_back(optimizer_->addRigPose(t, pose));

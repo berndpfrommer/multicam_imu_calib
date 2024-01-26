@@ -44,8 +44,14 @@ void Optimizer::addCameraPose(
   const auto pose_key = getNextKey();
   cam->setPoseKey(pose_key);
   values_.insert(pose_key, T_r_c);
-  graph_.push_back(
-    gtsam::PriorFactor<gtsam::Pose3>(pose_key, T_r_c, cam->getPoseNoise()));
+}
+
+value_key_t Optimizer::addCameraPosePrior(
+  value_key_t pose_key, const gtsam::Pose3 & T_r_c,
+  const SharedNoiseModel & noise)
+{
+  graph_.push_back(gtsam::PriorFactor<gtsam::Pose3>(pose_key, T_r_c, noise));
+  return (static_cast<value_key_t>(graph_.size() - 1));
 }
 
 void Optimizer::addCameraIntrinsics(
@@ -57,15 +63,20 @@ void Optimizer::addCameraIntrinsics(
   cam->setIntrinsicsKey(intr_key);
   switch (distortion_model) {
     case RADTAN: {
-      // optimizer layout: fx, fy, u, v, p1, p2, k[1...6]
+      // reorder coefficients:
       // our dist coeffs (opencv): k1, k2, p1, p2, k[3..6]
+      // optimizer layout: fx, fy, u, v, p1, p2, k[1...6]
+      std::array<double, 8> dd = {0, 0, 0, 0, 0, 0, 0, 0};
       const auto & dc = distortion_coefficients;
-      if (dc.size() != 8) {
-        BOMB_OUT("distortion model must have 8 coefficients!");
+      dd[0] = dc.size() > 2 ? dc[2] : 0;
+      dd[1] = dc.size() > 3 ? dc[3] : 0;
+      dd[2] = dc.size() > 0 ? dc[0] : 0;
+      dd[3] = dc.size() > 1 ? dc[1] : 0;
+      for (size_t i = 4; i < dc.size(); i++) {
+        dd[i] = dc[i];
       }
-      std::array<double, 6> d = {dc[0], dc[1], dc[4], dc[5], dc[6], dc[7]};
       Cal3DS3 intr_value(
-        intr[0], intr[1], intr[2], intr[3], dc[2], dc[3], d.data());
+        intr[0], intr[1], intr[2], intr[3], dd[0], dd[1], &dd[2]);
       intr_value.setCoefficientMask(cam->getCoefficientMask());
       values_.insert(intr_key, intr_value);
       graph_.push_back(gtsam::PriorFactor<Cal3DS3>(
@@ -75,11 +86,12 @@ void Optimizer::addCameraIntrinsics(
     case EQUIDISTANT: {
       // fx, fy, u, v, k[1..4]
       const auto & dc = distortion_coefficients;
-      if (dc.size() != 4) {
-        BOMB_OUT("distortion model must have 4 coefficients!");
+      std::array<double, 4> dd = {0, 0, 0, 0};
+      for (size_t i = 0; i < dc.size(); i++) {
+        dd[i] = dc[i];
       }
       Cal3FS2 intr_value(
-        intr[0], intr[1], intr[2], intr[3], dc[0], dc[1], dc[2], dc[3]);
+        intr[0], intr[1], intr[2], intr[3], dd[0], dd[1], dd[2], dd[3]);
       intr_value.setCoefficientMask(cam->getCoefficientMask());
       values_.insert(intr_key, intr_value);
       graph_.push_back(gtsam::PriorFactor<Cal3FS2>(
@@ -117,7 +129,9 @@ void Optimizer::addProjectionFactor(
     BOMB_OUT("different number of image and world corners!");
   }
   if (t != current_rig_pose_time_) {
-    BOMB_OUT("time: " << t << " does not match rig pose estimate time: " << t);
+    BOMB_OUT(
+      "time: " << t << " does not match rig pose estimate time: "
+               << current_rig_pose_time_);
   }
   gtsam::Expression<gtsam::Pose3> T_r_c(cam->getPoseKey());
   gtsam::Expression<gtsam::Pose3> T_w_r(current_rig_pose_key_);
@@ -184,6 +198,12 @@ void Optimizer::optimize()
 gtsam::Pose3 Optimizer::getOptimizedPose(value_key_t k) const
 {
   return (optimized_values_.at<gtsam::Pose3>(k));
+}
+
+double Optimizer::getOptimizedError(factor_key_t k) const
+{
+  const auto f = graph_.at(k);
+  return (f->error(optimized_values_));
 }
 
 }  // namespace multicam_imu_calib

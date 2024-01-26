@@ -21,6 +21,7 @@
 #include <gtsam/linear/NoiseModel.h>
 
 #include <memory>
+#include <multicam_imu_calib/factor_key.hpp>
 #include <multicam_imu_calib/value_key.hpp>
 #include <string>
 
@@ -49,8 +50,9 @@ public:
     return (distortion_coefficients_);
   }
   const auto & getIntrinsics() const { return (intrinsics_); }
-  value_key_t getPoseKey() const { return (pose_key_); }
-  value_key_t getIntrinsicsKey() const { return (intrinsics_key_); }
+  const auto getPoseKey() const { return (pose_key_); }
+  const auto getIntrinsicsKey() const { return (intrinsics_key_); }
+  const auto getPosePriorKey() const { return (pose_prior_key_); }
   std::vector<double> getCoefficientMask() const;
 
   // ------------ setters
@@ -58,6 +60,7 @@ public:
     const gtsam::Pose3 & pose, const SharedNoiseModel & noise);
   void setPoseKey(value_key_t k) { pose_key_ = k; }
   void setIntrinsicsKey(value_key_t k) { intrinsics_key_ = k; }
+  void setPosePriorKey(factor_key_t k) { pose_prior_key_ = k; }
   void setIntrinsics(double fx, double fy, double cx, double cy);
   void setDistortionCoefficients(const std::vector<double> & dc)
   {
@@ -80,6 +83,7 @@ private:
   SharedNoiseModel pixel_noise_;
   value_key_t pose_key_{0};
   value_key_t intrinsics_key_{0};
+  factor_key_t pose_prior_key_{0};
   Intrinsics intrinsics_{{0, 0, 0, 0}};
   DistortionModel distortion_model_{INVALID};
   DistortionCoefficients distortion_coefficients_;

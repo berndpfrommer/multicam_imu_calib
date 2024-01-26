@@ -1,0 +1,47 @@
+cameras:
+  - name: "camera_0"
+    intrinsics:
+      fx: 330.0
+      fy: 340.0
+      cx: 640
+      cy: 512
+    distortion_model:
+      type: "equidistant"
+      coefficients: [0.2, 0.1, -0.02, -0.01]
+    pose:
+      position:
+        x: 0.0
+        y: 0.0
+        z: 0.0
+      position_sigma:
+        x: 0.001
+        y: 0.001
+        z: 0.001
+      orientation:
+        x: 0.0
+        y: 0.0
+        z: 0.0
+        w: 1.0
+      orientation_sigma:
+        x: 0.001
+        y: 0.001
+        z: 0.001
+  - name: "camera_1"
+    intrinsics:
+      fx: 350.0
+      fy: 360.0
+      cx: 640
+      cy: 512
+    distortion_model:
+      type: "equidistant"
+      coefficients: [0.2, 0.1, -0.02, -0.01]
+    pose:
+      position:
+        x: 0.1
+        y: 0.0
+        z: 0.0
+      orientation:
+        x: 0.0
+        y: 0.0
+        z: 0.0
+        w: 1.0
