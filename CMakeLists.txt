@@ -22,16 +22,18 @@ add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_ros REQUIRED)
 find_package(ament_cmake_auto REQUIRED)
-find_package(OpenCV REQUIRED COMPONENTS core imgproc)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc calib3d)
 find_package(yaml-cpp REQUIRED)
 find_package(GTSAM REQUIRED)
 
 set(ament_dependencies
   "rclcpp"
   "rclcpp_components"
+  "rosbag2_cpp"
   "image_transport"
   "cv_bridge"
   "sensor_msgs"
+  "apriltag_detector"
   "apriltag_msgs")
 
 foreach(pkg ${ament_dependencies})
@@ -73,11 +75,24 @@ add_executable(${PROJECT_NAME}_node src/multicam_imu_calib_node.cpp)
 target_link_libraries(${PROJECT_NAME}_node ${PROJECT_NAME})
 target_compile_features(${PROJECT_NAME}_node PRIVATE cxx_std_17)
 
+#
+# -------- calibrate from bag
+#
+add_executable(calibrate_from_bag
+  src/calibrate_from_bag.cpp
+  src/init_pose.cpp
+  src/target.cpp
+  src/apriltag_board_target.cpp
+  src/front_end.cpp)
+target_link_libraries(calibrate_from_bag ${PROJECT_NAME} opencv_calib3d)
+target_compile_features(calibrate_from_bag PRIVATE cxx_std_17)
+
 # the node must go into the project specific lib directory or else
 # the launch file will not find it
 
 install(TARGETS
   ${PROJECT_NAME}_node
+  calibrate_from_bag
   DESTINATION lib/${PROJECT_NAME}/)
 
 # the shared library goes into the global lib dir so it can

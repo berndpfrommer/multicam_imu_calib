@@ -1,0 +1,43 @@
+targets:
+  - name: "apriltag board"
+    type: "apriltag_board"
+    family: "tf36h11"
+    starting_tag_id: 0
+    tag_size: 0.07
+    rows: 3
+    distance_rows: 0.087
+    columns: 4
+    distance_columns: 0.087
+
+cameras:
+  - name: "camera_0"
+    ros_topic: "/cam_sync/cam_0/image_raw"
+    pixel_noise: 1.0
+    intrinsics:
+      fx: 833.0
+      fy: 833.0
+      cx: 748
+      cy: 550
+    distortion_model:
+      type: "equidistant"
+      coefficients: [-0.0117, -0.0091, 0.0030, 0.0002]
+      coefficient_mask: [1, 1, 1, 1]
+      coefficient_sigma: [0.5, 0.5, 0.5, 0.5]
+    pose:
+      position:
+        x: 0.0
+        y: 0.0
+        z: 0.0
+      position_sigma:
+        x: 10.0
+        y: 10.0
+        z: 10.0
+      orientation:
+        x: 0.0
+        y: 0.0
+        z: 0.0
+        w: 1.0
+      orientation_sigma:
+        x: 6.28
+        y: 6.28
+        z: 6.28

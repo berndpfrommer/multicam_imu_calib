@@ -21,12 +21,15 @@
 #include <apriltag_msgs/msg/april_tag_detection_array.hpp>
 #include <memory>
 #include <multicam_imu_calib/camera.hpp>
-#include <multicam_imu_calib/optimizer.hpp>
+#include <multicam_imu_calib/detection.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <string>
+#include <unordered_map>
 
 namespace multicam_imu_calib
 {
+class Optimizer;  // forward decl
+
 class Calibration
 {
 public:
@@ -36,8 +39,10 @@ public:
   Calibration();
   ~Calibration() = default;
   void readConfigFile(const std::string & file);
-  const auto & getCameras() { return (cameras_); }
   void runOptimizer();
+  void writeResults(const std::string & outDir);
+  const auto & getCameras() { return (cameras_); }
+  const auto & getCameraList() { return (camera_list_); }
   void addIntrinsics(
     const Camera::SharedPtr & cam, const Intrinsics & intr,
     const std::vector<double> & dist);
@@ -50,7 +55,11 @@ public:
     const Camera::SharedPtr & camera, uint64_t t,
     const std::vector<std::array<double, 3>> & wc,
     const std::vector<std::array<double, 2>> & ic);
+  void addDetection(
+    const Camera::SharedPtr & camera, uint64_t t,
+    const Detection::SharedPtr & detection);
 
+  bool hasRigPose(uint64_t t) const;
   std::vector<gtsam::Pose3> getOptimizedRigPoses() const;
   gtsam::Pose3 getOptimizedCameraPose(const Camera::SharedPtr & cam) const;
   Intrinsics getOptimizedIntrinsics(const Camera::SharedPtr & cam) const;
@@ -62,9 +71,12 @@ private:
     const Camera::SharedPtr & cam, const YAML::Node & intr,
     const YAML::Node & dist);
   // ------------- variables -------------
-  Optimizer::SharedPtr optimizer_;
-  std::vector<Camera::SharedPtr> cameras_;
+  std::shared_ptr<Optimizer> optimizer_;
+  std::unordered_map<std::string, Camera::SharedPtr> cameras_;
+  std::vector<Camera::SharedPtr> camera_list_;
   std::vector<value_key_t> rig_pose_keys_;
+  std::unordered_map<uint64_t, value_key_t> time_to_rig_pose_;
+  YAML::Node config_;
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__CALIBRATION_HPP_

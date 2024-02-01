@@ -18,12 +18,18 @@
 #include <multicam_imu_calib/gtsam_extensions/Cal3DS3.h>
 #include <multicam_imu_calib/gtsam_extensions/Cal3FS2.h>
 
+#include <filesystem>
 #include <multicam_imu_calib/calibration.hpp>
 #include <multicam_imu_calib/logging.hpp>
+#include <multicam_imu_calib/optimizer.hpp>
+#include <sstream>
 
 namespace multicam_imu_calib
 {
-static rclcpp::Logger get_logger() { return (rclcpp::get_logger("optimizer")); }
+static rclcpp::Logger get_logger()
+{
+  return (rclcpp::get_logger("calibration"));
+}
 
 Calibration::Calibration() : optimizer_(std::make_shared<Optimizer>()) {}
 
@@ -137,11 +143,11 @@ void Calibration::readConfigFile(const std::string & file)
     BOMB_OUT("config_file parameter is empty!");
   }
   LOG_INFO("using config file: " << file);
-  YAML::Node yamlFile = YAML::LoadFile(file);
-  if (yamlFile.IsNull()) {
+  config_ = YAML::LoadFile(file);
+  if (config_.IsNull()) {
     BOMB_OUT("cannot open config file: " << file);
   }
-  YAML::Node cameras = yamlFile["cameras"];
+  YAML::Node cameras = config_["cameras"];
   if (!cameras.IsSequence()) {
     BOMB_OUT("config file has no list of cameras!");
   }
@@ -164,10 +170,76 @@ void Calibration::readConfigFile(const std::string & file)
       gtsam::noiseModel::Diagonal::Sigmas(gtsam::Vector2::Constant(pxn)));
     parseIntrinsicsAndDistortionModel(
       cam, c["intrinsics"], c["distortion_model"]);
+    cam->setTopic(
+      c["ros_topic"] ? c["ros_topic"].as<std::string>() : std::string(""));
     optimizer_->addCamera(cam);
     LOG_INFO("found camera: " << c["name"]);
-    cameras_.push_back(cam);
+    cameras_.insert({cam->getName(), cam});
+    camera_list_.push_back(cam);
   }
+}
+
+template <typename T>
+std::string fmt(const T & x, const int n)
+{
+  std::ostringstream out;
+  out.precision(n);
+  out << std::fixed << x;
+  return (std::move(out).str());
+}
+
+static YAML::Node makeIntrinsics(double fx, double fy, double cx, double cy)
+{
+  YAML::Node intr;
+  intr["fx"] = fmt(fx, 2);
+  intr["fy"] = fmt(fy, 2);
+  intr["cx"] = fmt(cx, 2);
+  intr["cy"] = fmt(cy, 2);
+  return intr;
+}
+
+template <class T>
+static YAML::Node makeDistortionCoefficients(const T & d)
+{
+  YAML::Node dist;
+  for (const auto c : d) {
+    dist.push_back(fmt(c, 4));
+  }
+  return (dist);
+}
+
+void Calibration::writeResults(const std::string & out_dir)
+{
+  (void)std::filesystem::create_directory(out_dir);
+  auto calib(config_);
+  for (size_t cam_id = 0; cam_id < camera_list_.size(); cam_id++) {
+    const auto & cam = camera_list_[cam_id];
+    switch (cam->getDistortionModel()) {
+      case RADTAN: {
+        const auto intr =
+          optimizer_->getOptimizedIntrinsics<Cal3DS3>(cam->getIntrinsicsKey());
+        calib["cameras"][cam_id]["intrinsics"] =
+          makeIntrinsics(intr.fx(), intr.fy(), intr.p1(), intr.p2());
+        calib["cameras"][cam_id]["distortion_model"]["coefficients"] =
+          makeDistortionCoefficients(intr.k());
+        break;
+      }
+      case EQUIDISTANT: {
+        const auto intr =
+          optimizer_->getOptimizedIntrinsics<Cal3FS2>(cam->getIntrinsicsKey());
+        calib["cameras"][cam_id]["intrinsics"] =
+          makeIntrinsics(intr.fx(), intr.fy(), intr.px(), intr.py());
+        calib["cameras"][cam_id]["distortion_model"]["coefficients"] =
+          makeDistortionCoefficients(intr.k());
+        break;
+      }
+      default:
+        BOMB_OUT("invalid distortion model!");
+    }
+  }
+  using Path = std::filesystem::path;
+  std::ofstream new_calib(Path(out_dir) / Path("calibration.yaml"));
+  new_calib << calib;
 }
 
 void Calibration::addIntrinsics(
@@ -194,6 +266,12 @@ void Calibration::addCameraPosePrior(
 void Calibration::addRigPose(uint64_t t, const gtsam::Pose3 & pose)
 {
   rig_pose_keys_.push_back(optimizer_->addRigPose(t, pose));
+  time_to_rig_pose_.insert({t, rig_pose_keys_.back()});
+}
+
+bool Calibration::hasRigPose(uint64_t t) const
+{
+  return (time_to_rig_pose_.find(t) != time_to_rig_pose_.end());
 }
 
 void Calibration::addProjectionFactor(
@@ -202,6 +280,13 @@ void Calibration::addProjectionFactor(
   const std::vector<std::array<double, 2>> & ic)
 {
   optimizer_->addProjectionFactor(camera, t, wc, ic);
+}
+
+void Calibration::addDetection(
+  const Camera::SharedPtr & camera, uint64_t t,
+  const Detection::SharedPtr & det)
+{
+  addProjectionFactor(camera, t, det->world_points, det->image_points);
 }
 
 std::vector<gtsam::Pose3> Calibration::getOptimizedRigPoses() const

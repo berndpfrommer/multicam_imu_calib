@@ -54,6 +54,7 @@ public:
   const auto getIntrinsicsKey() const { return (intrinsics_key_); }
   const auto getPosePriorKey() const { return (pose_prior_key_); }
   std::vector<double> getCoefficientMask() const;
+  const auto & getTopic() const { return (topic_); }
 
   // ------------ setters
   void setPoseWithNoise(
@@ -74,6 +75,7 @@ public:
   {
     coefficientSigma_ = cs;
   }
+  void setTopic(const std::string & topic) { topic_ = topic; }
 
 private:
   std::string name_;
@@ -89,6 +91,7 @@ private:
   DistortionCoefficients distortion_coefficients_;
   std::vector<int> mask_;
   std::vector<double> coefficientSigma_;  // coefficient noise
+  std::string topic_;
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__CAMERA_HPP_

@@ -5,7 +5,7 @@ calibration of multiple synchronized cameras as well as camera-to-IMU extrinsic 
 
 ## Supported platforms
 
-Should work under ROS2 versions starting with Foxy.
+Should work under ROS2 versions starting with Humble.
 
 ## How to build
 Create a workspace (``~/ws``), and clone this repo:
@@ -28,7 +28,11 @@ colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo  #
 
 ## How to use
 
-TODO.
+### From a ros bag:
+```bash
+ros2 run multicam_imu_calib calibrate_from_bag  -b "<path_to_bag_file>" -o "<output_directory>" -c "<calibration_config_file.yaml>"
+```
+This will produce calibration output results in the output directory.
 
 ## License
 

@@ -16,6 +16,7 @@
 #include <gtest/gtest.h>
 
 #include <cassert>
+#include <fstream>
 #include <multicam_imu_calib/calibration.hpp>
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core/core.hpp>
@@ -336,7 +337,7 @@ void test_single_cam(
   srand(1);
   multicam_imu_calib::Calibration calib;
   calib.readConfigFile(fname);
-  const auto cam = calib.getCameras()[0];  // first camera
+  const auto cam = calib.getCameraList()[0];  // first camera
 
   calib.addCameraPose(cam, cam->getPose());  // perfect init
   const auto intr_start = disturbIntrinsics(cam->getIntrinsics(), 0.2);
@@ -375,7 +376,7 @@ void test_stereo_cam(const std::string & fname)
   std::vector<DistortionCoefficients> dist_start;
   const auto num_cams = calib.getCameras().size();
   for (size_t cam_id = 0; cam_id < num_cams; cam_id++) {
-    const auto cam = calib.getCameras()[cam_id];
+    const auto cam = calib.getCameraList()[cam_id];
     calib.addCameraPose(cam, disturbPose(cam->getPose(), 0.01, 0.03));
     calib.addCameraPosePrior(cam, cam->getPose(), cam->getPoseNoise());
     intr_start.push_back(disturbIntrinsics(cam->getIntrinsics(), 0.1));
@@ -383,11 +384,12 @@ void test_stereo_cam(const std::string & fname)
     calib.addIntrinsics(cam, intr_start.back(), dist_start.back());
   }
   auto [img_pts, cam_world_poses_true, cam_world_poses_unopt, time_slots] =
-    generatePosesAndPoints(calib.getCameras(), &calib, wc, 1 /*pointcutoff*/);
+    generatePosesAndPoints(
+      calib.getCameraList(), &calib, wc, 1 /*pointcutoff*/);
   calib.runOptimizer();
 
   for (size_t cam_id = 0; cam_id < num_cams; cam_id++) {
-    const auto cam = calib.getCameras()[cam_id];
+    const auto cam = calib.getCameraList()[cam_id];
     printf("----------- camera %s -----------\n", cam->getName().c_str());
     printSummary(
       cam, calib, wc, img_pts[cam_id], intr_start[cam_id], dist_start[cam_id],
