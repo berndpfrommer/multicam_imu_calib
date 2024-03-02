@@ -20,6 +20,7 @@
 
 #include <filesystem>
 #include <multicam_imu_calib/calibration.hpp>
+#include <multicam_imu_calib/diagnostics.hpp>
 #include <multicam_imu_calib/logging.hpp>
 #include <multicam_imu_calib/optimizer.hpp>
 #include <sstream>
@@ -177,6 +178,9 @@ void Calibration::readConfigFile(const std::string & file)
     cameras_.insert({cam->getName(), cam});
     camera_list_.push_back(cam);
   }
+  image_points_.resize(camera_list_.size());
+  world_points_.resize(camera_list_.size());
+  detection_times_.resize(camera_list_.size());
 }
 
 template <typename T>
@@ -275,18 +279,20 @@ bool Calibration::hasRigPose(uint64_t t) const
 }
 
 void Calibration::addProjectionFactor(
-  const Camera::SharedPtr & camera, uint64_t t,
-  const std::vector<std::array<double, 3>> & wc,
+  size_t cam_idx, uint64_t t, const std::vector<std::array<double, 3>> & wc,
   const std::vector<std::array<double, 2>> & ic)
 {
+  const auto camera = camera_list_[cam_idx];
+  image_points_[cam_idx].push_back(ic);
+  world_points_[cam_idx].push_back(wc);
+  detection_times_[cam_idx].push_back(t);
   optimizer_->addProjectionFactor(camera, t, wc, ic);
 }
 
 void Calibration::addDetection(
-  const Camera::SharedPtr & camera, uint64_t t,
-  const Detection::SharedPtr & det)
+  size_t cam_idx, uint64_t t, const Detection::SharedPtr & det)
 {
-  addProjectionFactor(camera, t, det->world_points, det->image_points);
+  addProjectionFactor(cam_idx, t, det->world_points, det->image_points);
 }
 
 std::vector<gtsam::Pose3> Calibration::getOptimizedRigPoses() const
@@ -304,7 +310,7 @@ gtsam::Pose3 Calibration::getOptimizedCameraPose(
   return (optimizer_->getOptimizedPose(cam->getPoseKey()));
 }
 
-Calibration::Intrinsics Calibration::getOptimizedIntrinsics(
+Intrinsics Calibration::getOptimizedIntrinsics(
   const Camera::SharedPtr & cam) const
 {
   Intrinsics intr;
@@ -329,10 +335,10 @@ Calibration::Intrinsics Calibration::getOptimizedIntrinsics(
   return (intr);
 }
 
-std::vector<double> Calibration::getOptimizedDistortionCoefficients(
+DistortionCoefficients Calibration::getOptimizedDistortionCoefficients(
   const Camera::SharedPtr & cam) const
 {
-  std::vector<double> dist;
+  DistortionCoefficients dist;
   switch (cam->getDistortionModel()) {
     case RADTAN: {
       const auto calib =
@@ -365,5 +371,44 @@ std::vector<double> Calibration::getOptimizedDistortionCoefficients(
 }
 
 void Calibration::runOptimizer() { optimizer_->optimize(); }
+
+void Calibration::runDiagnostics(const std::string & error_file)
+{
+  try {
+    std::filesystem::remove(error_file);
+  } catch (const std::filesystem::filesystem_error &) {
+  }
+
+  for (size_t cam_idx = 0; cam_idx < camera_list_.size(); cam_idx++) {
+    const auto cam = camera_list_[cam_idx];
+    std::vector<gtsam::Pose3> cam_world_poses_opt;
+    std::vector<std::vector<std::array<double, 2>>> image_pts;
+    std::vector<std::vector<std::array<double, 3>>> world_pts;
+    const auto T_r_c = getOptimizedCameraPose(cam);
+    size_t num_points{0};
+    std::vector<uint64_t> times;
+    for (size_t det = 0; det < detection_times_[cam_idx].size(); det++) {
+      const auto t = detection_times_[cam_idx][det];
+      const auto it = time_to_rig_pose_.find(t);
+      if (it != time_to_rig_pose_.end()) {
+        const auto rig_pose = optimizer_->getOptimizedPose(it->second);
+        times.push_back(it->first);
+        cam_world_poses_opt.push_back(rig_pose * T_r_c);
+        image_pts.push_back(image_points_[cam_idx][det]);
+        world_pts.push_back(world_points_[cam_idx][det]);
+        num_points += image_points_[cam_idx][det].size();
+      }
+    }
+    const auto intr = getOptimizedIntrinsics(cam);
+    const auto dist = getOptimizedDistortionCoefficients(cam);
+    auto [sum_err, max_err, max_idx] = diagnostics::computeProjectionError(
+      cam_idx, times, world_pts, image_pts, cam_world_poses_opt, intr,
+      cam->getDistortionModel(), dist, error_file);
+    LOG_INFO_FMT(
+      "cam %5s avg pix err: %15.2f  max pix err: %15.2f at idx: %6zu",
+      cam->getName().c_str(), std::sqrt(sum_err / num_points),
+      std::sqrt(max_err), max_idx);
+  }
+}
 
 }  // namespace multicam_imu_calib

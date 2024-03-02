@@ -52,12 +52,14 @@ add_library(${PROJECT_NAME} SHARED
   src/calibration.cpp
   src/camera.cpp
   src/optimizer.cpp
+  src/utilities.cpp
+  src/diagnostics.cpp
   src/gtsam_extensions/Cal3DS3.cpp
   src/gtsam_extensions/Cal3FS2.cpp
 )
 
 ament_target_dependencies(${PROJECT_NAME} ${ament_dependencies})
-target_link_libraries(${PROJECT_NAME} opencv_core opencv_imgproc yaml-cpp gtsam)
+target_link_libraries(${PROJECT_NAME} opencv_core opencv_imgproc opencv_calib3d yaml-cpp gtsam)
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
 
 target_include_directories(
@@ -102,6 +104,10 @@ install(TARGETS
   ${PROJECT_NAME}
   DESTINATION lib
 )
+install(PROGRAMS
+  src/diagnostics.py
+  DESTINATION lib/${PROJECT_NAME}/)
+
 
 install(DIRECTORY
   launch

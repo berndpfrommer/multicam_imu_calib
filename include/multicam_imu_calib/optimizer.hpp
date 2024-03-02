@@ -23,6 +23,7 @@
 #include <map>
 #include <multicam_imu_calib/camera.hpp>
 #include <multicam_imu_calib/factor_key.hpp>
+#include <multicam_imu_calib/intrinsics.hpp>
 #include <multicam_imu_calib/value_key.hpp>
 #include <string>
 #include <vector>
@@ -33,7 +34,6 @@ class Optimizer
 {
 public:
   using SharedPtr = std::shared_ptr<Optimizer>;
-  using Intrinsics = Camera::Intrinsics;
   using SharedNoiseModel = gtsam::SharedNoiseModel;
   Optimizer();
   void addCamera(const Camera::SharedPtr & cam);

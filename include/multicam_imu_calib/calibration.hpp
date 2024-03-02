@@ -22,6 +22,7 @@
 #include <memory>
 #include <multicam_imu_calib/camera.hpp>
 #include <multicam_imu_calib/detection.hpp>
+#include <multicam_imu_calib/intrinsics.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <string>
 #include <unordered_map>
@@ -35,11 +36,13 @@ class Calibration
 public:
   using SharedPtr = std::shared_ptr<Calibration>;
   using SharedNoiseModel = gtsam::SharedNoiseModel;
-  using Intrinsics = Camera::Intrinsics;
+  using CameraList = std::vector<Camera::SharedPtr>;
   Calibration();
   ~Calibration() = default;
   void readConfigFile(const std::string & file);
   void runOptimizer();
+  void runDiagnostics(const std::string & error_file);
+
   void writeResults(const std::string & outDir);
   const auto & getCameras() { return (cameras_); }
   const auto & getCameraList() { return (camera_list_); }
@@ -52,18 +55,16 @@ public:
     const SharedNoiseModel & noise);
   void addRigPose(uint64_t t, const gtsam::Pose3 & pose);
   void addProjectionFactor(
-    const Camera::SharedPtr & camera, uint64_t t,
-    const std::vector<std::array<double, 3>> & wc,
+    size_t cam_idx, uint64_t t, const std::vector<std::array<double, 3>> & wc,
     const std::vector<std::array<double, 2>> & ic);
   void addDetection(
-    const Camera::SharedPtr & camera, uint64_t t,
-    const Detection::SharedPtr & detection);
+    size_t cam_idx, uint64_t t, const Detection::SharedPtr & detection);
 
   bool hasRigPose(uint64_t t) const;
   std::vector<gtsam::Pose3> getOptimizedRigPoses() const;
   gtsam::Pose3 getOptimizedCameraPose(const Camera::SharedPtr & cam) const;
   Intrinsics getOptimizedIntrinsics(const Camera::SharedPtr & cam) const;
-  std::vector<double> getOptimizedDistortionCoefficients(
+  DistortionCoefficients getOptimizedDistortionCoefficients(
     const Camera::SharedPtr & cam) const;
 
 private:
@@ -73,9 +74,14 @@ private:
   // ------------- variables -------------
   std::shared_ptr<Optimizer> optimizer_;
   std::unordered_map<std::string, Camera::SharedPtr> cameras_;
-  std::vector<Camera::SharedPtr> camera_list_;
+  CameraList camera_list_;
   std::vector<value_key_t> rig_pose_keys_;
   std::unordered_map<uint64_t, value_key_t> time_to_rig_pose_;
+  std::vector<std::vector<uint64_t>> detection_times_;
+  // image_points_[cam_idx][detection_idx][point_index][x/y]
+  std::vector<std::vector<std::vector<std::array<double, 2>>>> image_points_;
+  // world_points_[cam_idx][detection_idx][point_index][x/y]
+  std::vector<std::vector<std::vector<std::array<double, 3>>>> world_points_;
   YAML::Node config_;
 };
 }  // namespace multicam_imu_calib

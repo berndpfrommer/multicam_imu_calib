@@ -16,6 +16,7 @@
 #include <unistd.h>
 
 #include <chrono>
+#include <filesystem>
 #include <fstream>
 #include <multicam_imu_calib/calibration.hpp>
 #include <multicam_imu_calib/front_end.hpp>
@@ -38,31 +39,44 @@ void usage()
 namespace multicam_imu_calib
 {
 
+using sensor_msgs::msg::Image;
+using Path = std::filesystem::path;
+using rclcpp::Time;
+
 static rclcpp::Logger get_logger()
 {
   return (rclcpp::get_logger("calibrate_from_bag"));
 }
 
-using sensor_msgs::msg::Image;
-
-void calibrate_from_bag(
-  const std::string & inFile, const std::string & outDir,
-  const std::string & configFile)
+static std::tuple<
+  Calibration::CameraList, std::unordered_map<std::string, size_t>>
+initializeCalibration(Calibration * cal)
 {
-  Calibration calib;
-  calib.readConfigFile(configFile);
-  FrontEnd front_end;
-  front_end.readConfigFile(configFile);
-  std::unordered_map<std::string, Camera::SharedPtr> topic_to_cam;
-  for (const auto & cam : calib.getCameraList()) {
+  std::unordered_map<std::string, size_t> topic_to_cam;
+  auto cam_list = cal->getCameraList();
+  for (size_t cam_idx = 0; cam_idx < cam_list.size(); cam_idx++) {
+    const auto & cam = cam_list[cam_idx];
     if (cam->getTopic().empty()) {
       BOMB_OUT("camera " << cam->getName() << " has no ros topic configured!");
     }
-    topic_to_cam.insert({cam->getTopic(), cam});
-    calib.addCameraPose(cam, cam->getPose());
-    calib.addIntrinsics(
+    topic_to_cam.insert({cam->getTopic(), cam_idx});
+    cal->addCameraPose(cam, cam->getPose());
+    cal->addIntrinsics(
       cam, cam->getIntrinsics(), cam->getDistortionCoefficients());
   }
+  return {cam_list, topic_to_cam};
+}
+
+void calibrate_from_bag(
+  const std::string & inFile, const std::string & out_dir,
+  const std::string & config_file)
+{
+  Calibration cal;
+  cal.readConfigFile(config_file);
+  FrontEnd front_end;
+  front_end.readConfigFile(config_file);
+
+  auto [cam_list, topic_to_cam] = initializeCalibration(&cal);
 
   rosbag2_cpp::Reader reader;
   reader.open(inFile);
@@ -76,30 +90,29 @@ void calibrate_from_bag(
       continue;
     }
     num_frames++;
-    const auto cam = it->second;
+    const auto cam_idx = it->second;
+    const auto cam = cam_list[cam_idx];
     rclcpp::SerializedMessage serializedMsg(*msg->serialized_data);
     Image::SharedPtr m(new Image());
     serialization.deserialize_message(&serializedMsg, m.get());
-    const uint64_t t = rclcpp::Time(m->header.stamp).nanoseconds();
+    const uint64_t t = Time(m->header.stamp).nanoseconds();
     for (const auto & target : front_end.getTargets()) {
-      const auto detection = front_end.detect(target, m);
-      if (!detection) {
+      const auto det = front_end.detect(target, m);
+      if (!det) {
         continue;  // nothing detected
       }
-      num_points_detected += detection->world_points.size();
-      if (!calib.hasRigPose(t)) {
-        const auto T_c_w = init_pose::findCameraPose(cam, detection);
+      num_points_detected += det->world_points.size();
+      if (!cal.hasRigPose(t)) {
+        const auto T_c_w = init_pose::findCameraPose(cam, det);
         if (T_c_w) {
           // T_w_r = T_w_c * T_c_r
-          const auto T_w_r = (cam->getPose() * (*T_c_w)).inverse();
-          calib.addRigPose(t, T_w_r);
+          cal.addRigPose(t, (cam->getPose() * (*T_c_w)).inverse());
         } else {
           LOG_WARN(t << " cannot find rig pose for cam " << cam->getName());
         }
       }
-      if (calib.hasRigPose(t)) {
-        calib.addDetection(
-          cam, rclcpp::Time(m->header.stamp).nanoseconds(), detection);
+      if (cal.hasRigPose(t)) {
+        cal.addDetection(cam_idx, Time(m->header.stamp).nanoseconds(), det);
       }
     }
     if (num_frames % 50 == 0) {
@@ -108,9 +121,11 @@ void calibrate_from_bag(
         num_points_detected);
     }
   }
-  calib.runOptimizer();
-  calib.writeResults(outDir);
+  cal.runOptimizer();
+  cal.writeResults(out_dir);
+  cal.runDiagnostics(Path(out_dir) / Path("projections.txt"));
 }
+
 }  // namespace multicam_imu_calib
 
 int main(int argc, char ** argv)

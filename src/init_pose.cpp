@@ -14,6 +14,7 @@
 // limitations under the License.
 
 #include <multicam_imu_calib/init_pose.hpp>
+#include <multicam_imu_calib/intrinsics.hpp>
 #include <multicam_imu_calib/logging.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
 #include <opencv2/core/core.hpp>
@@ -29,13 +30,13 @@ namespace init_pose
 {
 static rclcpp::Logger get_logger() { return (rclcpp::get_logger("init_pose")); }
 
-static cv::Mat intrinsicsToK(const Camera::Intrinsics & ci)
+static cv::Mat intrinsicsToK(const Intrinsics & ci)
 {
   return (
     cv::Mat_<double>(3, 3) << ci[0], 0, ci[2], 0, ci[1], ci[3], 0, 0, 1.0);
 }
 
-static cv::Mat distortionToCV(const Camera::DistortionCoefficients & d)
+static cv::Mat distortionToCV(const DistortionCoefficients & d)
 {
   return (d.empty() ? cv::Mat::zeros(4, 1, CV_64F) : cv::Mat(d, true));
 }

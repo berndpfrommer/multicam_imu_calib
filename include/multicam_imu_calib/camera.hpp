@@ -22,20 +22,18 @@
 
 #include <memory>
 #include <multicam_imu_calib/factor_key.hpp>
+#include <multicam_imu_calib/intrinsics.hpp>
 #include <multicam_imu_calib/value_key.hpp>
 #include <string>
 
 namespace multicam_imu_calib
 {
-enum DistortionModel { INVALID = 0, RADTAN, EQUIDISTANT };
 class Camera
 {
 public:
   using SharedPtr = std::shared_ptr<Camera>;
   using KMatrix = Eigen::Matrix3d;
   using SharedNoiseModel = gtsam::SharedNoiseModel;
-  using Intrinsics = std::array<double, 4>;
-  using DistortionCoefficients = std::vector<double>;
   explicit Camera(const std::string & name) : name_(name) {}
 
   // ------------ getters
