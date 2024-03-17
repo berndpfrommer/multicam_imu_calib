@@ -13,35 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <multicam_imu_calib/front_end.hpp>
+#include <multicam_imu_calib/imu.hpp>
 #include <multicam_imu_calib/logging.hpp>
 
 namespace multicam_imu_calib
 {
-static rclcpp::Logger get_logger() { return (rclcpp::get_logger("front_end")); }
-FrontEnd::FrontEnd() {}
+// static rclcpp::Logger get_logger() { return (rclcpp::get_logger("camera")); }
 
-void FrontEnd::readConfigFile(const std::string & file)
+void IMU::setPoseWithNoise(
+  const gtsam::Pose3 & pose, const gtsam::SharedNoiseModel & noise)
 {
-  YAML::Node yamlFile = YAML::LoadFile(file);
-  if (yamlFile.IsNull()) {
-    BOMB_OUT("cannot open config file: " << file);
-  }
-  YAML::Node targets = yamlFile["targets"];
-  if (!targets.IsSequence()) {
-    BOMB_OUT("config file has no list of targets!");
-  }
-  for (const YAML::Node & target : targets) {
-    Target::SharedPtr targ = Target::make(target);
-    LOG_INFO("using target: " << targ->getName());
-    targets_.push_back(targ);
-  }
+  pose_noise_ = noise;
+  pose_ = pose;
 }
-
-Detection::SharedPtr FrontEnd::detect(
-  const Target::SharedPtr & target, const Image::ConstSharedPtr & img) const
-{
-  return (target->detect(img));
-}
-
 }  // namespace multicam_imu_calib

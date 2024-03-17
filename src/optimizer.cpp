@@ -108,6 +108,11 @@ void Optimizer::addCamera(const Camera::SharedPtr & cam)
   cameras_.insert({cam->getName(), cam});
 }
 
+void Optimizer::addIMU(const IMU::SharedPtr & imu)
+{
+  imus_.insert({imu->getName(), imu});
+}
+
 value_key_t Optimizer::addRigPose(uint64_t t, const gtsam::Pose3 & pose)
 {
   if (t <= current_rig_pose_time_) {

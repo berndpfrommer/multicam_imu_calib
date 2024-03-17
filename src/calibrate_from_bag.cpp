@@ -20,6 +20,7 @@
 #include <fstream>
 #include <multicam_imu_calib/calibration.hpp>
 #include <multicam_imu_calib/front_end.hpp>
+#include <multicam_imu_calib/imu_data.hpp>
 #include <multicam_imu_calib/init_pose.hpp>
 #include <multicam_imu_calib/logging.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -28,6 +29,7 @@
 #include <rosbag2_cpp/reader.hpp>
 #include <rosbag2_cpp/readers/sequential_reader.hpp>
 #include <sensor_msgs/msg/image.hpp>
+#include <sensor_msgs/msg/imu.hpp>
 
 void usage()
 {
@@ -40,6 +42,7 @@ namespace multicam_imu_calib
 {
 
 using sensor_msgs::msg::Image;
+using sensor_msgs::msg::Imu;
 using Path = std::filesystem::path;
 using rclcpp::Time;
 
@@ -48,9 +51,20 @@ static rclcpp::Logger get_logger()
   return (rclcpp::get_logger("calibrate_from_bag"));
 }
 
+template <typename T>
+static typename T::SharedPtr deserialize(
+  const rosbag2_storage::SerializedBagMessageSharedPtr & msg)
+{
+  rclcpp::SerializedMessage serializedMsg(*msg->serialized_data);
+  typename T::SharedPtr m(new T());
+  rclcpp::Serialization<T> serialization;
+  serialization.deserialize_message(&serializedMsg, m.get());
+  return (m);
+}
+
 static std::tuple<
   Calibration::CameraList, std::unordered_map<std::string, size_t>>
-initializeCalibration(Calibration * cal)
+initializeCalibrationCameras(Calibration * cal)
 {
   std::unordered_map<std::string, size_t> topic_to_cam;
   auto cam_list = cal->getCameraList();
@@ -67,6 +81,71 @@ initializeCalibration(Calibration * cal)
   return {cam_list, topic_to_cam};
 }
 
+static std::tuple<Calibration::IMUList, std::unordered_map<std::string, size_t>>
+initializeCalibrationIMUs(Calibration * cal)
+{
+  std::unordered_map<std::string, size_t> topic_to_imu;
+  auto imu_list = cal->getIMUList();
+  for (size_t imu_idx = 0; imu_idx < imu_list.size(); imu_idx++) {
+    const auto & imu = imu_list[imu_idx];
+    if (imu->getTopic().empty()) {
+      BOMB_OUT("imu " << imu->getName() << " has no ros topic configured!");
+    }
+    topic_to_imu.insert({imu->getTopic(), imu_idx});
+    //cal->addIMUPose(imu, imu->getPose());
+    //cal->addIMUIntrinsics(imu, imu->getIntrinsics());
+  }
+  return {imu_list, topic_to_imu};
+}
+
+size_t handleImage(
+  Calibration * cal, const FrontEnd & front_end, const size_t cam_idx,
+  const multicam_imu_calib::Camera::SharedPtr & cam,
+  rosbag2_storage::SerializedBagMessageSharedPtr & msg)
+{
+  size_t num_points_detected{0};
+  Image::SharedPtr m = deserialize<Image>(msg);
+  const uint64_t t = Time(m->header.stamp).nanoseconds();
+  for (const auto & target : front_end.getTargets()) {
+    const auto det = front_end.detect(target, m);
+    if (!det) {
+      continue;  // nothing detected
+    }
+    num_points_detected += det->world_points.size();
+    if (!cal->hasRigPose(t)) {
+      const auto T_c_w = init_pose::findCameraPose(cam, det);
+      if (T_c_w) {
+        // T_w_r = T_w_c * T_c_r
+        cal->addRigPose(t, (cam->getPose() * (*T_c_w)).inverse());
+      } else {
+        LOG_WARN(t << " cannot find rig pose for cam " << cam->getName());
+      }
+    }
+    if (cal->hasRigPose(t)) {
+      cal->addDetection(cam_idx, t, det);
+    }
+  }
+  return (num_points_detected);
+}
+
+size_t handleIMU(
+  Calibration * cal, const size_t imu_idx,
+  const multicam_imu_calib::IMU::SharedPtr & imu,
+  const rosbag2_storage::SerializedBagMessageSharedPtr & msg)
+{
+  Imu::SharedPtr m = deserialize<Imu>(msg);
+  const uint64_t t = Time(m->header.stamp).nanoseconds();
+  const gtsam::Vector3 acc{
+    {m->linear_acceleration.x, m->linear_acceleration.y,
+     m->linear_acceleration.z}};
+  const gtsam::Vector3 omega{
+    {m->angular_velocity.x, m->angular_velocity.y, m->angular_velocity.z}};
+  cal->addIMUData(imu_idx, IMUData(t, omega, acc));
+
+  (void)imu;
+  return (1);
+}
+
 void calibrate_from_bag(
   const std::string & inFile, const std::string & out_dir,
   const std::string & config_file)
@@ -76,51 +155,34 @@ void calibrate_from_bag(
   FrontEnd front_end;
   front_end.readConfigFile(config_file);
 
-  auto [cam_list, topic_to_cam] = initializeCalibration(&cal);
+  auto [cam_list, topic_to_cam] = initializeCalibrationCameras(&cal);
+  auto [imu_list, topic_to_imu] = initializeCalibrationIMUs(&cal);
 
   rosbag2_cpp::Reader reader;
   reader.open(inFile);
-  rclcpp::Serialization<Image> serialization;
-  size_t num_points_detected{0}, num_frames{0};
+  size_t num_points{0}, num_frames{0}, num_imu_frames{0};
 
   while (reader.has_next()) {
     auto msg = reader.read_next();
-    const auto it = topic_to_cam.find(msg->topic_name);
-    if (it == topic_to_cam.end()) {
-      continue;
-    }
-    num_frames++;
-    const auto cam_idx = it->second;
-    const auto cam = cam_list[cam_idx];
-    rclcpp::SerializedMessage serializedMsg(*msg->serialized_data);
-    Image::SharedPtr m(new Image());
-    serialization.deserialize_message(&serializedMsg, m.get());
-    const uint64_t t = Time(m->header.stamp).nanoseconds();
-    for (const auto & target : front_end.getTargets()) {
-      const auto det = front_end.detect(target, m);
-      if (!det) {
-        continue;  // nothing detected
-      }
-      num_points_detected += det->world_points.size();
-      if (!cal.hasRigPose(t)) {
-        const auto T_c_w = init_pose::findCameraPose(cam, det);
-        if (T_c_w) {
-          // T_w_r = T_w_c * T_c_r
-          cal.addRigPose(t, (cam->getPose() * (*T_c_w)).inverse());
-        } else {
-          LOG_WARN(t << " cannot find rig pose for cam " << cam->getName());
-        }
-      }
-      if (cal.hasRigPose(t)) {
-        cal.addDetection(cam_idx, Time(m->header.stamp).nanoseconds(), det);
+    auto it = topic_to_cam.find(msg->topic_name);
+    if (it != topic_to_cam.end()) {
+      num_points +=
+        handleImage(&cal, front_end, it->second, cam_list[it->second], msg);
+      num_frames++;
+      if (num_frames % 50 == 0) {
+        LOG_INFO_FMT(
+          "frames: %5zu total cam pts: %8zu, total imu frames: %8zu",
+          num_frames, num_points, num_imu_frames);
       }
     }
-    if (num_frames % 50 == 0) {
-      LOG_INFO_FMT(
-        "frames: %5zu total points detected: %8zu", num_frames,
-        num_points_detected);
+    it = topic_to_imu.find(msg->topic_name);
+    if (it != topic_to_imu.end()) {
+      num_imu_frames += handleIMU(&cal, it->second, imu_list[it->second], msg);
     }
   }
+  LOG_INFO(
+    "ratio of IMU to camera frames: "
+    << num_imu_frames / static_cast<double>(std::max(size_t(1), num_frames)));
   cal.runOptimizer();
   cal.writeResults(out_dir);
   cal.runDiagnostics(Path(out_dir) / Path("projections.txt"));

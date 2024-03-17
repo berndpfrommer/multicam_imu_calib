@@ -138,20 +138,8 @@ void Calibration::parseIntrinsicsAndDistortionModel(
   }
 }
 
-void Calibration::readConfigFile(const std::string & file)
+void Calibration::parseCameras(const YAML::Node & cameras)
 {
-  if (file.empty()) {
-    BOMB_OUT("config_file parameter is empty!");
-  }
-  LOG_INFO("using config file: " << file);
-  config_ = YAML::LoadFile(file);
-  if (config_.IsNull()) {
-    BOMB_OUT("cannot open config file: " << file);
-  }
-  YAML::Node cameras = config_["cameras"];
-  if (!cameras.IsSequence()) {
-    BOMB_OUT("config file has no list of cameras!");
-  }
   for (const auto & c : cameras) {
     if (!c["name"]) {
       LOG_WARN("ignoring camera with missing name!");
@@ -181,6 +169,53 @@ void Calibration::readConfigFile(const std::string & file)
   image_points_.resize(camera_list_.size());
   world_points_.resize(camera_list_.size());
   detection_times_.resize(camera_list_.size());
+}
+
+void Calibration::parseIMUs(const YAML::Node & imus)
+{
+  for (const auto & i : imus) {
+    if (!i["name"]) {
+      LOG_WARN("ignoring imu with missing name!");
+      continue;
+    }
+    const auto pp = i["pose"];
+    if (!pp) {
+      LOG_WARN("ignoring imu with missing pose!");
+      continue;
+    }
+    const auto pose = parsePose(pp);
+    gtsam::SharedNoiseModel poseNoise = parsePoseNoise(pp);
+    auto imu = std::make_shared<IMU>(i["name"].as<std::string>());
+    imu->setPoseWithNoise(pose, poseNoise);
+    imu->setTopic(
+      i["ros_topic"] ? i["ros_topic"].as<std::string>() : std::string(""));
+    optimizer_->addIMU(imu);
+    LOG_INFO("found imu: " << i["name"]);
+    imus_.insert({imu->getName(), imu});
+    imu_list_.push_back(imu);
+  }
+  imu_data_.resize(imu_list_.size());
+}
+
+void Calibration::readConfigFile(const std::string & file)
+{
+  if (file.empty()) {
+    BOMB_OUT("config_file parameter is empty!");
+  }
+  LOG_INFO("using config file: " << file);
+  config_ = YAML::LoadFile(file);
+  if (config_.IsNull()) {
+    BOMB_OUT("cannot open config file: " << file);
+  }
+  YAML::Node cameras = config_["cameras"];
+  if (!cameras.IsSequence()) {
+    BOMB_OUT("config file has no list of cameras!");
+  }
+  parseCameras(cameras);
+  YAML::Node imus = config_["imus"];
+  if (imus.IsSequence()) {
+    parseIMUs(imus);
+  }
 }
 
 template <typename T>
@@ -293,6 +328,11 @@ void Calibration::addDetection(
   size_t cam_idx, uint64_t t, const Detection::SharedPtr & det)
 {
   addProjectionFactor(cam_idx, t, det->world_points, det->image_points);
+}
+
+void Calibration::addIMUData(size_t imu_idx, const IMUData & data)
+{
+  imu_data_[imu_idx].push_back(data);
 }
 
 std::vector<gtsam::Pose3> Calibration::getOptimizedRigPoses() const

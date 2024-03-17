@@ -23,6 +23,7 @@
 #include <map>
 #include <multicam_imu_calib/camera.hpp>
 #include <multicam_imu_calib/factor_key.hpp>
+#include <multicam_imu_calib/imu.hpp>
 #include <multicam_imu_calib/intrinsics.hpp>
 #include <multicam_imu_calib/value_key.hpp>
 #include <string>
@@ -37,6 +38,7 @@ public:
   using SharedNoiseModel = gtsam::SharedNoiseModel;
   Optimizer();
   void addCamera(const Camera::SharedPtr & cam);
+  void addIMU(const IMU::SharedPtr & imu);
   void optimize();
   void setPixelNoise(double noise);
   void addCameraPose(const Camera::SharedPtr & cam, const gtsam::Pose3 & T_r_c);
@@ -65,6 +67,7 @@ public:
 private:
   value_key_t getNextKey() { return (key_++); }
   std::map<std::string, Camera::SharedPtr> cameras_;
+  std::map<std::string, IMU::SharedPtr> imus_;
   gtsam::ExpressionFactorGraph graph_;
   gtsam::Values values_;
   gtsam::Values optimized_values_;

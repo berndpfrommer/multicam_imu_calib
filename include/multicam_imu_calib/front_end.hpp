@@ -35,8 +35,8 @@ public:
   ~FrontEnd() = default;
   void readConfigFile(const std::string & file);
   Detection::SharedPtr detect(
-    const Target::SharedPtr & target, const Image::ConstSharedPtr & img);
-  const auto & getTargets() { return (targets_); }
+    const Target::SharedPtr & target, const Image::ConstSharedPtr & img) const;
+  const auto & getTargets() const { return (targets_); }
 
 private:
   // ------------- variables -------------
