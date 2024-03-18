@@ -23,7 +23,8 @@ namespace multicam_imu_calib
 struct IMUData
 {
   explicit IMUData(
-    uint64_t ta, const gtsam::Vector3 & om, const gtsam::Vector3 & a)
+    uint64_t ta = 0, const gtsam::Vector3 & om = gtsam::Vector3::Zero(),
+    const gtsam::Vector3 & a = gtsam::Vector3::Zero())
   : t(ta), omega(om), acceleration(a)
   {
   }

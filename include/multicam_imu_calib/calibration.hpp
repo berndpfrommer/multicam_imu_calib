@@ -19,6 +19,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include <apriltag_msgs/msg/april_tag_detection_array.hpp>
+#include <deque>
 #include <memory>
 #include <multicam_imu_calib/camera.hpp>
 #include <multicam_imu_calib/detection.hpp>
@@ -74,11 +75,19 @@ public:
     const Camera::SharedPtr & cam) const;
 
 private:
+  struct IMUInfo
+  {
+    std::deque<IMUData> data;
+    IMUData current_data;
+    bool is_preintegrating{false};
+  };
+
   void parseIntrinsicsAndDistortionModel(
     const Camera::SharedPtr & cam, const YAML::Node & intr,
     const YAML::Node & dist);
   void parseCameras(const YAML::Node & cameras);
   void parseIMUs(const YAML::Node & imus);
+  bool applyIMUData(uint64_t t);
   // ------------- variables -------------
   std::shared_ptr<Optimizer> optimizer_;
   std::unordered_map<std::string, Camera::SharedPtr> cameras_;
@@ -87,12 +96,14 @@ private:
   IMUList imu_list_;
   std::vector<value_key_t> rig_pose_keys_;
   std::unordered_map<uint64_t, value_key_t> time_to_rig_pose_;
-  std::vector<std::vector<uint64_t>> detection_times_; // only camera frame detections
+  std::vector<std::vector<uint64_t>>
+    detection_times_;  // only camera frame detections
   // image_points_[cam_idx][detection_idx][point_index][x/y]
   std::vector<std::vector<std::vector<std::array<double, 2>>>> image_points_;
   // world_points_[cam_idx][detection_idx][point_index][x/y]
   std::vector<std::vector<std::vector<std::array<double, 3>>>> world_points_;
-  std::vector<std::vector<IMUData>> imu_data_;
+  std::vector<IMUInfo> imu_info_;
+  std::deque<uint64_t> unused_rig_pose_times_;
   YAML::Node config_;
 };
 }  // namespace multicam_imu_calib

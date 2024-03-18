@@ -194,7 +194,7 @@ void Calibration::parseIMUs(const YAML::Node & imus)
     imus_.insert({imu->getName(), imu});
     imu_list_.push_back(imu);
   }
-  imu_data_.resize(imu_list_.size());
+  imu_info_.resize(imu_list_.size());
 }
 
 void Calibration::readConfigFile(const std::string & file)
@@ -306,6 +306,13 @@ void Calibration::addRigPose(uint64_t t, const gtsam::Pose3 & pose)
 {
   rig_pose_keys_.push_back(optimizer_->addRigPose(t, pose));
   time_to_rig_pose_.insert({t, rig_pose_keys_.back()});
+  unused_rig_pose_times_.push_back(t);
+  LOG_INFO("adding unused rig pose time: " << t);
+  while (!unused_rig_pose_times_.empty() &&
+         applyIMUData(unused_rig_pose_times_.front())) {
+    LOG_INFO("used rig pose time: " << unused_rig_pose_times_.front());
+    unused_rig_pose_times_.pop_front();
+  }
 }
 
 bool Calibration::hasRigPose(uint64_t t) const
@@ -332,7 +339,46 @@ void Calibration::addDetection(
 
 void Calibration::addIMUData(size_t imu_idx, const IMUData & data)
 {
-  imu_data_[imu_idx].push_back(data);
+  imu_info_[imu_idx].data.push_back(data);
+}
+
+bool Calibration::applyIMUData(uint64_t t)
+{
+  size_t num_imus_caught_up = 0;
+  for (size_t imu_idx = 0; imu_idx < imu_info_.size(); imu_idx++) {
+    auto & imu = imu_info_[imu_idx];
+    if (!imu.is_preintegrating) {
+      // not started yet, drain IMU data that is older than frame
+      while (!imu.data.empty() && imu.data.begin()->t < t) {
+        imu.is_preintegrating = true;
+        imu.current_data = imu.data.front();
+        imu.data.pop_front();
+        LOG_INFO(imu_idx << " drained: " << imu.current_data.t << " < " << t);
+      }
+      if (imu.is_preintegrating) {
+        // found IMU data that is older than frame
+        imu.current_data.t = t;  // drop
+        LOG_INFO(imu_idx << " started preintegration at " << t);
+      }
+    }
+    if (imu.is_preintegrating) {
+      while (!imu.data.empty() && imu.data.begin()->t < t) {
+        const IMUData data = imu.data.front();
+        const int64_t dt = data.t - imu.current_data.t;
+        LOG_INFO(imu_idx << " preint: " << imu.current_data.t << " dt: " << dt);
+        imu.current_data = data;
+        imu.data.pop_front();
+      }
+      if (!imu.data.empty()) {
+        LOG_INFO(imu_idx << " create factor: " << t);
+        imu.current_data.t = t;
+      }
+    }
+    if (!imu.is_preintegrating || imu.current_data.t >= t) {
+      num_imus_caught_up++;
+    }
+  }
+  return (num_imus_caught_up == imu_info_.size());
 }
 
 std::vector<gtsam::Pose3> Calibration::getOptimizedRigPoses() const
