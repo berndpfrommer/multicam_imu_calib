@@ -13,35 +13,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef MULTICAM_IMU_CALIB__TARGET_HPP_
-#define MULTICAM_IMU_CALIB__TARGET_HPP_
+#ifndef MULTICAM_IMU_CALIB__DETECTOR_LOADER_HPP_
+#define MULTICAM_IMU_CALIB__DETECTOR_LOADER_HPP_
 
-#include <yaml-cpp/yaml.h>
-
+#include <apriltag_detector/detector.hpp>
 #include <memory>
-#include <multicam_imu_calib/detection.hpp>
-#include <sensor_msgs/msg/image.hpp>
-#include <string>
+#include <pluginlib/class_loader.hpp>
+#include <unordered_map>
 
 namespace multicam_imu_calib
 {
-class FrontEnd;
-class Target
+class DetectorLoader
 {
 public:
-  virtual ~Target() {}
-  using SharedPtr = std::shared_ptr<Target>;
-  using Image = sensor_msgs::msg::Image;
-  enum Type { INVALID, APRILTAG_BOARD };
-  void setName(const std::string & s) { name_ = s; }
-  virtual Detection::SharedPtr detect(const Image::ConstSharedPtr & img) = 0;
-  Type getType() const { return (type_); }
-  static SharedPtr make(FrontEnd * fe, const YAML::Node & node);
-  const auto & getName() { return (name_); }
+  DetectorLoader();
+  ~DetectorLoader();
+  std::shared_ptr<apriltag_detector::Detector> getInstance(
+    const std::string & type, const std::string & fam);
 
-protected:
-  Type type_{INVALID};
-  std::string name_;
+private:
+  std::unordered_map<
+    std::string, std::unordered_map<
+                   std::string, std::shared_ptr<apriltag_detector::Detector>>>
+    detector_map_;
+  pluginlib::ClassLoader<apriltag_detector::Detector> detector_loader_;
 };
 }  // namespace multicam_imu_calib
-#endif  // MULTICAM_IMU_CALIB__TARGET_HPP_
+#endif  // MULTICAM_IMU_CALIB__DETECTOR_LOADER_HPP_

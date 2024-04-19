@@ -21,6 +21,8 @@ namespace multicam_imu_calib
 static rclcpp::Logger get_logger() { return (rclcpp::get_logger("front_end")); }
 FrontEnd::FrontEnd() {}
 
+FrontEnd::~FrontEnd() { targets_.clear(); }
+
 void FrontEnd::readConfigFile(const std::string & file)
 {
   YAML::Node yamlFile = YAML::LoadFile(file);
@@ -32,7 +34,7 @@ void FrontEnd::readConfigFile(const std::string & file)
     BOMB_OUT("config file has no list of targets!");
   }
   for (const YAML::Node & target : targets) {
-    Target::SharedPtr targ = Target::make(target);
+    Target::SharedPtr targ = Target::make(this, target);
     LOG_INFO("using target: " << targ->getName());
     targets_.push_back(targ);
   }

@@ -92,8 +92,8 @@ initializeCalibrationIMUs(Calibration * cal)
       BOMB_OUT("imu " << imu->getName() << " has no ros topic configured!");
     }
     topic_to_imu.insert({imu->getTopic(), imu_idx});
-    //cal->addIMUPose(imu, imu->getPose());
-    //cal->addIMUIntrinsics(imu, imu->getIntrinsics());
+    // cal->addIMUPose(imu, imu->getPose());
+    // cal->addIMUIntrinsics(imu, imu->getIntrinsics());
   }
   return {imu_list, topic_to_imu};
 }
@@ -150,9 +150,9 @@ void calibrate_from_bag(
   const std::string & inFile, const std::string & out_dir,
   const std::string & config_file)
 {
+  FrontEnd front_end;
   Calibration cal;
   cal.readConfigFile(config_file);
-  FrontEnd front_end;
   front_end.readConfigFile(config_file);
 
   auto [cam_list, topic_to_cam] = initializeCalibrationCameras(&cal);
@@ -194,19 +194,19 @@ int main(int argc, char ** argv)
 {
   int opt;
 
-  std::string inFile;
-  std::string outDir;
-  std::string configFile;
+  std::string in_file;
+  std::string out_dir;
+  std::string config_file;
   while ((opt = getopt(argc, argv, "b:o:c:h")) != -1) {
     switch (opt) {
       case 'b':
-        inFile = optarg;
+        in_file = optarg;
         break;
       case 'o':
-        outDir = optarg;
+        out_dir = optarg;
         break;
       case 'c':
-        configFile = optarg;
+        config_file = optarg;
         break;
       case 'h':
         usage();
@@ -220,14 +220,14 @@ int main(int argc, char ** argv)
         break;
     }
   }
-  if (inFile.empty() || outDir.empty() || configFile.empty()) {
+  if (in_file.empty() || out_dir.empty() || config_file.empty()) {
     std::cout << "missing input/output/config file name!" << std::endl;
     usage();
     return (-1);
   }
 
   const auto start = std::chrono::high_resolution_clock::now();
-  multicam_imu_calib::calibrate_from_bag(inFile, outDir, configFile);
+  multicam_imu_calib::calibrate_from_bag(in_file, out_dir, config_file);
   const auto stop = std::chrono::high_resolution_clock::now();
   auto total_duration =
     std::chrono::duration_cast<std::chrono::microseconds>(stop - start);

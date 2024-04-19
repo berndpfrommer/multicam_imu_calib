@@ -18,6 +18,7 @@
 
 #include <memory>
 #include <multicam_imu_calib/detection.hpp>
+#include <multicam_imu_calib/detector_loader.hpp>
 #include <multicam_imu_calib/optimizer.hpp>
 #include <multicam_imu_calib/target.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -32,15 +33,17 @@ public:
   using SharedPtr = std::shared_ptr<FrontEnd>;
   using Image = sensor_msgs::msg::Image;
   FrontEnd();
-  ~FrontEnd() = default;
+  ~FrontEnd();
   void readConfigFile(const std::string & file);
   Detection::SharedPtr detect(
     const Target::SharedPtr & target, const Image::ConstSharedPtr & img) const;
   const auto & getTargets() const { return (targets_); }
+  auto & getDetectorLoader() { return (detector_loader_); }
 
 private:
   // ------------- variables -------------
   std::vector<Target::SharedPtr> targets_;
+  DetectorLoader detector_loader_;
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__FRONT_END_HPP_

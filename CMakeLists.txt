@@ -34,6 +34,7 @@ set(ament_dependencies
   "cv_bridge"
   "sensor_msgs"
   "apriltag_detector"
+  "pluginlib"
   "apriltag_msgs")
 
 foreach(pkg ${ament_dependencies})
@@ -86,6 +87,7 @@ add_executable(calibrate_from_bag
   src/init_pose.cpp
   src/target.cpp
   src/apriltag_board_target.cpp
+  src/detector_loader.cpp
   src/front_end.cpp)
 target_link_libraries(calibrate_from_bag ${PROJECT_NAME} opencv_calib3d)
 target_compile_features(calibrate_from_bag PRIVATE cxx_std_17)
@@ -139,11 +141,12 @@ if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   set(CAMERA_TEST "${PROJECT_NAME}_camera_test")
   ament_add_gtest(${CAMERA_TEST} test/camera_test.cpp
-  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/test)
-  target_include_directories(${CAMERA_TEST} PUBLIC
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/test)
+  target_include_directories(${CAMERA_TEST}
+    PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>)
   target_compile_features(${CAMERA_TEST} PRIVATE cxx_std_17)
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
   ament_target_dependencies(${CAMERA_TEST} rclcpp)
   target_link_libraries(${CAMERA_TEST} ${PROJECT_NAME} opencv_core opencv_calib3d yaml-cpp gtsam)
 

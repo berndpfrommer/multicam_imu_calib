@@ -16,14 +16,10 @@
 #ifndef MULTICAM_IMU_CALIB__APRILTAG_BOARD_TARGET_HPP_
 #define MULTICAM_IMU_CALIB__APRILTAG_BOARD_TARGET_HPP_
 
+#include <apriltag_detector/detector.hpp>
 #include <memory>
 #include <multicam_imu_calib/target.hpp>
 #include <sensor_msgs/msg/image.hpp>
-
-namespace apriltag_detector
-{
-class DetectorWrapper;  // forward decl
-}
 
 namespace multicam_imu_calib
 {
@@ -31,19 +27,23 @@ class AprilTagBoardTarget : public Target
 {
 public:
   using SharedPtr = std::shared_ptr<AprilTagBoardTarget>;
+  ~AprilTagBoardTarget();
+
   Detection::SharedPtr detect(const Image::ConstSharedPtr & img) final;
 
   static SharedPtr make(
-    const std::string & fam, double tag_size, uint32_t rows, uint32_t cols,
-    double dist_rows, double dist_cols, uint32_t start_id);
+    FrontEnd * fe, const std::string & type, const std::string & fam,
+    double tag_size, uint32_t rows, uint32_t cols, double dist_rows,
+    double dist_cols, uint32_t start_id);
 
 private:
+  AprilTagBoardTarget() = default;
   void addTag(uint32_t id, const std::array<std::array<double, 2>, 4> & wp)
   {
     id_to_wp_.insert({id, wp});
   }
   std::unordered_map<uint32_t, std::array<std::array<double, 2>, 4>> id_to_wp_;
-  std::shared_ptr<apriltag_detector::DetectorWrapper> detector_;
+  std::shared_ptr<apriltag_detector::Detector> detector_;
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__APRILTAG_BOARD_TARGET_HPP_

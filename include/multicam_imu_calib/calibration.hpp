@@ -42,7 +42,6 @@ public:
   using CameraList = std::vector<Camera::SharedPtr>;
   using IMUList = std::vector<IMU::SharedPtr>;
   Calibration();
-  ~Calibration() = default;
   void readConfigFile(const std::string & file);
   void runOptimizer();
   void runDiagnostics(const std::string & error_file);

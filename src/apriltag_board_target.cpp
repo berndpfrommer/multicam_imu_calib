@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <apriltag_detector/detector_wrapper.hpp>
 #include <apriltag_msgs/msg/april_tag_detection_array.hpp>
 #include <multicam_imu_calib/apriltag_board_target.hpp>
+#include <multicam_imu_calib/front_end.hpp>
 #include <multicam_imu_calib/logging.hpp>
 
 #ifdef USE_CV_BRIDGE_HPP
@@ -32,9 +32,11 @@ static rclcpp::Logger get_logger()
 }
 using ApriltagArray = apriltag_msgs::msg::AprilTagDetectionArray;
 
-static std::unordered_map<
-  std::string, apriltag_detector::DetectorWrapper::SharedPtr>
-  detector_map;
+AprilTagBoardTarget::~AprilTagBoardTarget()
+{
+  detector_.reset();  // remove reference explicitly for debugging
+  std::cout << "destroyed board/detector" << std::endl;
+}
 
 Detection::SharedPtr AprilTagBoardTarget::detect(
   const Image::ConstSharedPtr & img)
@@ -63,8 +65,9 @@ Detection::SharedPtr AprilTagBoardTarget::detect(
 }
 
 AprilTagBoardTarget::SharedPtr AprilTagBoardTarget::make(
-  const std::string & fam, double ts, uint32_t rows, uint32_t cols,
-  double dist_rows, double dist_cols, uint32_t start_id)
+  FrontEnd * fe, const std::string & type, const std::string & fam, double ts,
+  uint32_t rows, uint32_t cols, double dist_rows, double dist_cols,
+  uint32_t start_id)
 {
   SharedPtr board(new AprilTagBoardTarget());
   // make tag detector of right kind
@@ -79,12 +82,7 @@ AprilTagBoardTarget::SharedPtr AprilTagBoardTarget::make(
       board->addTag(id, wp);
     }
   }
-  if (detector_map.find(fam) == detector_map.end()) {
-    auto det =
-      std::make_shared<apriltag_detector::DetectorWrapper>(fam, 0 /*hamm*/);
-    detector_map.insert({fam, det});
-  }
-  board->detector_ = detector_map.find(fam)->second;
+  board->detector_ = fe->getDetectorLoader().getInstance(type, fam);
   return (board);
 }
 

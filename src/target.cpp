@@ -21,15 +21,16 @@ namespace multicam_imu_calib
 {
 static rclcpp::Logger get_logger() { return (rclcpp::get_logger("target")); }
 
-Target::SharedPtr Target::make(const YAML::Node & yn)
+Target::SharedPtr Target::make(FrontEnd * fe, const YAML::Node & yn)
 {
   const auto tp = yn["type"].as<std::string>();
   Target::SharedPtr p;
   if (tp == "apriltag_board") {
     p = AprilTagBoardTarget::make(
-      yn["family"].as<std::string>(), yn["tag_size"].as<double>(),
-      yn["rows"].as<uint32_t>(), yn["columns"].as<uint32_t>(),
-      yn["distance_rows"].as<double>(), yn["distance_columns"].as<double>(),
+      fe, yn["detector"].as<std::string>(), yn["family"].as<std::string>(),
+      yn["tag_size"].as<double>(), yn["rows"].as<uint32_t>(),
+      yn["columns"].as<uint32_t>(), yn["distance_rows"].as<double>(),
+      yn["distance_columns"].as<double>(),
       yn["starting_tag_id"].as<uint32_t>());
   } else {
     BOMB_OUT("target type not implemented: " << tp);
