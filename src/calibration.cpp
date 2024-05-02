@@ -183,18 +183,40 @@ void Calibration::parseIMUs(const YAML::Node & imus)
       LOG_WARN("ignoring imu with missing pose!");
       continue;
     }
+    auto imu = std::make_shared<IMU>(i["name"].as<std::string>());
+    imu->setGravity(i["gravity"] ? i["gravity"].as<double>() : 9.81);
+    imu->setGyroNoiseDensity(
+      i["gyroscope_noise_density"].as<double>());  // rad/sec *  1/sqrt(Hz)
+    imu->setAccelNoiseDensity(
+      i["accelerometer_noise_density"].as<double>());  // m/sec^2 *  1/sqrt(Hz)
+    imu->setGyroRandomWalk(
+      i["gyroscope_random_walk"].as<double>());  // rad/sec^2 *  1/sqrt(Hz)
+    imu->setAccelRandomWalk(
+      i["accelerometer_random_walk"].as<double>());  // m/sec^3 *  1/sqrt(Hz)
+    if (i["gyro_bias_prior"]) {
+      const auto & p = i["gyro_bias_prior"];
+      imu->setGyroBiasPrior(
+        p["x"].as<double>(), p["y"].as<double>(), p["z"].as<double>(),
+        p["sigma"].as<double>());  // rad/s
+    }
+    if (i["accelerometer_bias_prior"]) {
+      const auto & p = i["accelerometer_bias_prior"];
+      imu->setAccelBiasPrior(
+        p["x"].as<double>(), p["y"].as<double>(), p["z"].as<double>(),
+        p["sigma"].as<double>());  // m/s^2
+    }
     const auto pose = parsePose(pp);
     gtsam::SharedNoiseModel poseNoise = parsePoseNoise(pp);
-    auto imu = std::make_shared<IMU>(i["name"].as<std::string>());
     imu->setPoseWithNoise(pose, poseNoise);
     imu->setTopic(
       i["ros_topic"] ? i["ros_topic"].as<std::string>() : std::string(""));
+    imu->parametersComplete();
     optimizer_->addIMU(imu);
+
     LOG_INFO("found imu: " << i["name"]);
     imus_.insert({imu->getName(), imu});
     imu_list_.push_back(imu);
   }
-  imu_info_.resize(imu_list_.size());
 }
 
 void Calibration::readConfigFile(const std::string & file)
@@ -305,12 +327,15 @@ void Calibration::addCameraPosePrior(
 void Calibration::addRigPose(uint64_t t, const gtsam::Pose3 & pose)
 {
   rig_pose_keys_.push_back(optimizer_->addRigPose(t, pose));
+
   time_to_rig_pose_.insert({t, rig_pose_keys_.back()});
   unused_rig_pose_times_.push_back(t);
-  LOG_INFO("adding unused rig pose time: " << t);
+  // A new camera frame has arrived, let's see if we can
+  // integrate the IMUs up to that time, and create factors.
+  // This all is done by applyIMUData(), which returns true if
+  // it was possible to integrate up all IMUs to its time argument.
   while (!unused_rig_pose_times_.empty() &&
          applyIMUData(unused_rig_pose_times_.front())) {
-    LOG_INFO("used rig pose time: " << unused_rig_pose_times_.front());
     unused_rig_pose_times_.pop_front();
   }
 }
@@ -339,46 +364,31 @@ void Calibration::addDetection(
 
 void Calibration::addIMUData(size_t imu_idx, const IMUData & data)
 {
-  imu_info_[imu_idx].data.push_back(data);
+  imu_list_[imu_idx]->addData(data);
 }
 
 bool Calibration::applyIMUData(uint64_t t)
 {
   size_t num_imus_caught_up = 0;
-  for (size_t imu_idx = 0; imu_idx < imu_info_.size(); imu_idx++) {
-    auto & imu = imu_info_[imu_idx];
-    if (!imu.is_preintegrating) {
-      // not started yet, drain IMU data that is older than frame
-      while (!imu.data.empty() && imu.data.begin()->t < t) {
-        imu.is_preintegrating = true;
-        imu.current_data = imu.data.front();
-        imu.data.pop_front();
-        LOG_INFO(imu_idx << " drained: " << imu.current_data.t << " < " << t);
-      }
-      if (imu.is_preintegrating) {
-        // found IMU data that is older than frame
-        imu.current_data.t = t;  // drop
-        LOG_INFO(imu_idx << " started preintegration at " << t);
+  for (size_t imu_idx = 0; imu_idx < imu_list_.size(); imu_idx++) {
+    auto & imu = imu_list_[imu_idx];
+    if (!imu->isPreintegrating()) {
+      imu->drainOldData(t);
+      if (imu->isPreintegrating()) {
+        // found data preceeding t, can initialize IMU pose from accelerometer
+        imu->initializeWorldPose(t);
       }
     }
-    if (imu.is_preintegrating) {
-      while (!imu.data.empty() && imu.data.begin()->t < t) {
-        const IMUData data = imu.data.front();
-        const int64_t dt = data.t - imu.current_data.t;
-        LOG_INFO(imu_idx << " preint: " << imu.current_data.t << " dt: " << dt);
-        imu.current_data = data;
-        imu.data.pop_front();
-      }
-      if (!imu.data.empty()) {
-        LOG_INFO(imu_idx << " create factor: " << t);
-        imu.current_data.t = t;
-      }
+    if (imu->isPreintegrating()) {
+      imu->preintegrateUpTo(t);
+      imu->updateRotation(t);
+      imu->resetPreintegration();
     }
-    if (!imu.is_preintegrating || imu.current_data.t >= t) {
+    if (!imu->isPreintegrating() || imu->getCurrentData().t >= t) {
       num_imus_caught_up++;
     }
   }
-  return (num_imus_caught_up == imu_info_.size());
+  return (num_imus_caught_up == imu_list_.size());
 }
 
 std::vector<gtsam::Pose3> Calibration::getOptimizedRigPoses() const

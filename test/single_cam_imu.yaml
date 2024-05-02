@@ -1,22 +1,10 @@
 #
-# Test file for stereo camera calibration from tag board including IMU
+# Test file for single camera + imu tests
 #
 #
-targets:
-  - name: "apriltag board"
-    type: "apriltag_board"
-    detector: "umich"
-    family: "tf36h11"
-    starting_tag_id: 0
-    tag_size: 0.07
-    rows: 3
-    distance_rows: 0.087
-    columns: 4
-    distance_columns: 0.087
-
 imus:
   - name: "imu_0"
-    ros_topic: "/vectornav/imu_uncompensated"
+    ros_topic: "/imu"
     gyroscope_noise_density: 1e-6 # in rad/sec *  1/sqrt(Hz)
     accelerometer_noise_density: 1e-6 # in m/sec^2 *  1/sqrt(Hz)
     gyroscope_random_walk: 1e-4 # gyro bias random walk in rad/sec^2 *  1/sqrt(Hz)
@@ -55,46 +43,13 @@ cameras:
     ros_topic: "/cam_sync/cam_0/image_raw"
     pixel_noise: 1.0
     intrinsics:
-      fx: 833.0
-      fy: 833.0
-      cx: 748
-      cy: 550
+      fx: 1000.0
+      fy: 1000.0
+      cx: 500
+      cy: 400
     distortion_model:
-      type: "equidistant"
-      coefficients: [-0.0117, -0.0091, 0.0030, 0.0002]
-      coefficient_mask: [1, 1, 1, 1]
-      coefficient_sigma: [0.5, 0.5, 0.5, 0.5]
-    pose:
-      position:
-        x: 0.0
-        y: 0.0
-        z: 0.0
-      position_sigma:
-        x: 10.0
-        y: 10.0
-        z: 10.0
-      orientation:
-        x: 0.0
-        y: 0.0
-        z: 0.0
-        w: 1.0
-      orientation_sigma:
-        x: 6.28
-        y: 6.28
-        z: 6.28
-  - name: "camera_1"
-    ros_topic: "/cam_sync/cam_1/image_raw"
-    pixel_noise: 1.0
-    intrinsics:
-      fx: 833.0
-      fy: 833.0
-      cx: 748
-      cy: 550
-    distortion_model:
-      type: "equidistant"
-      coefficients: [-0.0117, -0.0091, 0.0030, 0.0002]
-      coefficient_mask: [1, 1, 1, 1]
-      coefficient_sigma: [0.5, 0.5, 0.5, 0.5]
+      type: "radtan"
+      coefficients: [0, 0, 0, 0]
     pose:
       position:
         x: 0.0

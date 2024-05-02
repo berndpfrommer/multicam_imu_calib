@@ -24,7 +24,6 @@
 #include <multicam_imu_calib/camera.hpp>
 #include <multicam_imu_calib/detection.hpp>
 #include <multicam_imu_calib/imu.hpp>
-#include <multicam_imu_calib/imu_data.hpp>
 #include <multicam_imu_calib/intrinsics.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <string>
@@ -74,13 +73,6 @@ public:
     const Camera::SharedPtr & cam) const;
 
 private:
-  struct IMUInfo
-  {
-    std::deque<IMUData> data;
-    IMUData current_data;
-    bool is_preintegrating{false};
-  };
-
   void parseIntrinsicsAndDistortionModel(
     const Camera::SharedPtr & cam, const YAML::Node & intr,
     const YAML::Node & dist);
@@ -94,6 +86,7 @@ private:
   std::unordered_map<std::string, IMU::SharedPtr> imus_;
   IMUList imu_list_;
   std::vector<value_key_t> rig_pose_keys_;
+  std::vector<value_key_t> imu_pose_keys_;
   std::unordered_map<uint64_t, value_key_t> time_to_rig_pose_;
   std::vector<std::vector<uint64_t>>
     detection_times_;  // only camera frame detections
@@ -101,7 +94,6 @@ private:
   std::vector<std::vector<std::vector<std::array<double, 2>>>> image_points_;
   // world_points_[cam_idx][detection_idx][point_index][x/y]
   std::vector<std::vector<std::vector<std::array<double, 3>>>> world_points_;
-  std::vector<IMUInfo> imu_info_;
   std::deque<uint64_t> unused_rig_pose_times_;
   YAML::Node config_;
 };

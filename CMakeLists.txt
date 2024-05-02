@@ -25,6 +25,7 @@ find_package(ament_cmake_auto REQUIRED)
 find_package(OpenCV REQUIRED COMPONENTS core imgproc calib3d)
 find_package(yaml-cpp REQUIRED)
 find_package(GTSAM REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 set(ament_dependencies
   "rclcpp"
@@ -61,7 +62,7 @@ add_library(${PROJECT_NAME} SHARED
 )
 
 ament_target_dependencies(${PROJECT_NAME} ${ament_dependencies})
-target_link_libraries(${PROJECT_NAME} opencv_core opencv_imgproc opencv_calib3d yaml-cpp gtsam)
+target_link_libraries(${PROJECT_NAME} opencv_core opencv_imgproc opencv_calib3d yaml-cpp gtsam Eigen3::Eigen)
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
 
 target_include_directories(
@@ -139,16 +140,28 @@ if(BUILD_TESTING)
 
   # ----------- setup gtests
   find_package(ament_cmake_gtest REQUIRED)
+  # if(FALSE)
   set(CAMERA_TEST "${PROJECT_NAME}_camera_test")
   ament_add_gtest(${CAMERA_TEST} test/camera_test.cpp
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/test)
-  target_include_directories(${CAMERA_TEST}
+    target_include_directories(${CAMERA_TEST}
     PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
   target_compile_features(${CAMERA_TEST} PRIVATE cxx_std_17)
   ament_target_dependencies(${CAMERA_TEST} rclcpp)
   target_link_libraries(${CAMERA_TEST} ${PROJECT_NAME} opencv_core opencv_calib3d yaml-cpp gtsam)
+  # endif()
+  set(IMU_TEST "${PROJECT_NAME}_imu_test")
+  ament_add_gtest(${IMU_TEST} test/imu_test.cpp
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/test)
+  target_include_directories(${IMU_TEST}
+    PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>)
+  target_compile_features(${IMU_TEST} PRIVATE cxx_std_17)
+  ament_target_dependencies(${IMU_TEST} rclcpp)
+  target_link_libraries(${IMU_TEST} ${PROJECT_NAME} opencv_core opencv_calib3d yaml-cpp gtsam)
 
 endif()
 

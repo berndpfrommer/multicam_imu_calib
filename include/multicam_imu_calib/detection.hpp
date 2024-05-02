@@ -25,6 +25,13 @@ namespace multicam_imu_calib
 struct Detection
 {
   using SharedPtr = std::shared_ptr<Detection>;
+  Detection() = default;
+  explicit Detection(
+    const std::vector<std::array<double, 3>> & wp,
+    const std::vector<std::array<double, 2>> & ip)
+  : world_points(wp), image_points(ip)
+  {
+  }
   std::vector<std::array<double, 3>> world_points;
   std::vector<std::array<double, 2>> image_points;
 };
