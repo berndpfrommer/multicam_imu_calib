@@ -189,37 +189,40 @@ factor_key_t Optimizer::addProjectionFactor(
   return (getLastFactorKey());
 }
 
-void Optimizer::optimize()
+std::tuple<double, double> Optimizer::optimize()
 {
   if (!graph_.empty()) {
     LOG_INFO("running optimizer");
+#ifdef DEBUG_OPT
+    graph_.print();
+    values_.print();
+#endif
 #ifdef USE_ISAM
-    // values_.print();
-    // graph_.print();
     auto result = isam2_->update(graph_, values_);
     optimized_values_ = isam2_->calculateEstimate();
 #else
     gtsam::LevenbergMarquardtParams lmp;
-    graph_.print();
-    values_.print();
     lmp.setVerbosity("SUMMARY");
     lmp.setMaxIterations(100);
     lmp.setAbsoluteErrorTol(1e-7);
     lmp.setRelativeErrorTol(0);
     gtsam::LevenbergMarquardtOptimizer lmo(graph_, values_, lmp);
-    LOG_INFO("start error: " << lmo.error());
+    const double initial_error = lmo.error();
+    LOG_INFO("start error: " << initial_error);
     optimized_values_ = lmo.optimize();
     LOG_INFO(
       "final error: " << lmo.error() << " after iter: " << lmo.iterations());
 #endif
-#if 1
+#ifdef DEBUG_OPT
     printErrors(values_);
     LOG_INFO("optimized values: ");
     for (const auto & v : optimized_values_) {
       v.value.print();
     }
 #endif
+    return {initial_error, lmo.error()};
   }
+  return {-1, -1};
 }
 
 gtsam::Pose3 Optimizer::getOptimizedPose(value_key_t k) const

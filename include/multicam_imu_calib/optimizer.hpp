@@ -41,7 +41,7 @@ public:
   Optimizer();
   void addCamera(const Camera::SharedPtr & cam);
   void addIMU(const IMU::SharedPtr & imu);
-  void optimize();
+  std::tuple<double, double> optimize();
   void setPixelNoise(double noise);
   void addCameraPose(const Camera::SharedPtr & cam, const gtsam::Pose3 & T_r_c);
   template <class T>

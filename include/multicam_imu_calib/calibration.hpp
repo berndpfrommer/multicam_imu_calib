@@ -42,8 +42,9 @@ public:
   using IMUList = std::vector<IMU::SharedPtr>;
   Calibration();
   void readConfigFile(const std::string & file);
-  void runOptimizer();
+  std::tuple<double, double> runOptimizer();
   void runDiagnostics(const std::string & error_file);
+  void setAddInitialIMUPosePrior(bool f) { add_initial_imu_pose_prior_ = f; }
 
   void writeResults(const std::string & outDir);
   const auto & getCameras() { return (cameras_); }
@@ -95,6 +96,7 @@ private:
   // world_points_[cam_idx][detection_idx][point_index][x/y]
   std::vector<std::vector<std::vector<std::array<double, 3>>>> world_points_;
   std::deque<uint64_t> unused_rig_pose_times_;
+  bool add_initial_imu_pose_prior_{false};
   YAML::Node config_;
 };
 }  // namespace multicam_imu_calib

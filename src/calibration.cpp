@@ -326,6 +326,7 @@ void Calibration::addCameraPosePrior(
 
 void Calibration::addRigPose(uint64_t t, const gtsam::Pose3 & pose)
 {
+#define USE_CAMERA
 #ifdef USE_CAMERA
   rig_pose_keys_.push_back(optimizer_->addRigPose(t, pose));
   time_to_rig_pose_.insert({t, rig_pose_keys_.back()});
@@ -392,10 +393,12 @@ bool Calibration::applyIMUData(uint64_t t)
           utilities::makeNoise3(1e-3));
         imu->setBiasPriorKey(optimizer_->addPrior(
           vk.bias_key, imu->getBiasPrior(), imu->getBiasPriorNoise()));
-        // XXX this prior used only for testing, remove later!!!
-        (void)optimizer_->addPrior(
-          vk.pose_key, imu->getCurrentState().pose(),
-          utilities::makeNoise6(1e-3 /*angle*/, 1e-3));
+        if (add_initial_imu_pose_prior_) {
+          // pin down initial IMU pose for testing
+          (void)optimizer_->addPrior(
+            vk.pose_key, imu->getCurrentState().pose(),
+            utilities::makeNoise6(1e-3 /*angle*/, 1e-3));
+        }
       }
     }
     if (imu->isPreintegrating()) {
@@ -492,7 +495,10 @@ DistortionCoefficients Calibration::getOptimizedDistortionCoefficients(
   return (dist);
 }
 
-void Calibration::runOptimizer() { optimizer_->optimize(); }
+std::tuple<double, double> Calibration::runOptimizer()
+{
+  return (optimizer_->optimize());
+}
 
 void Calibration::runDiagnostics(const std::string & error_file)
 {

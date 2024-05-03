@@ -35,25 +35,27 @@ namespace diagnostics = multicam_imu_calib::diagnostics;
 
 TEST(multicam_imu_calib, imu_preintegration)
 {
+  // Simulate camera and IMU, build graph, and test.
+  // The IMU poses are *not* yet tied to the rig poses,
+  // so the first IMU pose has to be set with a prior.
+
   multicam_imu_calib::Calibration calib;
   calib.readConfigFile("single_cam_imu.yaml");
+  calib.setAddInitialIMUPosePrior(true);      // only for debugging
   const auto cam = calib.getCameraList()[0];  // first camera
 
   // initialize the camera perfectly
-#ifdef USE_CAMERA
-    // XXX reinstate later!
   calib.addCameraPose(cam, cam->getPose());  // perfect init
   calib.addIntrinsics(
     cam, cam->getIntrinsics(), cam->getDistortionCoefficients());
-#endif
 
   // world points form a square in the x/y plane
   std::vector<std::array<double, 3>> wc = {
     {1, 1, 0}, {-1, 1, 0}, {-1, -1, 0}, {1, -1, 0}};
 
   const gtsam::Vector3 g_vec(0, 0, -9.81);
-  const double tot_angle = 0.5 * M_PI;
-  //const double tot_angle = 0.1 * M_PI;
+  // const double tot_angle = 0.5 * M_PI;
+  const double tot_angle = 0.1 * M_PI;
   const double omega = 2.0;  // rad/sec
   const double tot_time = tot_angle / omega;
   size_t num_frames = 10;
@@ -63,19 +65,20 @@ TEST(multicam_imu_calib, imu_preintegration)
   const double delta_angle = tot_angle / num_imu_updates;
 
   uint64_t t = 1ULL;  // cannot start at zero
-  std::vector<multicam_imu_calib::StampedAttitude> ground_truth;
+  std::vector<multicam_imu_calib::StampedAttitude> imu_attitudes;
   std::vector<multicam_imu_calib::StampedAttitude> rig_attitudes;
   // observation point is 1m above ground plane
   const gtsam::Point3 rig_location(0.0, 0.0, 1.0);
   // start with camera pointing down on ground plane, x along x
   gtsam::Rot3 rot = gtsam::Rot3::AxisAngle(gtsam::Unit3(1, 0, 0), M_PI);
-  const gtsam::Pose3 T_r_c;  // make camera center of rig
+  const gtsam::Pose3 T_r_c;  // identity pose: make camera center of rig
+
   // the IMU x-axis must be aligned with the world frame
   // because the IMU pose initialization aligns it that way,
   // so attitude comparison will fail if you do arbitrary rotations.
 
   const gtsam::Pose3 T_r_i(
-    gtsam::Rot3::AxisAngle(gtsam::Unit3(1, 0, 0), 0.0 /* M_PI * 0.1 */),
+    gtsam::Rot3::AxisAngle(gtsam::Unit3(1, 0, 0), M_PI * 0.1),
     gtsam::Vector3(0, 0, 0));
 
   for (int i_axis = 0; i_axis < 3; i_axis++) {
@@ -99,7 +102,7 @@ TEST(multicam_imu_calib, imu_preintegration)
           auto det = std::make_shared<multicam_imu_calib::Detection>(wc, ip);
           calib.addDetection(0, t, det);
         }
-        ground_truth.push_back(
+        imu_attitudes.push_back(
           multicam_imu_calib::StampedAttitude(t, T_w_i.rotation()));
         rig_attitudes.push_back(
           multicam_imu_calib::StampedAttitude(t, T_w_r.rotation()));
@@ -115,9 +118,10 @@ TEST(multicam_imu_calib, imu_preintegration)
   const double err =
     (T_r_i_est.inverse() * T_r_i.rotation()).axisAngle().second;
   EXPECT_TRUE(std::abs(err) < 1e-6);
-  imu.testAttitudes(ground_truth);
-  EXPECT_TRUE(calib.getIMUList()[0]->testAttitudes(ground_truth));
-  calib.runOptimizer();
+  EXPECT_TRUE(imu.testAttitudes(imu_attitudes));
+  auto [init_err, final_err] = calib.runOptimizer();
+  EXPECT_LT(std::abs(init_err), 4e-4);
+  EXPECT_LT(std::abs(final_err), 1e-10);
 }
 
 int main(int argc, char ** argv)
