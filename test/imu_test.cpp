@@ -59,39 +59,58 @@ TEST(multicam_imu_calib, imu_preintegration)
   const double delta_angle = tot_angle / num_imu_updates;
 
   uint64_t t = 1ULL;  // cannot start at zero
-  std::vector<multicam_imu_calib::IMU::StampedAttitude> ground_truth;
+  std::vector<multicam_imu_calib::StampedAttitude> ground_truth;
+  std::vector<multicam_imu_calib::StampedAttitude> rig_attitudes;
   // observation point is 1m above ground plane
-  const gtsam::Point3 observation_point(0.0, 0.0, 1.0);
+  const gtsam::Point3 rig_location(0.0, 0.0, 1.0);
   // start with camera pointing down on ground plane, x along x
   gtsam::Rot3 rot = gtsam::Rot3::AxisAngle(gtsam::Unit3(1, 0, 0), M_PI);
+  const gtsam::Pose3 T_r_c;  // make camera center of rig
+  // the IMU x-axis must be aligned with the world frame
+  // because the IMU pose initialization aligns it that way,
+  // so attitude comparison will fail if you do arbitrary rotations.
+  const gtsam::Pose3 T_r_i(
+    gtsam::Rot3::AxisAngle(gtsam::Unit3(1, 0, 0), M_PI * 0.1),
+    gtsam::Vector3(0, 0, 0));
 
   for (int i_axis = 0; i_axis < 3; i_axis++) {
     Eigen::Vector3d axis = Eigen::Vector3d::Zero();
     axis(i_axis) = 1.0;
     for (size_t i_update = 0; i_update < num_imu_updates; i_update++) {
-      gtsam::Vector3 omega_w = axis * omega;  // in world coor
-      const gtsam::Pose3 T_w_i(rot, observation_point);
-      const gtsam::Vector3 acc = rot.inverse() * (-1.0 * g_vec);
-      const gtsam::Vector3 omega_i = rot.inverse() * omega_w;
+      gtsam::Vector3 omega_w = axis * omega;  // in world coordinates
+      const gtsam::Pose3 T_w_r(rot, rig_location);
+      const gtsam::Pose3 T_w_i = T_w_r * T_r_i;
+      const gtsam::Pose3 T_w_c = T_w_r * T_r_c;
+      // transform accel and omega vectors from world frame to imu frame
+      const gtsam::Vector3 acc = T_w_i.inverse().rotation() * (-1.0 * g_vec);
+      const gtsam::Vector3 omega_i = T_w_i.inverse().rotation() * omega_w;
       calib.addIMUData(0, multicam_imu_calib::IMUData(t, omega_i, acc));
       if (i_update % imu_updates_per_frame == 0) {
-        calib.addRigPose(t, T_w_i);
+        calib.addRigPose(t, T_w_r);
         const auto ip = utilities::makeProjectedPoints(
           cam->getIntrinsics(), cam->getDistortionModel(),
-          cam->getDistortionCoefficients(), T_w_i, wc);
+          cam->getDistortionCoefficients(), T_w_c, wc);
         if (calib.hasRigPose(t)) {
           auto det = std::make_shared<multicam_imu_calib::Detection>(wc, ip);
           calib.addDetection(0, t, det);
         }
         ground_truth.push_back(
-          multicam_imu_calib::IMU::StampedAttitude(t, rot));
+          multicam_imu_calib::StampedAttitude(t, T_w_i.rotation()));
+        rig_attitudes.push_back(
+          multicam_imu_calib::StampedAttitude(t, T_w_r.rotation()));
       }
       // update to next pose
       rot = gtsam::Rot3::AxisAngle(axis, delta_angle) * rot;
       t += dt;
     }
   }
-  calib.getIMUList()[0]->testAttitudes(ground_truth);
+  const auto & imu = *(calib.getIMUList()[0]);
+  const auto T_r_i_est =
+    utilities::averageRotationDifference(rig_attitudes, imu.getAttitudes());
+  const double err =
+    (T_r_i_est.inverse() * T_r_i.rotation()).axisAngle().second;
+  EXPECT_TRUE(std::abs(err) < 1e-6);
+  imu.testAttitudes(ground_truth);
   EXPECT_TRUE(calib.getIMUList()[0]->testAttitudes(ground_truth));
 }
 

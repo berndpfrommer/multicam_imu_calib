@@ -26,6 +26,7 @@
 #include <multicam_imu_calib/factor_key.hpp>
 #include <multicam_imu_calib/imu_data.hpp>
 #include <multicam_imu_calib/intrinsics.hpp>
+#include <multicam_imu_calib/stamped_attitude.hpp>
 #include <multicam_imu_calib/value_key.hpp>
 #include <string>
 
@@ -42,17 +43,6 @@ class IMU
 public:
   using SharedPtr = std::shared_ptr<IMU>;
   using SharedNoiseModel = gtsam::SharedNoiseModel;
-  struct StampedAttitude
-  {
-    explicit StampedAttitude(uint64_t ta, const gtsam::Rot3 & rot)
-    : t(ta), rotation(rot)
-    {
-    }
-    StampedAttitude() = default;
-    uint64_t t{0};
-    gtsam::Rot3 rotation;
-  };
-
   explicit IMU(const std::string & name);
   ~IMU();
 
@@ -66,6 +56,7 @@ public:
   const auto & getData() const { return (data_); }
   bool isPreintegrating() const { return (is_preintegrating_); }
   const auto & getCurrentData() const { return (current_data_); }
+  const auto & getAttitudes() const { return (attitudes_); }
 
   // ------------ setters
   void setPoseWithNoise(

@@ -19,6 +19,7 @@
 #include <gtsam/geometry/Pose3.h>
 
 #include <multicam_imu_calib/intrinsics.hpp>
+#include <multicam_imu_calib/stamped_attitude.hpp>
 #include <opencv2/core/core.hpp>
 #include <optional>
 #include <tuple>
@@ -34,6 +35,9 @@ std::vector<std::array<double, 2>> makeProjectedPoints(
   const Intrinsics & intr, const multicam_imu_calib::DistortionModel dist_model,
   const std::vector<double> & dist_coeffs, const gtsam::Pose3 & T_w_c,
   const std::vector<std::array<double, 3>> & wc);
+gtsam::Rot3 averageRotationDifference(
+  const std::vector<StampedAttitude> & sa1,
+  const std::vector<StampedAttitude> & sa2);
 
 }  // namespace utilities
 }  // namespace multicam_imu_calib

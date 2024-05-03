@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <cassert>
 #include <multicam_imu_calib/utilities.hpp>
 #include <opencv2/calib3d.hpp>
 
@@ -73,6 +74,34 @@ std::vector<std::array<double, 2>> makeProjectedPoints(
     ic.push_back({ip[i].x, ip[i].y});
   }
   return (ic);
+}
+
+gtsam::Rot3 averageRotationDifference(
+  const std::vector<StampedAttitude> & sa1,
+  const std::vector<StampedAttitude> & sa2)
+{
+  assert(sa1.size() == sa2.size());
+  Eigen::Matrix4d Q = Eigen::Matrix4d::Zero();
+  for (size_t i = 0; i < sa1.size(); i++) {
+    const auto dR = sa1[i].rotation.inverse() * sa2[i].rotation;
+    const Eigen::Vector4d dq = dR.toQuaternion().coeffs();
+    const Eigen::Matrix4d m = dq * dq.transpose();
+    Q = Q + m;
+  }
+
+  Eigen::EigenSolver<Eigen::Matrix4d> solver(Q);
+  double max_val = std::numeric_limits<double>::min();
+  // find largest eigenvalue and return corresponding eigenvector
+  size_t i_max = 0;
+  for (int64_t i = 0; i < Q.rows(); i++) {
+    const auto v = solver.eigenvalues()(i).real();
+    if (v > max_val) {
+      i_max = i;
+      max_val = v;
+    }
+  }
+  const Eigen::Vector4d v = solver.eigenvectors().col(i_max).real();
+  return (gtsam::Quaternion(v(3), v(0), v(1), v(2)));
 }
 
 }  // namespace utilities
