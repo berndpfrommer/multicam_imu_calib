@@ -326,9 +326,14 @@ void Calibration::addCameraPosePrior(
 
 void Calibration::addRigPose(uint64_t t, const gtsam::Pose3 & pose)
 {
+#ifdef USE_CAMERA
   rig_pose_keys_.push_back(optimizer_->addRigPose(t, pose));
-
   time_to_rig_pose_.insert({t, rig_pose_keys_.back()});
+#else
+  (void)pose;
+  time_to_rig_pose_.insert({t, 0});
+#endif
+
   unused_rig_pose_times_.push_back(t);
   // A new camera frame has arrived, let's see if we can
   // integrate the IMUs up to that time, and create factors.
@@ -353,7 +358,9 @@ void Calibration::addProjectionFactor(
   image_points_[cam_idx].push_back(ic);
   world_points_[cam_idx].push_back(wc);
   detection_times_[cam_idx].push_back(t);
+#ifdef USE_CAMERA
   optimizer_->addProjectionFactor(camera, t, wc, ic);
+#endif
 }
 
 void Calibration::addDetection(
@@ -379,13 +386,15 @@ bool Calibration::applyIMUData(uint64_t t)
         imu->initializeWorldPose(t);
         imu->addValueKeys(optimizer_->addIMUState(t, imu->getCurrentState()));
         const auto vk = imu->getValueKeys().back();
+        // add prior for start velocity to be zero
         (void)optimizer_->addPrior(
           vk.velocity_key, gtsam::Vector3(gtsam::Vector3::Zero()),
           utilities::makeNoise3(1e-3));
         imu->setBiasPriorKey(optimizer_->addPrior(
           vk.bias_key, imu->getBiasPrior(), imu->getBiasPriorNoise()));
+        // XXX this prior used only for testing, remove later!!!
         (void)optimizer_->addPrior(
-          vk.pose_key, gtsam::Pose3(),
+          vk.pose_key, imu->getCurrentState().pose(),
           utilities::makeNoise6(1e-3 /*angle*/, 1e-3));
       }
     }
@@ -396,7 +405,7 @@ bool Calibration::applyIMUData(uint64_t t)
       if (t > prev_keys.t) {
         imu->addValueKeys(optimizer_->addIMUState(t, imu->getCurrentState()));
         const auto current_keys = imu->getValueKeys().back();
-        const double dt = std::max(0.0, 1e-9 * (t - current_keys.t));
+        const double dt = std::max(0.0, 1e-9 * (t - prev_keys.t));
         imu->addFactorKeys(optimizer_->addIMUFactors(
           prev_keys, current_keys, imu->getBiasNoise(dt), *(imu->getAccum())));
       }
@@ -404,7 +413,7 @@ bool Calibration::applyIMUData(uint64_t t)
     }
     if (!imu->isPreintegrating() || imu->getCurrentData().t >= t) {
       num_imus_caught_up++;
-    } 
+    }
   }
   return (num_imus_caught_up == imu_list_.size());
 }

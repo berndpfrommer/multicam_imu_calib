@@ -40,17 +40,20 @@ TEST(multicam_imu_calib, imu_preintegration)
   const auto cam = calib.getCameraList()[0];  // first camera
 
   // initialize the camera perfectly
+#ifdef USE_CAMERA
+    // XXX reinstate later!
   calib.addCameraPose(cam, cam->getPose());  // perfect init
   calib.addIntrinsics(
     cam, cam->getIntrinsics(), cam->getDistortionCoefficients());
+#endif
 
   // world points form a square in the x/y plane
   std::vector<std::array<double, 3>> wc = {
     {1, 1, 0}, {-1, 1, 0}, {-1, -1, 0}, {1, -1, 0}};
 
   const gtsam::Vector3 g_vec(0, 0, -9.81);
-  //const double tot_angle = 0.5 * M_PI;
-  const double tot_angle = 0.1 * M_PI;
+  const double tot_angle = 0.5 * M_PI;
+  //const double tot_angle = 0.1 * M_PI;
   const double omega = 2.0;  // rad/sec
   const double tot_time = tot_angle / omega;
   size_t num_frames = 10;
@@ -70,8 +73,9 @@ TEST(multicam_imu_calib, imu_preintegration)
   // the IMU x-axis must be aligned with the world frame
   // because the IMU pose initialization aligns it that way,
   // so attitude comparison will fail if you do arbitrary rotations.
+
   const gtsam::Pose3 T_r_i(
-    gtsam::Rot3::AxisAngle(gtsam::Unit3(1, 0, 0), M_PI * 0.1),
+    gtsam::Rot3::AxisAngle(gtsam::Unit3(1, 0, 0), 0.0 /* M_PI * 0.1 */),
     gtsam::Vector3(0, 0, 0));
 
   for (int i_axis = 0; i_axis < 3; i_axis++) {

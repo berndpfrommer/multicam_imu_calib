@@ -76,6 +76,7 @@ public:
     return (optimized_values_.at<T>(key));
   }
   double getOptimizedError(factor_key_t k) const;
+  void printErrors(const gtsam::Values & vals) const;
 
 private:
   value_key_t getNextKey() { return (key_++); }

@@ -136,18 +136,15 @@ StampedIMUFactorKeys Optimizer::addIMUFactors(
   const gtsam::PreintegratedImuMeasurements & accum)
 {
   StampedIMUFactorKeys fk;
+  fk.t = curr_keys.t;
   graph_.add(gtsam::ImuFactor(
     prev_keys.pose_key, prev_keys.velocity_key, curr_keys.pose_key,
     curr_keys.velocity_key, curr_keys.bias_key, accum));
   fk.imu = getLastFactorKey();
-  auto factor =
-    std::make_shared<gtsam::BetweenFactor<gtsam::imuBias::ConstantBias>>(
-      prev_keys.bias_key, curr_keys.bias_key, gtsam::imuBias::ConstantBias(),
-      random_walk_noise);
-  graph_.add(gtsam::ImuFactor(
-    prev_keys.pose_key, prev_keys.velocity_key, curr_keys.pose_key,
-    curr_keys.velocity_key, curr_keys.bias_key, accum));
-  fk.imu = getLastFactorKey();
+  graph_.add(gtsam::BetweenFactor<gtsam::imuBias::ConstantBias>(
+    prev_keys.bias_key, curr_keys.bias_key, gtsam::imuBias::ConstantBias(),
+    random_walk_noise));
+  fk.bias = getLastFactorKey();
   return (fk);
 }
 
@@ -220,7 +217,8 @@ void Optimizer::optimize()
     LOG_INFO(
       "final error: " << lmo.error() << " after iter: " << lmo.iterations());
 #endif
-#if 0
+#if 1
+    printErrors(values_);
     LOG_INFO("optimized values: ");
     for (const auto & v : optimized_values_) {
       v.value.print();
@@ -238,6 +236,14 @@ double Optimizer::getOptimizedError(factor_key_t k) const
 {
   const auto f = graph_.at(k);
   return (f->error(optimized_values_));
+}
+
+void Optimizer::printErrors(const gtsam::Values & vals) const
+{
+  for (size_t i = 0; i < graph_.size(); i++) {
+    std::cout << "factor " << i << " has error: " << graph_.at(i)->error(vals)
+              << std::endl;
+  }
 }
 
 }  // namespace multicam_imu_calib

@@ -92,7 +92,6 @@ gtsam::SharedNoiseModel IMU::getBiasNoise(double dt) const
   // See documentation for Kalibr IMU model.
   // unit of bias is rad / s
   // unit of noise density is (rad / s^2) * 1/sqrt(s)
-  //
   const double sqdt = std::sqrt(dt);
   return (
     utilities::makeNoise6(accel_random_walk_ * sqdt, gyro_random_walk_ * sqdt));
@@ -111,7 +110,8 @@ void IMU::updateRotation(uint64_t t)
 {
   current_state_ = accum_->predict(current_state_, zero_bias);
   current_state_ = gtsam::NavState(
-    current_state_.attitude(), gtsam::Point3(), gtsam::Velocity3());
+    current_state_.attitude(), gtsam::Point3(0, 0, 0) /*translation*/,
+    gtsam::Velocity3(0, 0, 0) /*linear velocity*/);
   saveAttitude(t);
 }
 
