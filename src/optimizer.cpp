@@ -132,19 +132,14 @@ StampedIMUValueKeys Optimizer::addIMUState(
 
 StampedIMUFactorKeys Optimizer::addIMUFactors(
   const StampedIMUValueKeys & prev_keys, const StampedIMUValueKeys & curr_keys,
-  const gtsam::SharedNoiseModel & random_walk_noise,
-  const gtsam::PreintegratedImuMeasurements & accum)
+  const gtsam::PreintegratedCombinedMeasurements & accum)
 {
   StampedIMUFactorKeys fk;
   fk.t = curr_keys.t;
-  graph_.add(gtsam::ImuFactor(
+  graph_.add(gtsam::CombinedImuFactor(
     prev_keys.pose_key, prev_keys.velocity_key, curr_keys.pose_key,
-    curr_keys.velocity_key, curr_keys.bias_key, accum));
+    curr_keys.velocity_key, prev_keys.bias_key, curr_keys.bias_key, accum));
   fk.imu = getLastFactorKey();
-  graph_.add(gtsam::BetweenFactor<gtsam::imuBias::ConstantBias>(
-    prev_keys.bias_key, curr_keys.bias_key, gtsam::imuBias::ConstantBias(),
-    random_walk_noise));
-  fk.bias = getLastFactorKey();
   return (fk);
 }
 

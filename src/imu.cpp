@@ -32,10 +32,14 @@ IMU::~IMU() {}
 
 void IMU::setGravity(double g)
 {
-  params_ = gtsam::PreintegrationParams::MakeSharedU(g);
+  params_ = gtsam::PreintegratedCombinedMeasurements::Params::MakeSharedU(g);
   params_->setUse2ndOrderCoriolis(false);
   params_->setOmegaCoriolis(gtsam::Vector3(0, 0, 0));
-  params_->setIntegrationCovariance(gtsam::I_3x3 * 0.1);  // XXX ???
+  // error due to integrating position from velocities
+  params_->setIntegrationCovariance(gtsam::I_3x3 * 1e-8);
+  // error in the bias used for preintegration
+  // (copied comment from CombinedImuFactorsExample.cpp)
+  params_->setBiasAccOmegaInit(gtsam::I_6x6 * 1e-5);
 }
 
 void IMU::setGyroNoiseDensity(double s)
@@ -48,9 +52,15 @@ void IMU::setAccelNoiseDensity(double s)
   params_->setAccelerometerCovariance(gtsam::I_3x3 * s * s);
 }
 
-void IMU::setGyroRandomWalk(double s) { gyro_random_walk_ = s; }
+void IMU::setGyroRandomWalk(double s)
+{
+  params_->setBiasOmegaCovariance(gtsam::I_3x3 * s * s);
+}
 
-void IMU::setAccelRandomWalk(double s) { accel_random_walk_ = s; }
+void IMU::setAccelRandomWalk(double s)
+{
+  params_->setBiasAccCovariance(gtsam::I_3x3 * s * s);
+}
 
 void IMU::setGyroBiasPrior(double x, double y, double z, double sigma)
 {
@@ -79,22 +89,13 @@ void IMU::setPoseWithNoise(
 
 void IMU::parametersComplete()
 {
-  accum_ = std::make_unique<gtsam::PreintegratedImuMeasurements>(params_);
+  accum_ = std::make_unique<gtsam::PreintegratedCombinedMeasurements>(
+    params_, getBiasPrior());
 }
 
 gtsam::imuBias::ConstantBias IMU::getBiasPrior() const
 {
   return (gtsam::imuBias::ConstantBias(accel_bias_prior_, gyro_bias_prior_));
-}
-
-gtsam::SharedNoiseModel IMU::getBiasNoise(double dt) const
-{
-  // See documentation for Kalibr IMU model.
-  // unit of bias is rad / s
-  // unit of noise density is (rad / s^2) * 1/sqrt(s)
-  const double sqdt = std::sqrt(dt);
-  return (
-    utilities::makeNoise6(accel_random_walk_ * sqdt, gyro_random_walk_ * sqdt));
 }
 
 void IMU::integrateMeasurement(

@@ -66,8 +66,7 @@ public:
   StampedIMUFactorKeys addIMUFactors(
     const StampedIMUValueKeys & prev_keys,
     const StampedIMUValueKeys & curr_keys,
-    const gtsam::SharedNoiseModel & random_walk_noise,
-    const gtsam::PreintegratedImuMeasurements & accum);
+    const gtsam::PreintegratedCombinedMeasurements & accum);
 
   gtsam::Pose3 getOptimizedPose(value_key_t k) const;
   template <class T>

@@ -19,6 +19,7 @@
 #include <gtsam/base/Vector.h>
 #include <gtsam/geometry/Pose3.h>
 #include <gtsam/linear/NoiseModel.h>
+#include <gtsam/navigation/CombinedImuFactor.h>
 #include <gtsam/navigation/ImuBias.h>
 #include <gtsam/navigation/NavState.h>
 
@@ -32,12 +33,6 @@
 #include <multicam_imu_calib/stamped_imu_value_keys.hpp>
 #include <multicam_imu_calib/value_key.hpp>
 #include <string>
-
-namespace gtsam
-{
-class PreintegratedImuMeasurements;
-class PreintegrationParams;
-}  // namespace gtsam
 
 namespace multicam_imu_calib
 {
@@ -64,7 +59,6 @@ public:
   const auto & getAttitudes() const { return (attitudes_); }
   const auto & getAccum() const { return (accum_); }
 
-  gtsam::SharedNoiseModel getBiasNoise(double dt) const;  // random walk
   gtsam::imuBias::ConstantBias getBiasPrior() const;
   gtsam::SharedNoiseModel getBiasPriorNoise() const;
 
@@ -113,15 +107,12 @@ private:
   std::string name_;
   gtsam::Pose3 pose_;            // prior pose
   SharedNoiseModel pose_noise_;  // prior pose noise
-  std::unique_ptr<gtsam::PreintegratedImuMeasurements> accum_;
-  boost::shared_ptr<gtsam::PreintegrationParams> params_;
+  std::unique_ptr<gtsam::PreintegratedCombinedMeasurements> accum_;
+  boost::shared_ptr<gtsam::PreintegratedCombinedMeasurements::Params> params_;
   gtsam::Vector3 gyro_bias_prior_;
   double gyro_bias_prior_sigma_{0};
   gtsam::Vector3 accel_bias_prior_;
   double accel_bias_prior_sigma_{0};
-
-  double gyro_random_walk_{0};
-  double accel_random_walk_{0};
 
   value_key_t pose_key_{0};
   factor_key_t pose_prior_key_{0};

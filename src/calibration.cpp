@@ -405,9 +405,8 @@ bool Calibration::applyIMUData(uint64_t t)
       if (t > prev_keys.t) {
         imu->addValueKeys(optimizer_->addIMUState(t, imu->getCurrentState()));
         const auto current_keys = imu->getValueKeys().back();
-        const double dt = std::max(0.0, 1e-9 * (t - prev_keys.t));
         imu->addFactorKeys(optimizer_->addIMUFactors(
-          prev_keys, current_keys, imu->getBiasNoise(dt), *(imu->getAccum())));
+          prev_keys, current_keys, *(imu->getAccum())));
       }
       imu->resetPreintegration();
     }
