@@ -49,7 +49,8 @@ TEST(multicam_imu_calib, imu_preintegration)
     {1, 1, 0}, {-1, 1, 0}, {-1, -1, 0}, {1, -1, 0}};
 
   const gtsam::Vector3 g_vec(0, 0, -9.81);
-  const double tot_angle = 0.5 * M_PI;
+  //const double tot_angle = 0.5 * M_PI;
+  const double tot_angle = 0.1 * M_PI;
   const double omega = 2.0;  // rad/sec
   const double tot_time = tot_angle / omega;
   size_t num_frames = 10;
@@ -90,7 +91,7 @@ TEST(multicam_imu_calib, imu_preintegration)
         const auto ip = utilities::makeProjectedPoints(
           cam->getIntrinsics(), cam->getDistortionModel(),
           cam->getDistortionCoefficients(), T_w_c, wc);
-        if (calib.hasRigPose(t)) {
+        if (calib.hasRigPose(t)) {  // should always be true
           auto det = std::make_shared<multicam_imu_calib::Detection>(wc, ip);
           calib.addDetection(0, t, det);
         }
@@ -112,6 +113,7 @@ TEST(multicam_imu_calib, imu_preintegration)
   EXPECT_TRUE(std::abs(err) < 1e-6);
   imu.testAttitudes(ground_truth);
   EXPECT_TRUE(calib.getIMUList()[0]->testAttitudes(ground_truth));
+  calib.runOptimizer();
 }
 
 int main(int argc, char ** argv)

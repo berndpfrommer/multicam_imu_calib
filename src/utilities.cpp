@@ -104,5 +104,20 @@ gtsam::Rot3 averageRotationDifference(
   return (gtsam::Quaternion(v(3), v(0), v(1), v(2)));
 }
 
+gtsam::SharedNoiseModel makeNoise6(double sig_a, double sig_b)
+{
+  Eigen::Matrix<double, 6, 1> sig;
+  Eigen::Matrix<double, 3, 1> a = Eigen::Matrix<double, 3, 1>::Ones() * sig_a;
+  Eigen::Matrix<double, 3, 1> b = Eigen::Matrix<double, 3, 1>::Ones() * sig_b;
+  sig << a, b;
+  return (gtsam::noiseModel::Diagonal::Sigmas(sig));
+}
+
+gtsam::SharedNoiseModel makeNoise3(double s)
+{
+  return (gtsam::noiseModel::Diagonal::Sigmas(
+    Eigen::Matrix<double, 3, 1>::Ones() * s));
+}
+
 }  // namespace utilities
 }  // namespace multicam_imu_calib

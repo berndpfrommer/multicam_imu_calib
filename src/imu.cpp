@@ -21,6 +21,7 @@
 #include <Eigen/Geometry>
 #include <multicam_imu_calib/imu.hpp>
 #include <multicam_imu_calib/logging.hpp>
+#include <multicam_imu_calib/utilities.hpp>
 
 namespace multicam_imu_calib
 {
@@ -53,14 +54,20 @@ void IMU::setAccelRandomWalk(double s) { accel_random_walk_ = s; }
 
 void IMU::setGyroBiasPrior(double x, double y, double z, double sigma)
 {
-  gyro_bias_ = gtsam::Vector3(x, y, z);
-  gyro_bias_sigma_ = sigma;
+  gyro_bias_prior_ = gtsam::Vector3(x, y, z);
+  gyro_bias_prior_sigma_ = sigma;
 }
 
 void IMU::setAccelBiasPrior(double x, double y, double z, double sigma)
 {
-  accel_bias_ = gtsam::Vector3(x, y, z);
-  accel_bias_sigma_ = sigma;
+  accel_bias_prior_ = gtsam::Vector3(x, y, z);
+  accel_bias_prior_sigma_ = sigma;
+}
+
+gtsam::SharedNoiseModel IMU::getBiasPriorNoise() const
+{
+  return (
+    utilities::makeNoise6(accel_bias_prior_sigma_, gyro_bias_prior_sigma_));
 }
 
 void IMU::setPoseWithNoise(
@@ -73,6 +80,22 @@ void IMU::setPoseWithNoise(
 void IMU::parametersComplete()
 {
   accum_ = std::make_unique<gtsam::PreintegratedImuMeasurements>(params_);
+}
+
+gtsam::imuBias::ConstantBias IMU::getBiasPrior() const
+{
+  return (gtsam::imuBias::ConstantBias(accel_bias_prior_, gyro_bias_prior_));
+}
+
+gtsam::SharedNoiseModel IMU::getBiasNoise(double dt) const
+{
+  // See documentation for Kalibr IMU model.
+  // unit of bias is rad / s
+  // unit of noise density is (rad / s^2) * 1/sqrt(s)
+  //
+  const double sqdt = std::sqrt(dt);
+  return (
+    utilities::makeNoise6(accel_random_walk_ * sqdt, gyro_random_walk_ * sqdt));
 }
 
 void IMU::integrateMeasurement(

@@ -17,6 +17,7 @@
 #define MULTICAM_IMU_CALIB__UTILITIES_HPP_
 
 #include <gtsam/geometry/Pose3.h>
+#include <gtsam/linear/NoiseModel.h>
 
 #include <multicam_imu_calib/intrinsics.hpp>
 #include <multicam_imu_calib/stamped_attitude.hpp>
@@ -38,7 +39,8 @@ std::vector<std::array<double, 2>> makeProjectedPoints(
 gtsam::Rot3 averageRotationDifference(
   const std::vector<StampedAttitude> & sa1,
   const std::vector<StampedAttitude> & sa2);
-
+gtsam::SharedNoiseModel makeNoise6(double sig_a, double sig_b);
+gtsam::SharedNoiseModel makeNoise3(double sig_a);
 }  // namespace utilities
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__UTILITIES_HPP_

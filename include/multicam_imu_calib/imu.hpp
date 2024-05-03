@@ -19,6 +19,7 @@
 #include <gtsam/base/Vector.h>
 #include <gtsam/geometry/Pose3.h>
 #include <gtsam/linear/NoiseModel.h>
+#include <gtsam/navigation/ImuBias.h>
 #include <gtsam/navigation/NavState.h>
 
 #include <deque>
@@ -27,6 +28,8 @@
 #include <multicam_imu_calib/imu_data.hpp>
 #include <multicam_imu_calib/intrinsics.hpp>
 #include <multicam_imu_calib/stamped_attitude.hpp>
+#include <multicam_imu_calib/stamped_imu_factor_keys.hpp>
+#include <multicam_imu_calib/stamped_imu_value_keys.hpp>
 #include <multicam_imu_calib/value_key.hpp>
 #include <string>
 
@@ -56,7 +59,14 @@ public:
   const auto & getData() const { return (data_); }
   bool isPreintegrating() const { return (is_preintegrating_); }
   const auto & getCurrentData() const { return (current_data_); }
+  const auto & getCurrentState() const { return (current_state_); }
+  const auto & getValueKeys() const { return (value_keys_); }
   const auto & getAttitudes() const { return (attitudes_); }
+  const auto & getAccum() const { return (accum_); }
+
+  gtsam::SharedNoiseModel getBiasNoise(double dt) const;  // random walk
+  gtsam::imuBias::ConstantBias getBiasPrior() const;
+  gtsam::SharedNoiseModel getBiasPriorNoise() const;
 
   // ------------ setters
   void setPoseWithNoise(
@@ -74,6 +84,7 @@ public:
   void setPreintegrating(bool b) { is_preintegrating_ = b; }
   void setCurrentData(const IMUData & d) { current_data_ = d; }
   void setCurrentTime(uint64_t t) { current_data_.t = t; }
+  void setBiasPriorKey(factor_key_t k) { bias_prior_key_ = k; }
 
   // ------------ others
   void parametersComplete();
@@ -81,6 +92,15 @@ public:
   void drainOldData(uint64_t t);
   void preintegrateUpTo(uint64_t t);
   void addData(const IMUData & d) { data_.push_back(d); }
+  void addValueKeys(const StampedIMUValueKeys & k)
+  {
+    value_keys_.push_back(k);
+    current_value_keys_ = k;
+  }
+  void addFactorKeys(const StampedIMUFactorKeys & k)
+  {
+    factor_keys_.push_back(k);
+  }
   void integrateMeasurement(
     const gtsam::Vector3 & acc, const gtsam::Vector3 & omega, int64_t dt);
   void popData() { data_.pop_front(); }
@@ -93,24 +113,20 @@ private:
   std::string name_;
   gtsam::Pose3 pose_;            // prior pose
   SharedNoiseModel pose_noise_;  // prior pose noise
-  std::array<double, 3> gyro_bias_prior_{{0, 0, 0}};
-  SharedNoiseModel gyro_bias_prior_noise_;
-  std::array<double, 3> accel_bias_prior_{{0, 0, 0}};
-  SharedNoiseModel accel_bias_prior_noise_;
   std::unique_ptr<gtsam::PreintegratedImuMeasurements> accum_;
   boost::shared_ptr<gtsam::PreintegrationParams> params_;
-  gtsam::Vector3 gyro_bias_;
-  double gyro_bias_sigma_{0};
-  gtsam::Vector3 accel_bias_;
-  double accel_bias_sigma_{0};
+  gtsam::Vector3 gyro_bias_prior_;
+  double gyro_bias_prior_sigma_{0};
+  gtsam::Vector3 accel_bias_prior_;
+  double accel_bias_prior_sigma_{0};
 
   double gyro_random_walk_{0};
   double accel_random_walk_{0};
 
   value_key_t pose_key_{0};
-  factor_key_t gyro_bias_prior_key_{0};
-  factor_key_t accel_bias_prior_key_{0};
   factor_key_t pose_prior_key_{0};
+  factor_key_t bias_prior_key_{0};
+  factor_key_t velocity_prior_key_{0};
   std::string topic_;
   std::deque<IMUData> data_;
   IMUData current_data_;
@@ -118,6 +134,9 @@ private:
   gtsam::Pose3 initial_pose_;      // initial transform T_w_i
   gtsam::NavState current_state_;  // pose + velocity
   std::vector<StampedAttitude> attitudes_;
+  std::vector<StampedIMUValueKeys> value_keys_;
+  std::vector<StampedIMUFactorKeys> factor_keys_;
+  StampedIMUValueKeys current_value_keys_;
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__IMU_HPP_

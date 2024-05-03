@@ -14,7 +14,9 @@
 // limitations under the License.
 
 #include <gtsam/nonlinear/LevenbergMarquardtOptimizer.h>
-#include <gtsam/slam/GeneralSFMFactor.h>
+// #include <gtsam/slam/GeneralSFMFactor.h>   XXX needed at all?
+#include <gtsam/navigation/ImuFactor.h>
+#include <gtsam/slam/BetweenFactor.h>
 #include <gtsam/slam/expressions.h>
 #include <multicam_imu_calib/gtsam_extensions/Cal3DS3.h>
 #include <multicam_imu_calib/gtsam_extensions/Cal3FS2.h>
@@ -46,15 +48,7 @@ void Optimizer::addCameraPose(
   values_.insert(pose_key, T_r_c);
 }
 
-value_key_t Optimizer::addCameraPosePrior(
-  value_key_t pose_key, const gtsam::Pose3 & T_r_c,
-  const SharedNoiseModel & noise)
-{
-  graph_.push_back(gtsam::PriorFactor<gtsam::Pose3>(pose_key, T_r_c, noise));
-  return (static_cast<value_key_t>(graph_.size() - 1));
-}
-
-void Optimizer::addCameraIntrinsics(
+factor_key_t Optimizer::addCameraIntrinsics(
   const Camera::SharedPtr & cam, const Intrinsics & intr,
   const DistortionModel & distortion_model,
   const std::vector<double> & distortion_coefficients)
@@ -79,7 +73,7 @@ void Optimizer::addCameraIntrinsics(
         intr[0], intr[1], intr[2], intr[3], dd[0], dd[1], &dd[2]);
       intr_value.setCoefficientMask(cam->getCoefficientMask());
       values_.insert(intr_key, intr_value);
-      graph_.push_back(gtsam::PriorFactor<Cal3DS3>(
+      graph_.add(gtsam::PriorFactor<Cal3DS3>(
         intr_key, intr_value, cam->getIntrinsicsNoise()));
       break;
     }
@@ -101,6 +95,7 @@ void Optimizer::addCameraIntrinsics(
     default:
       BOMB_OUT("invalid distortion model!");
   }
+  return (getLastFactorKey());
 }
 
 void Optimizer::addCamera(const Camera::SharedPtr & cam)
@@ -125,7 +120,38 @@ value_key_t Optimizer::addRigPose(uint64_t t, const gtsam::Pose3 & pose)
   return (current_rig_pose_key_);
 }
 
-void Optimizer::addProjectionFactor(
+StampedIMUValueKeys Optimizer::addIMUState(
+  uint64_t t, const gtsam::NavState & nav)
+{
+  StampedIMUValueKeys vk(t, getNextKey(), getNextKey(), getNextKey());
+  values_.insert(vk.pose_key, nav.pose());
+  values_.insert(vk.velocity_key, nav.v());
+  values_.insert(vk.bias_key, gtsam::imuBias::ConstantBias());  // 0 bias init
+  return (vk);
+}
+
+StampedIMUFactorKeys Optimizer::addIMUFactors(
+  const StampedIMUValueKeys & prev_keys, const StampedIMUValueKeys & curr_keys,
+  const gtsam::SharedNoiseModel & random_walk_noise,
+  const gtsam::PreintegratedImuMeasurements & accum)
+{
+  StampedIMUFactorKeys fk;
+  graph_.add(gtsam::ImuFactor(
+    prev_keys.pose_key, prev_keys.velocity_key, curr_keys.pose_key,
+    curr_keys.velocity_key, curr_keys.bias_key, accum));
+  fk.imu = getLastFactorKey();
+  auto factor =
+    std::make_shared<gtsam::BetweenFactor<gtsam::imuBias::ConstantBias>>(
+      prev_keys.bias_key, curr_keys.bias_key, gtsam::imuBias::ConstantBias(),
+      random_walk_noise);
+  graph_.add(gtsam::ImuFactor(
+    prev_keys.pose_key, prev_keys.velocity_key, curr_keys.pose_key,
+    curr_keys.velocity_key, curr_keys.bias_key, accum));
+  fk.imu = getLastFactorKey();
+  return (fk);
+}
+
+factor_key_t Optimizer::addProjectionFactor(
   const Camera::SharedPtr & cam, uint64_t t,
   const std::vector<std::array<double, 3>> & wc,
   const std::vector<std::array<double, 2>> & ic)
@@ -168,6 +194,7 @@ void Optimizer::addProjectionFactor(
         BOMB_OUT("invalid distortion model!");
     }
   }
+  return (getLastFactorKey());
 }
 
 void Optimizer::optimize()
@@ -181,6 +208,8 @@ void Optimizer::optimize()
     optimized_values_ = isam2_->calculateEstimate();
 #else
     gtsam::LevenbergMarquardtParams lmp;
+    graph_.print();
+    values_.print();
     lmp.setVerbosity("SUMMARY");
     lmp.setMaxIterations(100);
     lmp.setAbsoluteErrorTol(1e-7);

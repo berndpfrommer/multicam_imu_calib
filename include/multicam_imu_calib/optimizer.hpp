@@ -18,6 +18,7 @@
 #include <gtsam/nonlinear/ExpressionFactorGraph.h>
 #include <gtsam/nonlinear/ISAM2.h>
 #include <gtsam/nonlinear/NonlinearFactor.h>
+#include <gtsam/nonlinear/PriorFactor.h>
 
 #include <array>
 #include <map>
@@ -25,6 +26,7 @@
 #include <multicam_imu_calib/factor_key.hpp>
 #include <multicam_imu_calib/imu.hpp>
 #include <multicam_imu_calib/intrinsics.hpp>
+#include <multicam_imu_calib/stamped_imu_value_keys.hpp>
 #include <multicam_imu_calib/value_key.hpp>
 #include <string>
 #include <vector>
@@ -42,19 +44,30 @@ public:
   void optimize();
   void setPixelNoise(double noise);
   void addCameraPose(const Camera::SharedPtr & cam, const gtsam::Pose3 & T_r_c);
-  value_key_t addCameraPosePrior(
-    value_key_t pose_key, const gtsam::Pose3 & T_r_c,
-    const SharedNoiseModel & noise);
+  template <class T>
+  factor_key_t addPrior(
+    value_key_t value_key, const T & prior_value,
+    const SharedNoiseModel & noise)
+  {
+    graph_.add(gtsam::PriorFactor(value_key, prior_value, noise));
+    return (getLastFactorKey());
+  }
 
-  void addCameraIntrinsics(
+  factor_key_t addCameraIntrinsics(
     const Camera::SharedPtr & cam, const Intrinsics & intr,
     const DistortionModel & distortion_model,
     const std::vector<double> & distortion_coefficients);
-  void addProjectionFactor(
+  factor_key_t addProjectionFactor(
     const Camera::SharedPtr & camera, uint64_t t,
     const std::vector<std::array<double, 3>> & wc,
     const std::vector<std::array<double, 2>> & ic);
   value_key_t addRigPose(uint64_t t, const gtsam::Pose3 & pose);
+  StampedIMUValueKeys addIMUState(uint64_t t, const gtsam::NavState & nav);
+  StampedIMUFactorKeys addIMUFactors(
+    const StampedIMUValueKeys & prev_keys,
+    const StampedIMUValueKeys & curr_keys,
+    const gtsam::SharedNoiseModel & random_walk_noise,
+    const gtsam::PreintegratedImuMeasurements & accum);
 
   gtsam::Pose3 getOptimizedPose(value_key_t k) const;
   template <class T>
@@ -66,6 +79,10 @@ public:
 
 private:
   value_key_t getNextKey() { return (key_++); }
+  factor_key_t getLastFactorKey()
+  {
+    return (static_cast<factor_key_t>(graph_.size() - 1));
+  }
   std::map<std::string, Camera::SharedPtr> cameras_;
   std::map<std::string, IMU::SharedPtr> imus_;
   gtsam::ExpressionFactorGraph graph_;

@@ -23,6 +23,7 @@
 #include <multicam_imu_calib/diagnostics.hpp>
 #include <multicam_imu_calib/logging.hpp>
 #include <multicam_imu_calib/optimizer.hpp>
+#include <multicam_imu_calib/utilities.hpp>
 #include <sstream>
 
 namespace multicam_imu_calib
@@ -320,8 +321,7 @@ void Calibration::addCameraPosePrior(
   const Camera::SharedPtr & cam, const gtsam::Pose3 & T_r_c,
   const SharedNoiseModel & noise)
 {
-  cam->setPosePriorKey(
-    optimizer_->addCameraPosePrior(cam->getPoseKey(), T_r_c, noise));
+  cam->setPosePriorKey(optimizer_->addPrior(cam->getPoseKey(), T_r_c, noise));
 }
 
 void Calibration::addRigPose(uint64_t t, const gtsam::Pose3 & pose)
@@ -377,16 +377,34 @@ bool Calibration::applyIMUData(uint64_t t)
       if (imu->isPreintegrating()) {
         // found data preceeding t, can initialize IMU pose from accelerometer
         imu->initializeWorldPose(t);
+        imu->addValueKeys(optimizer_->addIMUState(t, imu->getCurrentState()));
+        const auto vk = imu->getValueKeys().back();
+        (void)optimizer_->addPrior(
+          vk.velocity_key, gtsam::Vector3(gtsam::Vector3::Zero()),
+          utilities::makeNoise3(1e-3));
+        imu->setBiasPriorKey(optimizer_->addPrior(
+          vk.bias_key, imu->getBiasPrior(), imu->getBiasPriorNoise()));
+        (void)optimizer_->addPrior(
+          vk.pose_key, gtsam::Pose3(),
+          utilities::makeNoise6(1e-3 /*angle*/, 1e-3));
       }
     }
     if (imu->isPreintegrating()) {
       imu->preintegrateUpTo(t);
-      imu->updateRotation(t);
+      imu->updateRotation(t);  // updates current nav state
+      const auto prev_keys = imu->getValueKeys().back();
+      if (t > prev_keys.t) {
+        imu->addValueKeys(optimizer_->addIMUState(t, imu->getCurrentState()));
+        const auto current_keys = imu->getValueKeys().back();
+        const double dt = std::max(0.0, 1e-9 * (t - current_keys.t));
+        imu->addFactorKeys(optimizer_->addIMUFactors(
+          prev_keys, current_keys, imu->getBiasNoise(dt), *(imu->getAccum())));
+      }
       imu->resetPreintegration();
     }
     if (!imu->isPreintegrating() || imu->getCurrentData().t >= t) {
       num_imus_caught_up++;
-    }
+    } 
   }
   return (num_imus_caught_up == imu_list_.size());
 }
