@@ -495,6 +495,39 @@ DistortionCoefficients Calibration::getOptimizedDistortionCoefficients(
   return (dist);
 }
 
+std::vector<StampedAttitude> Calibration::getRigAttitudes(
+  const std::vector<uint64_t> & times) const
+{
+  std::vector<StampedAttitude> att;
+  for (const auto & t : times) {
+    const auto it = time_to_rig_pose_.find(t);
+    if (it == time_to_rig_pose_.end()) {
+      BOMB_OUT("no rig pose found for time slot " << t);
+    }
+    StampedAttitude a;
+    a.t = t;
+    a.rotation = optimizer_->getUnoptimizedPose(it->second).rotation();
+    att.push_back(a);
+  }
+  return (att);
+}
+
+void Calibration::initializeIMUPoses()
+{
+  for (const auto & imu : imu_list_) {
+    auto att_i = imu->getAttitudes();
+    std::vector<uint64_t> times;
+    std::transform(
+      att_i.begin(), att_i.end(), std::back_inserter(times),
+      std::mem_fn(&StampedAttitude::t));
+
+    const auto att_r = getRigAttitudes(times);
+    const auto T_r_i_est = utilities::averageRotationDifference(att_r, att_i);
+    optimizer_->addIMUPose(
+      imu, gtsam::Pose3(T_r_i_est, gtsam::Point3(0, 0, 0)), time_to_rig_pose_);
+  }
+}
+
 std::tuple<double, double> Calibration::runOptimizer()
 {
   return (optimizer_->optimize());

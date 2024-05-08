@@ -13,9 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <gtsam/nonlinear/LevenbergMarquardtOptimizer.h>
-// #include <gtsam/slam/GeneralSFMFactor.h>   XXX needed at all?
 #include <gtsam/navigation/ImuFactor.h>
+#include <gtsam/nonlinear/LevenbergMarquardtOptimizer.h>
 #include <gtsam/slam/BetweenFactor.h>
 #include <gtsam/slam/expressions.h>
 #include <multicam_imu_calib/gtsam_extensions/Cal3DS3.h>
@@ -23,6 +22,7 @@
 
 #include <multicam_imu_calib/logging.hpp>
 #include <multicam_imu_calib/optimizer.hpp>
+#include <multicam_imu_calib/utilities.hpp>
 
 namespace multicam_imu_calib
 {
@@ -46,6 +46,33 @@ void Optimizer::addCameraPose(
   const auto pose_key = getNextKey();
   cam->setPoseKey(pose_key);
   values_.insert(pose_key, T_r_c);
+}
+
+void Optimizer::addIMUPose(
+  const IMU::SharedPtr & imu, const gtsam::Pose3 & T_r_i_pose,
+  const std::unordered_map<uint64_t, value_key_t> & rig_keys)
+{
+  // add the extrinsic calibration pose T_r_i
+  const auto imu_calib_key = getNextKey();
+  imu->setPoseKey(imu_calib_key);
+  values_.insert(imu_calib_key, T_r_i_pose);
+  // add all the factors
+  for (const auto & keys : imu->getValueKeys()) {
+    auto it = rig_keys.find(keys.t);
+    if (it == rig_keys.end()) {
+      BOMB_OUT("no rig pose found for time: " << keys.t);
+    }
+    auto rig_pose_key = (*it).second;
+    gtsam::Expression<gtsam::Pose3> T_w_r(rig_pose_key);
+    gtsam::Expression<gtsam::Pose3> T_w_i(keys.pose_key);
+    gtsam::Expression<gtsam::Pose3> T_r_i(imu_calib_key);
+    // transformPoseTo applies inverse of first pose to second
+    // (T_w_i^-1 * T_w_r)^-1 * T_r_i === identity
+    gtsam::Expression<gtsam::Pose3> T_identity =
+      gtsam::transformPoseTo(gtsam::transformPoseTo(T_w_i, T_w_r), T_r_i);
+    graph_.addExpressionFactor(
+      T_identity, gtsam::Pose3(), utilities::makeNoise6(0, 0));
+  }
 }
 
 factor_key_t Optimizer::addCameraIntrinsics(
@@ -228,6 +255,11 @@ std::tuple<double, double> Optimizer::optimize()
 gtsam::Pose3 Optimizer::getOptimizedPose(value_key_t k) const
 {
   return (optimized_values_.at<gtsam::Pose3>(k));
+}
+
+gtsam::Pose3 Optimizer::getUnoptimizedPose(value_key_t k) const
+{
+  return (values_.at<gtsam::Pose3>(k));
 }
 
 double Optimizer::getOptimizedError(factor_key_t k) const

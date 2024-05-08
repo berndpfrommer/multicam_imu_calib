@@ -25,6 +25,7 @@
 #include <multicam_imu_calib/detection.hpp>
 #include <multicam_imu_calib/imu.hpp>
 #include <multicam_imu_calib/intrinsics.hpp>
+#include <multicam_imu_calib/stamped_attitude.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <string>
 #include <unordered_map>
@@ -72,6 +73,7 @@ public:
   Intrinsics getOptimizedIntrinsics(const Camera::SharedPtr & cam) const;
   DistortionCoefficients getOptimizedDistortionCoefficients(
     const Camera::SharedPtr & cam) const;
+  void initializeIMUPoses();
 
 private:
   void parseIntrinsicsAndDistortionModel(
@@ -80,6 +82,8 @@ private:
   void parseCameras(const YAML::Node & cameras);
   void parseIMUs(const YAML::Node & imus);
   bool applyIMUData(uint64_t t);
+  std::vector<StampedAttitude> getRigAttitudes(
+    const std::vector<uint64_t> & times) const;
   // ------------- variables -------------
   std::shared_ptr<Optimizer> optimizer_;
   std::unordered_map<std::string, Camera::SharedPtr> cameras_;

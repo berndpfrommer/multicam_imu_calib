@@ -29,6 +29,7 @@
 #include <multicam_imu_calib/stamped_imu_value_keys.hpp>
 #include <multicam_imu_calib/value_key.hpp>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace multicam_imu_calib
@@ -44,6 +45,10 @@ public:
   std::tuple<double, double> optimize();
   void setPixelNoise(double noise);
   void addCameraPose(const Camera::SharedPtr & cam, const gtsam::Pose3 & T_r_c);
+  void addIMUPose(
+    const IMU::SharedPtr & imu, const gtsam::Pose3 & T_r_i,
+    const std::unordered_map<uint64_t, value_key_t> & rig_keys);
+
   template <class T>
   factor_key_t addPrior(
     value_key_t value_key, const T & prior_value,
@@ -69,6 +74,8 @@ public:
     const gtsam::PreintegratedCombinedMeasurements & accum);
 
   gtsam::Pose3 getOptimizedPose(value_key_t k) const;
+  gtsam::Pose3 getUnoptimizedPose(value_key_t k) const;
+
   template <class T>
   T getOptimizedIntrinsics(value_key_t key)
   {
