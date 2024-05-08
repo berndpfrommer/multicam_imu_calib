@@ -24,6 +24,14 @@
 #include <multicam_imu_calib/optimizer.hpp>
 #include <multicam_imu_calib/utilities.hpp>
 
+namespace gtsam
+{
+inline Pose3_ transformPoseFrom(const Pose3_ & p, const Pose3_ & q)
+{
+  return Pose3_(p, &Pose3::transformPoseFrom, q);
+}
+}  // namespace gtsam
+
 namespace multicam_imu_calib
 {
 static rclcpp::Logger get_logger() { return (rclcpp::get_logger("optimizer")); }
@@ -57,21 +65,36 @@ void Optimizer::addIMUPose(
   imu->setPoseKey(imu_calib_key);
   values_.insert(imu_calib_key, T_r_i_pose);
   // add all the factors
-  for (const auto & keys : imu->getValueKeys()) {
-    auto it = rig_keys.find(keys.t);
+  for (const auto & imu_keys : imu->getValueKeys()) {
+    auto it = rig_keys.find(imu_keys.t);
     if (it == rig_keys.end()) {
-      BOMB_OUT("no rig pose found for time: " << keys.t);
+      BOMB_OUT("no rig pose found for time: " << imu_keys.t);
     }
     auto rig_pose_key = (*it).second;
     gtsam::Expression<gtsam::Pose3> T_w_r(rig_pose_key);
-    gtsam::Expression<gtsam::Pose3> T_w_i(keys.pose_key);
+    gtsam::Expression<gtsam::Pose3> T_w_i(imu_keys.pose_key);
     gtsam::Expression<gtsam::Pose3> T_r_i(imu_calib_key);
     // transformPoseTo applies inverse of first pose to second
     // (T_w_i^-1 * T_w_r)^-1 * T_r_i === identity
     gtsam::Expression<gtsam::Pose3> T_identity =
-      gtsam::transformPoseTo(gtsam::transformPoseTo(T_w_i, T_w_r), T_r_i);
+      gtsam::transformPoseFrom(gtsam::transformPoseTo(T_w_i, T_w_r), T_r_i);
     graph_.addExpressionFactor(
       T_identity, gtsam::Pose3(), utilities::makeNoise6(0, 0));
+    imu->addPoseFactorKey(imu_keys.t, getLastFactorKey());
+#ifdef IDENTITY_CHECK
+    const gtsam::Pose3 I =
+      (values_.at<gtsam::Pose3>(imu_keys.pose_key).inverse() *
+       values_.at<gtsam::Pose3>(rig_pose_key)) *
+      values_.at<gtsam::Pose3>(imu_calib_key);
+    std::cout << "T_w_i: " << std::endl
+              << values_.at<gtsam::Pose3>(imu_keys.pose_key) << std::endl;
+    std::cout << "T_w_r: " << std::endl
+              << values_.at<gtsam::Pose3>(rig_pose_key) << std::endl;
+    std::cout << "T_r_i: " << std::endl
+              << values_.at<gtsam::Pose3>(imu_calib_key) << std::endl;
+    std::cout << "id pose: " << std::endl;
+    std::cout << I << std::endl;
+#endif
   }
 }
 
@@ -84,36 +107,16 @@ factor_key_t Optimizer::addCameraIntrinsics(
   cam->setIntrinsicsKey(intr_key);
   switch (distortion_model) {
     case RADTAN: {
-      // reorder coefficients:
-      // our dist coeffs (opencv): k1, k2, p1, p2, k[3..6]
-      // optimizer layout: fx, fy, u, v, p1, p2, k[1...6]
-      std::array<double, 8> dd = {0, 0, 0, 0, 0, 0, 0, 0};
-      const auto & dc = distortion_coefficients;
-      dd[0] = dc.size() > 2 ? dc[2] : 0;
-      dd[1] = dc.size() > 3 ? dc[3] : 0;
-      dd[2] = dc.size() > 0 ? dc[0] : 0;
-      dd[3] = dc.size() > 1 ? dc[1] : 0;
-      for (size_t i = 4; i < dc.size(); i++) {
-        dd[i] = dc[i];
-      }
-      Cal3DS3 intr_value(
-        intr[0], intr[1], intr[2], intr[3], dd[0], dd[1], &dd[2]);
-      intr_value.setCoefficientMask(cam->getCoefficientMask());
+      const auto intr_value =
+        cam->makeRadTanModel(intr, distortion_coefficients);
       values_.insert(intr_key, intr_value);
       graph_.add(gtsam::PriorFactor<Cal3DS3>(
         intr_key, intr_value, cam->getIntrinsicsNoise()));
       break;
     }
     case EQUIDISTANT: {
-      // fx, fy, u, v, k[1..4]
-      const auto & dc = distortion_coefficients;
-      std::array<double, 4> dd = {0, 0, 0, 0};
-      for (size_t i = 0; i < dc.size(); i++) {
-        dd[i] = dc[i];
-      }
-      Cal3FS2 intr_value(
-        intr[0], intr[1], intr[2], intr[3], dd[0], dd[1], dd[2], dd[3]);
-      intr_value.setCoefficientMask(cam->getCoefficientMask());
+      const auto intr_value =
+        cam->makeEquidistantModel(intr, distortion_coefficients);
       values_.insert(intr_key, intr_value);
       graph_.push_back(gtsam::PriorFactor<Cal3FS2>(
         intr_key, intr_value, cam->getIntrinsicsNoise()));
@@ -157,24 +160,22 @@ StampedIMUValueKeys Optimizer::addIMUState(
   return (vk);
 }
 
-StampedIMUFactorKeys Optimizer::addIMUFactors(
+std::tuple<uint64_t, factor_key_t> Optimizer::addPreintegratedFactor(
   const StampedIMUValueKeys & prev_keys, const StampedIMUValueKeys & curr_keys,
   const gtsam::PreintegratedCombinedMeasurements & accum)
 {
-  StampedIMUFactorKeys fk;
-  fk.t = curr_keys.t;
   graph_.add(gtsam::CombinedImuFactor(
     prev_keys.pose_key, prev_keys.velocity_key, curr_keys.pose_key,
     curr_keys.velocity_key, prev_keys.bias_key, curr_keys.bias_key, accum));
-  fk.imu = getLastFactorKey();
-  return (fk);
+  return {curr_keys.t, getLastFactorKey()};
 }
 
-factor_key_t Optimizer::addProjectionFactor(
+std::vector<factor_key_t> Optimizer::addProjectionFactors(
   const Camera::SharedPtr & cam, uint64_t t,
   const std::vector<std::array<double, 3>> & wc,
   const std::vector<std::array<double, 2>> & ic)
 {
+  std::vector<factor_key_t> factors;
   if (wc.size() != ic.size()) {
     BOMB_OUT("different number of image and world corners!");
   }
@@ -201,6 +202,19 @@ factor_key_t Optimizer::addProjectionFactor(
         gtsam::Expression<Cal3DS3> cK(cam->getIntrinsicsKey());
         gtsam::Expression<gtsam::Point2> predict(cK, &Cal3DS3::uncalibrate, xp);
         graph_.addExpressionFactor(predict, img_point, cam->getPixelNoise());
+// #define DEBUG_PROJECTION
+#ifdef DEBUG_PROJECTION
+        const auto intr_v = cam->makeRadTanModel(
+          cam->getIntrinsics(), cam->getDistortionCoefficients());
+        const auto v_T_w_r = values_.at<gtsam::Pose3>(current_rig_pose_key_);
+        const auto v_T_r_c = values_.at<gtsam::Pose3>(cam->getPoseKey());
+        const auto rp = v_T_w_r.inverse() * wp;
+        const auto cp = v_T_r_c.inverse() * rp;
+        const auto up = intr_v.uncalibrate(gtsam::PinholeBase::Project(cp));
+        std::cout << (graph_.size() - 1) << " uncalib point: " << up.transpose()
+                  << " cam: " << up.transpose()
+                  << " img: " << img_point.transpose() << std::endl;
+#endif
         break;
       }
       case EQUIDISTANT: {
@@ -212,9 +226,12 @@ factor_key_t Optimizer::addProjectionFactor(
       default:
         BOMB_OUT("invalid distortion model!");
     }
+    factors.push_back(getLastFactorKey());
   }
-  return (getLastFactorKey());
+  return (factors);
 }
+
+// #define DEBUG_OPTz
 
 std::tuple<double, double> Optimizer::optimize()
 {
@@ -252,20 +269,15 @@ std::tuple<double, double> Optimizer::optimize()
   return {-1, -1};
 }
 
-gtsam::Pose3 Optimizer::getOptimizedPose(value_key_t k) const
+gtsam::Pose3 Optimizer::getPose(value_key_t k, bool optimized) const
 {
-  return (optimized_values_.at<gtsam::Pose3>(k));
+  return ((optimized ? optimized_values_ : values_).at<gtsam::Pose3>(k));
 }
 
-gtsam::Pose3 Optimizer::getUnoptimizedPose(value_key_t k) const
-{
-  return (values_.at<gtsam::Pose3>(k));
-}
-
-double Optimizer::getOptimizedError(factor_key_t k) const
+double Optimizer::getError(factor_key_t k, bool optimized) const
 {
   const auto f = graph_.at(k);
-  return (f->error(optimized_values_));
+  return (f->error(optimized ? optimized_values_ : values_));
 }
 
 void Optimizer::printErrors(const gtsam::Values & vals) const

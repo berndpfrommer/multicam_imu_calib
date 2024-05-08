@@ -24,6 +24,7 @@
 #include <gtsam/navigation/NavState.h>
 
 #include <deque>
+#include <map>
 #include <memory>
 #include <multicam_imu_calib/factor_key.hpp>
 #include <multicam_imu_calib/imu_data.hpp>
@@ -56,6 +57,7 @@ public:
   const auto & getCurrentData() const { return (current_data_); }
   const auto & getCurrentState() const { return (current_state_); }
   const auto & getValueKeys() const { return (value_keys_); }
+  const auto & getFactorKeys() const { return (factor_keys_); }
   const auto & getAttitudes() const { return (attitudes_); }
   const auto & getAccum() const { return (accum_); }
 
@@ -82,23 +84,18 @@ public:
 
   // ------------ others
   void parametersComplete();
-  void initializeWorldPose(uint64_t t);
   void drainOldData(uint64_t t);
   void preintegrateUpTo(uint64_t t);
   void addData(const IMUData & d) { data_.push_back(d); }
-  void addValueKeys(const StampedIMUValueKeys & k)
-  {
-    value_keys_.push_back(k);
-    current_value_keys_ = k;
-  }
-  void addFactorKeys(const StampedIMUFactorKeys & k)
-  {
-    factor_keys_.push_back(k);
-  }
+  void addValueKeys(const StampedIMUValueKeys & k);
+  void addPreintegratedFactorKey(uint64_t t, factor_key_t k);
+  void addPoseFactorKey(uint64_t t, factor_key_t k);
+
   void integrateMeasurement(
     const gtsam::Vector3 & acc, const gtsam::Vector3 & omega, int64_t dt);
   void popData() { data_.pop_front(); }
-  void updateRotation(uint64_t t);
+  void initializeWorldPose(uint64_t t, const gtsam::Pose3 & rigPose);
+  void updateWorldPose(uint64_t t, const gtsam::Pose3 & rigPose);
   void resetPreintegration();
   void saveAttitude(uint64_t t);
   bool testAttitudes(const std::vector<StampedAttitude> & sa) const;
@@ -126,7 +123,7 @@ private:
   gtsam::NavState current_state_;  // pose + velocity
   std::vector<StampedAttitude> attitudes_;
   std::vector<StampedIMUValueKeys> value_keys_;
-  std::vector<StampedIMUFactorKeys> factor_keys_;
+  std::map<uint64_t, StampedIMUFactorKeys> factor_keys_;
   StampedIMUValueKeys current_value_keys_;
 };
 }  // namespace multicam_imu_calib

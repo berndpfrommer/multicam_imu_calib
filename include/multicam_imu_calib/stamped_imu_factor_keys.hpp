@@ -23,15 +23,16 @@ namespace multicam_imu_calib
 {
 struct StampedIMUFactorKeys
 {
-  explicit StampedIMUFactorKeys(uint64_t ta, factor_key_t im, factor_key_t e)
-  : t(ta), imu(im), ext_calib(e)
+  explicit StampedIMUFactorKeys(
+    uint64_t ta, factor_key_t preint, factor_key_t pos)
+  : t(ta), preintegrated(preint), pose(pos)
   {
   }
   StampedIMUFactorKeys() = default;
 
   uint64_t t{0};
-  factor_key_t imu{0};
-  factor_key_t ext_calib{0};
+  factor_key_t preintegrated{0};
+  factor_key_t pose{0};
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__STAMPED_IMU_FACTOR_KEYS_HPP_

@@ -62,26 +62,25 @@ public:
     const Camera::SharedPtr & cam, const Intrinsics & intr,
     const DistortionModel & distortion_model,
     const std::vector<double> & distortion_coefficients);
-  factor_key_t addProjectionFactor(
+  std::vector<factor_key_t> addProjectionFactors(
     const Camera::SharedPtr & camera, uint64_t t,
     const std::vector<std::array<double, 3>> & wc,
     const std::vector<std::array<double, 2>> & ic);
   value_key_t addRigPose(uint64_t t, const gtsam::Pose3 & pose);
   StampedIMUValueKeys addIMUState(uint64_t t, const gtsam::NavState & nav);
-  StampedIMUFactorKeys addIMUFactors(
+  std::tuple<uint64_t, factor_key_t> addPreintegratedFactor(
     const StampedIMUValueKeys & prev_keys,
     const StampedIMUValueKeys & curr_keys,
     const gtsam::PreintegratedCombinedMeasurements & accum);
 
-  gtsam::Pose3 getOptimizedPose(value_key_t k) const;
-  gtsam::Pose3 getUnoptimizedPose(value_key_t k) const;
+  gtsam::Pose3 getPose(value_key_t k, bool optimized) const;
 
   template <class T>
   T getOptimizedIntrinsics(value_key_t key)
   {
     return (optimized_values_.at<T>(key));
   }
-  double getOptimizedError(factor_key_t k) const;
+  double getError(factor_key_t k, bool optimized) const;
   void printErrors(const gtsam::Values & vals) const;
 
 private:

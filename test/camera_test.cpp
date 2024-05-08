@@ -197,7 +197,7 @@ static PosesAndPoints generatePosesAndPoints(
           calib->addRigPose(t, T_w_r_guess);
           rigPoseAdded = true;
         }
-        calib->addProjectionFactor(cam_idx, t, wc, ip);
+        calib->addProjectionFactors(cam_idx, t, wc, ip);
         cam_world_poses_true[cam_idx].push_back(T_w_c);
         img_pts[cam_idx].push_back(ip);
         time_slot[cam_idx].push_back(t - 1);
@@ -225,7 +225,7 @@ static void printSummary(
 
   std::vector<gtsam::Pose3> cam_world_poses_opt;
   const auto T_r_c = calib.getOptimizedCameraPose(cam);
-  const auto opt_rig_poses = calib.getOptimizedRigPoses();
+  const auto opt_rig_poses = calib.getRigPoses(true /*opt*/);
   for (const auto & t : time_slots) {
     cam_world_poses_opt.push_back(opt_rig_poses[t] * T_r_c);
   }

@@ -60,7 +60,7 @@ public:
     const Camera::SharedPtr & cam, const gtsam::Pose3 & T_r_c,
     const SharedNoiseModel & noise);
   void addRigPose(uint64_t t, const gtsam::Pose3 & pose);
-  void addProjectionFactor(
+  void addProjectionFactors(
     size_t cam_idx, uint64_t t, const std::vector<std::array<double, 3>> & wc,
     const std::vector<std::array<double, 2>> & ic);
   void addDetection(
@@ -68,12 +68,13 @@ public:
   void addIMUData(size_t imu_idx, const IMUData & data);
 
   bool hasRigPose(uint64_t t) const;
-  std::vector<gtsam::Pose3> getOptimizedRigPoses() const;
+  std::vector<gtsam::Pose3> getRigPoses(bool optimized) const;
   gtsam::Pose3 getOptimizedCameraPose(const Camera::SharedPtr & cam) const;
   Intrinsics getOptimizedIntrinsics(const Camera::SharedPtr & cam) const;
   DistortionCoefficients getOptimizedDistortionCoefficients(
     const Camera::SharedPtr & cam) const;
   void initializeIMUPoses();
+  void printErrors(bool optimized);
 
 private:
   void parseIntrinsicsAndDistortionModel(
@@ -84,6 +85,7 @@ private:
   bool applyIMUData(uint64_t t);
   std::vector<StampedAttitude> getRigAttitudes(
     const std::vector<uint64_t> & times) const;
+  gtsam::Pose3 getRigPose(uint64_t t, bool optimized) const;
   // ------------- variables -------------
   std::shared_ptr<Optimizer> optimizer_;
   std::unordered_map<std::string, Camera::SharedPtr> cameras_;

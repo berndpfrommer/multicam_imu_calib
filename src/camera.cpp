@@ -55,4 +55,42 @@ std::vector<double> Camera::getCoefficientMask() const
   }
   return (cm);
 }
+
+const Cal3DS3 Camera::makeRadTanModel(
+  const Intrinsics & intr,
+  const DistortionCoefficients & distortion_coefficients) const
+{
+  // reorder coefficients:
+  // our dist coeffs (opencv): k1, k2, p1, p2, k[3..6]
+  // optimizer layout: fx, fy, u, v, p1, p2, k[1...6]
+  std::array<double, 8> dd = {0, 0, 0, 0, 0, 0, 0, 0};
+  const auto & dc = distortion_coefficients;
+  dd[0] = dc.size() > 2 ? dc[2] : 0;
+  dd[1] = dc.size() > 3 ? dc[3] : 0;
+  dd[2] = dc.size() > 0 ? dc[0] : 0;
+  dd[3] = dc.size() > 1 ? dc[1] : 0;
+  for (size_t i = 4; i < dc.size(); i++) {
+    dd[i] = dc[i];
+  }
+  Cal3DS3 intr_value(intr[0], intr[1], intr[2], intr[3], dd[0], dd[1], &dd[2]);
+  intr_value.setCoefficientMask(getCoefficientMask());
+  return (intr_value);
+}
+
+const Cal3FS2 Camera::makeEquidistantModel(
+  const Intrinsics & intr,
+  const DistortionCoefficients & distortion_coefficients) const
+{
+  // fx, fy, u, v, k[1..4]
+  const auto & dc = distortion_coefficients;
+  std::array<double, 4> dd = {0, 0, 0, 0};
+  for (size_t i = 0; i < dc.size(); i++) {
+    dd[i] = dc[i];
+  }
+  Cal3FS2 intr_value(
+    intr[0], intr[1], intr[2], intr[3], dd[0], dd[1], dd[2], dd[3]);
+  intr_value.setCoefficientMask(getCoefficientMask());
+  return (intr_value);
+}
+
 }  // namespace multicam_imu_calib

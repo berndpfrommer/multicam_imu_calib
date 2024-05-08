@@ -308,7 +308,8 @@ void Calibration::addIntrinsics(
   const Camera::SharedPtr & cam, const Intrinsics & intr,
   const std::vector<double> & dist)
 {
-  optimizer_->addCameraIntrinsics(cam, intr, cam->getDistortionModel(), dist);
+  cam->setIntrinsicsPriorKey(optimizer_->addCameraIntrinsics(
+    cam, intr, cam->getDistortionModel(), dist));
 }
 
 void Calibration::addCameraPose(
@@ -322,6 +323,15 @@ void Calibration::addCameraPosePrior(
   const SharedNoiseModel & noise)
 {
   cam->setPosePriorKey(optimizer_->addPrior(cam->getPoseKey(), T_r_c, noise));
+}
+
+gtsam::Pose3 Calibration::getRigPose(uint64_t t, bool optimized) const
+{
+  auto it = time_to_rig_pose_.find(t);
+  if (it == time_to_rig_pose_.end()) {
+    BOMB_OUT("no rig pose found for t = " << t);
+  }
+  return (optimizer_->getPose(it->second, optimized));
 }
 
 void Calibration::addRigPose(uint64_t t, const gtsam::Pose3 & pose)
@@ -351,7 +361,7 @@ bool Calibration::hasRigPose(uint64_t t) const
   return (time_to_rig_pose_.find(t) != time_to_rig_pose_.end());
 }
 
-void Calibration::addProjectionFactor(
+void Calibration::addProjectionFactors(
   size_t cam_idx, uint64_t t, const std::vector<std::array<double, 3>> & wc,
   const std::vector<std::array<double, 2>> & ic)
 {
@@ -360,14 +370,15 @@ void Calibration::addProjectionFactor(
   world_points_[cam_idx].push_back(wc);
   detection_times_[cam_idx].push_back(t);
 #ifdef USE_CAMERA
-  optimizer_->addProjectionFactor(camera, t, wc, ic);
+  camera->addProjectionFactors(
+    t, optimizer_->addProjectionFactors(camera, t, wc, ic));
 #endif
 }
 
 void Calibration::addDetection(
   size_t cam_idx, uint64_t t, const Detection::SharedPtr & det)
 {
-  addProjectionFactor(cam_idx, t, det->world_points, det->image_points);
+  addProjectionFactors(cam_idx, t, det->world_points, det->image_points);
 }
 
 void Calibration::addIMUData(size_t imu_idx, const IMUData & data)
@@ -384,7 +395,7 @@ bool Calibration::applyIMUData(uint64_t t)
       imu->drainOldData(t);
       if (imu->isPreintegrating()) {
         // found data preceeding t, can initialize IMU pose from accelerometer
-        imu->initializeWorldPose(t);
+        imu->initializeWorldPose(t, getRigPose(t, false));
         imu->addValueKeys(optimizer_->addIMUState(t, imu->getCurrentState()));
         const auto vk = imu->getValueKeys().back();
         // add prior for start velocity to be zero
@@ -403,13 +414,15 @@ bool Calibration::applyIMUData(uint64_t t)
     }
     if (imu->isPreintegrating()) {
       imu->preintegrateUpTo(t);
-      imu->updateRotation(t);  // updates current nav state
+      imu->updateWorldPose(
+        t, getRigPose(t, false));  // updates current nav state
       const auto prev_keys = imu->getValueKeys().back();
       if (t > prev_keys.t) {
         imu->addValueKeys(optimizer_->addIMUState(t, imu->getCurrentState()));
         const auto current_keys = imu->getValueKeys().back();
-        imu->addFactorKeys(optimizer_->addIMUFactors(
-          prev_keys, current_keys, *(imu->getAccum())));
+        const auto [t, fk] = optimizer_->addPreintegratedFactor(
+          prev_keys, current_keys, *(imu->getAccum()));
+        imu->addPreintegratedFactorKey(t, fk);
       }
       imu->resetPreintegration();
     }
@@ -420,11 +433,11 @@ bool Calibration::applyIMUData(uint64_t t)
   return (num_imus_caught_up == imu_list_.size());
 }
 
-std::vector<gtsam::Pose3> Calibration::getOptimizedRigPoses() const
+std::vector<gtsam::Pose3> Calibration::getRigPoses(bool optimized) const
 {
   std::vector<gtsam::Pose3> poses;
   for (const auto & key : rig_pose_keys_) {
-    poses.push_back(optimizer_->getOptimizedPose(key));
+    poses.push_back(optimizer_->getPose(key, optimized));
   }
   return (poses);
 }
@@ -432,7 +445,7 @@ std::vector<gtsam::Pose3> Calibration::getOptimizedRigPoses() const
 gtsam::Pose3 Calibration::getOptimizedCameraPose(
   const Camera::SharedPtr & cam) const
 {
-  return (optimizer_->getOptimizedPose(cam->getPoseKey()));
+  return (optimizer_->getPose(cam->getPoseKey(), true));
 }
 
 Intrinsics Calibration::getOptimizedIntrinsics(
@@ -506,7 +519,7 @@ std::vector<StampedAttitude> Calibration::getRigAttitudes(
     }
     StampedAttitude a;
     a.t = t;
-    a.rotation = optimizer_->getUnoptimizedPose(it->second).rotation();
+    a.rotation = optimizer_->getPose(it->second, false).rotation();
     att.push_back(a);
   }
   return (att);
@@ -552,7 +565,7 @@ void Calibration::runDiagnostics(const std::string & error_file)
       const auto t = detection_times_[cam_idx][det];
       const auto it = time_to_rig_pose_.find(t);
       if (it != time_to_rig_pose_.end()) {
-        const auto rig_pose = optimizer_->getOptimizedPose(it->second);
+        const auto rig_pose = optimizer_->getPose(it->second, true);
         times.push_back(it->first);
         cam_world_poses_opt.push_back(rig_pose * T_r_c);
         image_pts.push_back(image_points_[cam_idx][det]);
@@ -569,6 +582,34 @@ void Calibration::runDiagnostics(const std::string & error_file)
       "cam %5s avg pix err: %15.2f  max pix err: %15.2f at idx: %6zu",
       cam->getName().c_str(), std::sqrt(sum_err / num_points),
       std::sqrt(max_err), max_idx);
+  }
+}
+
+void Calibration::printErrors(bool optimized)
+{
+  LOG_INFO("------------ imu errors -----------");
+  for (const auto & imu : imu_list_) {
+    LOG_INFO("errors for imu " << imu->getName());
+    const auto pfk = imu->getFactorKeys();
+    for (const auto & fk : pfk) {
+      const double e_pose = optimizer_->getError(fk.second.pose, optimized);
+      const double e_pre =
+        optimizer_->getError(fk.second.preintegrated, optimized);
+      LOG_INFO(fk.second.t << " preint: " << e_pre << " pose: " << e_pose);
+    }
+  }
+  LOG_INFO("------------ camera errors -----------");
+  for (const auto & cam : camera_list_) {
+    LOG_INFO("errors for camera " << cam->getName());
+    const auto pfk = cam->getFactorKeys();
+    for (const auto & fk : pfk) {
+      const auto keys = fk.second;
+      std::stringstream ss;
+      for (const auto k : keys) {
+        ss << " " << optimizer_->getError(k, optimized);
+      }
+      LOG_INFO(fk.first << " err: " << ss.str());
+    }
   }
 }
 

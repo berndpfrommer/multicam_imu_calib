@@ -107,11 +107,13 @@ void IMU::integrateMeasurement(
 
 static const gtsam::imuBias::ConstantBias zero_bias(gtsam::Vector6::Zero());
 
-void IMU::updateRotation(uint64_t t)
+void IMU::updateWorldPose(uint64_t t, const gtsam::Pose3 & rigPose)
 {
   current_state_ = accum_->predict(current_state_, zero_bias);
+  // set the IMU world position identical to the rig position
+  // TODO(Bernd) use translation from extrinsic calibration if given
   current_state_ = gtsam::NavState(
-    current_state_.attitude(), gtsam::Point3(0, 0, 0) /*translation*/,
+    current_state_.attitude(), rigPose.translation(),
     gtsam::Velocity3(0, 0, 0) /*linear velocity*/);
   saveAttitude(t);
 }
@@ -155,7 +157,7 @@ bool IMU::testAttitudes(const std::vector<StampedAttitude> & sa) const
   return (all_good);
 }
 
-void IMU::initializeWorldPose(uint64_t t)
+void IMU::initializeWorldPose(uint64_t t, const gtsam::Pose3 & rigPose)
 {
   if (current_data_.acceleration.norm() < 1e-4) {
     BOMB_OUT("acceleration must be non-zero on init!");
@@ -178,7 +180,7 @@ void IMU::initializeWorldPose(uint64_t t)
   const auto R_2 = Eigen::AngleAxisd(-beta, gtsam::Vector3(0, 0, 1.0));
   // chain the two rotations together
   const gtsam::Rot3 rot(R_2.toRotationMatrix() * R_1);
-  initial_pose_ = gtsam::Pose3(rot, gtsam::Point3(0, 0, 0));
+  initial_pose_ = gtsam::Pose3(rot, rigPose.translation());
   current_state_ = gtsam::NavState(initial_pose_, gtsam::Vector3(0, 0, 0));
   saveAttitude(t);
 }
@@ -222,4 +224,29 @@ void IMU::preintegrateUpTo(uint64_t t)
     }
   }
 }
+
+void IMU::addValueKeys(const StampedIMUValueKeys & k)
+{
+  value_keys_.push_back(k);
+  current_value_keys_ = k;
+}
+
+void IMU::addPreintegratedFactorKey(uint64_t t, factor_key_t k)
+{
+  auto it = factor_keys_.find(t);
+  if (it == factor_keys_.end()) {
+    it = factor_keys_.insert({t, StampedIMUFactorKeys(t, k, 0)}).first;
+  }
+  it->second.preintegrated = k;
+}
+
+void IMU::addPoseFactorKey(uint64_t t, factor_key_t k)
+{
+  auto it = factor_keys_.find(t);
+  if (it == factor_keys_.end()) {
+    it = factor_keys_.insert({t, StampedIMUFactorKeys(t, k, 0)}).first;
+  }
+  it->second.pose = k;
+}
+
 }  // namespace multicam_imu_calib

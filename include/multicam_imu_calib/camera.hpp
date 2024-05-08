@@ -19,7 +19,10 @@
 #include <gtsam/base/Vector.h>
 #include <gtsam/geometry/Pose3.h>
 #include <gtsam/linear/NoiseModel.h>
+#include <multicam_imu_calib/gtsam_extensions/Cal3DS3.h>
+#include <multicam_imu_calib/gtsam_extensions/Cal3FS2.h>
 
+#include <map>
 #include <memory>
 #include <multicam_imu_calib/factor_key.hpp>
 #include <multicam_imu_calib/intrinsics.hpp>
@@ -53,6 +56,7 @@ public:
   const auto getPosePriorKey() const { return (pose_prior_key_); }
   std::vector<double> getCoefficientMask() const;
   const auto & getTopic() const { return (topic_); }
+  const auto & getFactorKeys() const { return (factor_keys_); }
 
   // ------------ setters
   void setPoseWithNoise(
@@ -61,7 +65,7 @@ public:
   void setIntrinsicsKey(value_key_t k) { intrinsics_key_ = k; }
   void setPosePriorKey(factor_key_t k) { pose_prior_key_ = k; }
   void setIntrinsics(double fx, double fy, double cx, double cy);
-  void setDistortionCoefficients(const std::vector<double> & dc)
+  void setDistortionCoefficients(const DistortionCoefficients & dc)
   {
     distortion_coefficients_ = dc;
   }
@@ -74,6 +78,19 @@ public:
     coefficientSigma_ = cs;
   }
   void setTopic(const std::string & topic) { topic_ = topic; }
+  void setIntrinsicsPriorKey(factor_key_t k) { intrinsics_prior_key_ = k; }
+
+  // ------------ other public methods
+
+  const Cal3DS3 makeRadTanModel(
+    const Intrinsics & intr, const DistortionCoefficients & dc) const;
+  const Cal3FS2 makeEquidistantModel(
+    const Intrinsics & intr, const DistortionCoefficients & dc) const;
+
+  void addProjectionFactors(uint64_t t, const std::vector<factor_key_t> & k)
+  {
+    factor_keys_.insert({t, k});
+  }
 
 private:
   std::string name_;
@@ -82,14 +99,16 @@ private:
   SharedNoiseModel intrinsics_noise_;
   SharedNoiseModel pixel_noise_;
   value_key_t pose_key_{0};
-  value_key_t intrinsics_key_{0};
   factor_key_t pose_prior_key_{0};
+  value_key_t intrinsics_key_{0};
+  factor_key_t intrinsics_prior_key_{0};
   Intrinsics intrinsics_{{0, 0, 0, 0}};
   DistortionModel distortion_model_{INVALID};
   DistortionCoefficients distortion_coefficients_;
   std::vector<int> mask_;
   std::vector<double> coefficientSigma_;  // coefficient noise
   std::string topic_;
+  std::map<uint64_t, std::vector<factor_key_t>> factor_keys_;
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__CAMERA_HPP_
