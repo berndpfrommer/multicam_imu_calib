@@ -20,7 +20,7 @@
 
 namespace multicam_imu_calib
 {
-using factor_key_t = size_t;
+using factor_key_t = int64_t;
 }  // namespace multicam_imu_calib
 
 #endif  // MULTICAM_IMU_CALIB__FACTOR_KEY_HPP_

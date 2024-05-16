@@ -345,14 +345,16 @@ void Calibration::addRigPose(uint64_t t, const gtsam::Pose3 & pose)
   time_to_rig_pose_.insert({t, 0});
 #endif
 
-  unused_rig_pose_times_.push_back(t);
-  // A new camera frame has arrived, let's see if we can
-  // integrate the IMUs up to that time, and create factors.
-  // This all is done by applyIMUData(), which returns true if
-  // it was possible to integrate up all IMUs to its time argument.
-  while (!unused_rig_pose_times_.empty() &&
-         applyIMUData(unused_rig_pose_times_.front())) {
-    unused_rig_pose_times_.pop_front();
+  if (!imu_list_.empty()) {
+    unused_rig_pose_times_.push_back(t);
+    // A new camera frame has arrived, let's see if we can
+    // integrate the IMUs up to that time, and create factors.
+    // This all is done by applyIMUData(), which returns true if
+    // it was possible to integrate up all IMUs to its time argument.
+    while (!unused_rig_pose_times_.empty() &&
+           applyIMUData(unused_rig_pose_times_.front())) {
+      unused_rig_pose_times_.pop_front();
+    }
   }
 }
 
@@ -388,6 +390,7 @@ void Calibration::addIMUData(size_t imu_idx, const IMUData & data)
 
 bool Calibration::applyIMUData(uint64_t t)
 {
+  // std::cout << "applying imu data for t = " << t << std::endl;
   size_t num_imus_caught_up = 0;
   for (size_t imu_idx = 0; imu_idx < imu_list_.size(); imu_idx++) {
     auto & imu = imu_list_[imu_idx];
@@ -414,19 +417,21 @@ bool Calibration::applyIMUData(uint64_t t)
     }
     if (imu->isPreintegrating()) {
       imu->preintegrateUpTo(t);
-      imu->updateWorldPose(
-        t, getRigPose(t, false));  // updates current nav state
-      const auto prev_keys = imu->getValueKeys().back();
-      if (t > prev_keys.t) {
-        imu->addValueKeys(optimizer_->addIMUState(t, imu->getCurrentState()));
-        const auto current_keys = imu->getValueKeys().back();
-        const auto [t, fk] = optimizer_->addPreintegratedFactor(
-          prev_keys, current_keys, *(imu->getAccum()));
-        imu->addPreintegratedFactorKey(t, fk);
+      if (imu->isPreintegratedUpTo(t)) {
+        imu->updateWorldPose(
+          t, getRigPose(t, false));  // updates current nav state
+        const auto prev_keys = imu->getValueKeys().back();
+        if (t > prev_keys.t) {
+          imu->addValueKeys(optimizer_->addIMUState(t, imu->getCurrentState()));
+          const auto current_keys = imu->getValueKeys().back();
+          const auto [t, fk] = optimizer_->addPreintegratedFactor(
+            prev_keys, current_keys, *(imu->getAccum()));
+          imu->addPreintegratedFactorKey(t, fk);
+        }
+        imu->resetPreintegration();
       }
-      imu->resetPreintegration();
     }
-    if (!imu->isPreintegrating() || imu->getCurrentData().t >= t) {
+    if (imu->isPreintegrating() && imu->getCurrentData().t >= t) {
       num_imus_caught_up++;
     }
   }
@@ -592,10 +597,15 @@ void Calibration::printErrors(bool optimized)
     LOG_INFO("errors for imu " << imu->getName());
     const auto pfk = imu->getFactorKeys();
     for (const auto & fk : pfk) {
-      const double e_pose = optimizer_->getError(fk.second.pose, optimized);
-      const double e_pre =
-        optimizer_->getError(fk.second.preintegrated, optimized);
-      LOG_INFO(fk.second.t << " preint: " << e_pre << " pose: " << e_pose);
+      const auto & fks = fk.second;
+#if 0      
+      const double e_pose = optimizer_->getError(fks.pose, optimized);
+      const double e_pre = optimizer_->getError(fks.preintegrated, optimized);
+      LOG_INFO(
+        fks.t << " preint(" << fks.preintegrated << ") " << e_pre
+                    << " pose(" << fks.pose << ") " << e_pose);
+#endif
+      (void)optimizer_->getCombinedImuFactorError(fks.preintegrated, optimized);
     }
   }
   LOG_INFO("------------ camera errors -----------");

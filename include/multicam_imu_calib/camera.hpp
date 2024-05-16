@@ -98,10 +98,10 @@ private:
   SharedNoiseModel pose_noise_;
   SharedNoiseModel intrinsics_noise_;
   SharedNoiseModel pixel_noise_;
-  value_key_t pose_key_{0};
-  factor_key_t pose_prior_key_{0};
-  value_key_t intrinsics_key_{0};
-  factor_key_t intrinsics_prior_key_{0};
+  value_key_t pose_key_{-1};
+  factor_key_t pose_prior_key_{-1};
+  value_key_t intrinsics_key_{-1};
+  factor_key_t intrinsics_prior_key_{-1};
   Intrinsics intrinsics_{{0, 0, 0, 0}};
   DistortionModel distortion_model_{INVALID};
   DistortionCoefficients distortion_coefficients_;

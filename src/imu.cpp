@@ -23,6 +23,11 @@
 #include <multicam_imu_calib/logging.hpp>
 #include <multicam_imu_calib/utilities.hpp>
 
+/*
+ 0   1   2   3   4   5   6
+ |           |           |
+
+*/
 namespace multicam_imu_calib
 {
 static rclcpp::Logger get_logger() { return (rclcpp::get_logger("imu")); }
@@ -99,22 +104,58 @@ gtsam::imuBias::ConstantBias IMU::getBiasPrior() const
 }
 
 void IMU::integrateMeasurement(
-  const gtsam::Vector3 & acc, const gtsam::Vector3 & omega, int64_t dt)
+  uint64_t t, const gtsam::Vector3 & acc, const gtsam::Vector3 & omega,
+  int64_t dt)
 {
+  if (dt <= 0) {
+    return;
+  }
   const double dt_sec = 1e-9 * dt;
+#if 0
+  std::cout << "state before: " << std::endl << current_state_ << std::endl;
+  std::cout << "integrating meas: " << acc.transpose()
+            << " om: " << omega.transpose() << " dt: " << dt_sec << std::endl;
+  std::cout << "velocity before: " << current_state_.velocity().transpose()
+            << std::endl;
+#endif
   accum_->integrateMeasurement(acc, omega, dt_sec);
+#if 0
+  std::cout << num_integrated_++ << " integrating meas: " << t << " "
+            << acc.transpose() << " om: " << omega.transpose()
+            << " dt: " << dt_sec << std::endl;
+#else
+  (void)t;
+#endif
+  const auto nav2 = accum_->predict(
+    current_state_, gtsam::imuBias::ConstantBias(gtsam::Vector6::Zero()));
+#if 0
+  std::cout << "velocity after: " << nav2.velocity().transpose() << std::endl;
+#endif
 }
 
 static const gtsam::imuBias::ConstantBias zero_bias(gtsam::Vector6::Zero());
 
 void IMU::updateWorldPose(uint64_t t, const gtsam::Pose3 & rigPose)
 {
+#ifdef PRINT_DEBUG
+  std::cout << "state before pose update: " << std::endl
+            << current_state_ << std::endl;
+#endif
   current_state_ = accum_->predict(current_state_, zero_bias);
   // set the IMU world position identical to the rig position
   // TODO(Bernd) use translation from extrinsic calibration if given
+#if 0  
   current_state_ = gtsam::NavState(
     current_state_.attitude(), rigPose.translation(),
     gtsam::Velocity3(0, 0, 0) /*linear velocity*/);
+#else
+  (void)rigPose;
+
+#ifdef PRINT_DEBUG
+  std::cout << "state after pose update: " << std::endl
+            << current_state_ << std::endl;
+#endif
+#endif
   saveAttitude(t);
 }
 
@@ -128,6 +169,12 @@ void IMU::saveAttitude(uint64_t t)
 void IMU::resetPreintegration()
 {
   accum_->resetIntegrationAndSetBias(zero_bias);
+  num_integrated_ = 0;
+}
+
+bool IMU::isPreintegratedUpTo(uint64_t t) const
+{
+  return (current_data_.t >= t);
 }
 
 bool IMU::testAttitudes(const std::vector<StampedAttitude> & sa) const
@@ -162,6 +209,8 @@ void IMU::initializeWorldPose(uint64_t t, const gtsam::Pose3 & rigPose)
   if (current_data_.acceleration.norm() < 1e-4) {
     BOMB_OUT("acceleration must be non-zero on init!");
   }
+  std::cout << "accel on init: " << current_data_.acceleration.transpose()
+            << std::endl;
   const gtsam::Vector3 g_i = current_data_.acceleration.normalized();
   // first rotate the measured acceleration vector such that it
   // is parallel to the z-axis. The axis to rotate along is thus
@@ -182,6 +231,7 @@ void IMU::initializeWorldPose(uint64_t t, const gtsam::Pose3 & rigPose)
   const gtsam::Rot3 rot(R_2.toRotationMatrix() * R_1);
   initial_pose_ = gtsam::Pose3(rot, rigPose.translation());
   current_state_ = gtsam::NavState(initial_pose_, gtsam::Vector3(0, 0, 0));
+  std::cout << "initial state: " << std::endl << current_state_ << std::endl;
   saveAttitude(t);
 }
 
@@ -206,22 +256,19 @@ int64_t nonNegativeDelta(uint64_t t, uint64_t t0)
 void IMU::preintegrateUpTo(uint64_t t)
 {
   while (!data_.empty() && data_.front().t < t) {
-    const int64_t dt = nonNegativeDelta(data_.front().t, current_data_.t);
-    if (dt > 0) {
-      integrateMeasurement(current_data_.acceleration, current_data_.omega, dt);
-    }
+    integrateMeasurement(
+      current_data_.t, current_data_.acceleration, current_data_.omega,
+      nonNegativeDelta(data_.front().t, current_data_.t));
     current_data_ = data_.front();
     data_.pop_front();
   }
   // if there is data that is more recent than t,
   // integrate up to t b/c we know current data is valid until t.
-
   if (!data_.empty()) {
-    const int64_t dt = nonNegativeDelta(t, current_data_.t);
-    if (dt > 0) {  // should always be true, but just in case..
-      integrateMeasurement(current_data_.acceleration, current_data_.omega, dt);
-      current_data_.t = t;  // avoids integrating twice!
-    }
+    integrateMeasurement(
+      current_data_.t, current_data_.acceleration, current_data_.omega,
+      nonNegativeDelta(t, current_data_.t));
+    current_data_.t = t;  // avoids integrating twice!
   }
 }
 
@@ -235,7 +282,7 @@ void IMU::addPreintegratedFactorKey(uint64_t t, factor_key_t k)
 {
   auto it = factor_keys_.find(t);
   if (it == factor_keys_.end()) {
-    it = factor_keys_.insert({t, StampedIMUFactorKeys(t, k, 0)}).first;
+    it = factor_keys_.insert({t, StampedIMUFactorKeys(t, k, -1)}).first;
   }
   it->second.preintegrated = k;
 }
@@ -244,7 +291,7 @@ void IMU::addPoseFactorKey(uint64_t t, factor_key_t k)
 {
   auto it = factor_keys_.find(t);
   if (it == factor_keys_.end()) {
-    it = factor_keys_.insert({t, StampedIMUFactorKeys(t, k, 0)}).first;
+    it = factor_keys_.insert({t, StampedIMUFactorKeys(t, -1, k)}).first;
   }
   it->second.pose = k;
 }

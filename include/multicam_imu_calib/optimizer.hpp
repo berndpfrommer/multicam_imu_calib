@@ -81,6 +81,7 @@ public:
     return (optimized_values_.at<T>(key));
   }
   double getError(factor_key_t k, bool optimized) const;
+  double getCombinedImuFactorError(factor_key_t k, bool optimized) const;
   void printErrors(const gtsam::Values & vals) const;
 
 private:
@@ -95,9 +96,9 @@ private:
   gtsam::Values values_;
   gtsam::Values optimized_values_;
   std::shared_ptr<gtsam::ISAM2> isam2_;
-  value_key_t key_{0};
+  value_key_t key_{0};  // starts at zero, gets incremented
   uint64_t current_rig_pose_time_{0};
-  value_key_t current_rig_pose_key_{0};
+  value_key_t current_rig_pose_key_{-1};
   gtsam::Pose3 current_rig_pose_;
   gtsam::SharedNoiseModel pixel_noise_;
 };

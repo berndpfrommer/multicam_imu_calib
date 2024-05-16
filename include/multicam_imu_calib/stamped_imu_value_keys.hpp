@@ -31,9 +31,9 @@ struct StampedIMUValueKeys
   StampedIMUValueKeys() = default;
 
   uint64_t t{0};
-  value_key_t pose_key{0};
-  value_key_t velocity_key{0};
-  value_key_t bias_key{0};
+  value_key_t pose_key{-1};
+  value_key_t velocity_key{-1};
+  value_key_t bias_key{-1};
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__STAMPED_IMU_VALUE_KEYS_HPP_

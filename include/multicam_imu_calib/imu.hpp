@@ -86,13 +86,15 @@ public:
   void parametersComplete();
   void drainOldData(uint64_t t);
   void preintegrateUpTo(uint64_t t);
+  bool isPreintegratedUpTo(uint64_t t) const;
   void addData(const IMUData & d) { data_.push_back(d); }
   void addValueKeys(const StampedIMUValueKeys & k);
   void addPreintegratedFactorKey(uint64_t t, factor_key_t k);
   void addPoseFactorKey(uint64_t t, factor_key_t k);
 
   void integrateMeasurement(
-    const gtsam::Vector3 & acc, const gtsam::Vector3 & omega, int64_t dt);
+    uint64_t t, const gtsam::Vector3 & acc, const gtsam::Vector3 & omega,
+    int64_t dt);
   void popData() { data_.pop_front(); }
   void initializeWorldPose(uint64_t t, const gtsam::Pose3 & rigPose);
   void updateWorldPose(uint64_t t, const gtsam::Pose3 & rigPose);
@@ -111,10 +113,10 @@ private:
   gtsam::Vector3 accel_bias_prior_;
   double accel_bias_prior_sigma_{0};
 
-  value_key_t pose_key_{0};
-  factor_key_t pose_prior_key_{0};
-  factor_key_t bias_prior_key_{0};
-  factor_key_t velocity_prior_key_{0};
+  value_key_t pose_key_{-1};
+  factor_key_t pose_prior_key_{-1};
+  factor_key_t bias_prior_key_{-1};
+  factor_key_t velocity_prior_key_{-1};
   std::string topic_;
   std::deque<IMUData> data_;
   IMUData current_data_;
@@ -125,6 +127,7 @@ private:
   std::vector<StampedIMUValueKeys> value_keys_;
   std::map<uint64_t, StampedIMUFactorKeys> factor_keys_;
   StampedIMUValueKeys current_value_keys_;
+  size_t num_integrated_{0};  // XXX remove once debugged
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__IMU_HPP_

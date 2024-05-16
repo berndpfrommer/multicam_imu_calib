@@ -81,6 +81,7 @@ void Optimizer::addIMUPose(
     graph_.addExpressionFactor(
       T_identity, gtsam::Pose3(), utilities::makeNoise6(0, 0));
     imu->addPoseFactorKey(imu_keys.t, getLastFactorKey());
+// #define IDENTITY_CHECK
 #ifdef IDENTITY_CHECK
     const gtsam::Pose3 I =
       (values_.at<gtsam::Pose3>(imu_keys.pose_key).inverse() *
@@ -167,6 +168,11 @@ std::tuple<uint64_t, factor_key_t> Optimizer::addPreintegratedFactor(
   graph_.add(gtsam::CombinedImuFactor(
     prev_keys.pose_key, prev_keys.velocity_key, curr_keys.pose_key,
     curr_keys.velocity_key, prev_keys.bias_key, curr_keys.bias_key, accum));
+#if 0
+  std::cout << curr_keys.t << " add imu factor " << getLastFactorKey()
+            << " err: " << getCombinedImuFactorError(getLastFactorKey(), false)
+            << std::endl;
+#endif
   return {curr_keys.t, getLastFactorKey()};
 }
 
@@ -231,7 +237,7 @@ std::vector<factor_key_t> Optimizer::addProjectionFactors(
   return (factors);
 }
 
-// #define DEBUG_OPTz
+// #define DEBUG_OPT
 
 std::tuple<double, double> Optimizer::optimize()
 {
@@ -276,8 +282,43 @@ gtsam::Pose3 Optimizer::getPose(value_key_t k, bool optimized) const
 
 double Optimizer::getError(factor_key_t k, bool optimized) const
 {
+  if (k < 0) {
+    return (-1.0);
+  }
   const auto f = graph_.at(k);
   return (f->error(optimized ? optimized_values_ : values_));
+}
+
+static gtsam::Pose3 pv(const gtsam::Values & v, factor_key_t k)
+{
+  return (v.at<gtsam::Pose3>(k));
+}
+
+static gtsam::Vector3 vv(const gtsam::Values & v, factor_key_t k)
+{
+  return (v.at<gtsam::Vector3>(k));
+}
+
+static gtsam::imuBias::ConstantBias bv(const gtsam::Values & v, factor_key_t k)
+{
+  return (v.at<gtsam::imuBias::ConstantBias>(k));
+}
+
+double Optimizer::getCombinedImuFactorError(
+  factor_key_t k, bool optimized) const
+{
+  if (k < 0) {
+    return (-1.0);
+  }
+  const auto & v = optimized ? optimized_values_ : values_;
+  const auto & f = reinterpret_cast<gtsam::CombinedImuFactor &>(*graph_.at(k));
+  const auto ev = f.evaluateError(
+    pv(v, f.key<1>()), vv(v, f.key<2>()), pv(v, f.key<3>()), vv(v, f.key<4>()),
+    bv(v, f.key<5>()), bv(v, f.key<6>()));
+  // 9-dim error: (rotation, position, velocity)
+  std::cout << k << " combined imu error: " << ev.block<6, 1>(3, 0).transpose()
+            << std::endl;
+  return (f.error(v));
 }
 
 void Optimizer::printErrors(const gtsam::Values & vals) const

@@ -31,8 +31,8 @@ struct StampedIMUFactorKeys
   StampedIMUFactorKeys() = default;
 
   uint64_t t{0};
-  factor_key_t preintegrated{0};
-  factor_key_t pose{0};
+  factor_key_t preintegrated{-1};
+  factor_key_t pose{-1};
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__STAMPED_IMU_FACTOR_KEYS_HPP_
