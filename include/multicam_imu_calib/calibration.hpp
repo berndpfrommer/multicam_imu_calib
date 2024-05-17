@@ -75,6 +75,7 @@ public:
     const Camera::SharedPtr & cam) const;
   void initializeIMUPoses();
   void printErrors(bool optimized);
+  gtsam::Pose3 getIMUPose(size_t imu_idx, bool opt) const;
 
 private:
   void parseIntrinsicsAndDistortionModel(

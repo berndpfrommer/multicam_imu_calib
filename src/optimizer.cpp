@@ -79,7 +79,7 @@ void Optimizer::addIMUPose(
     gtsam::Expression<gtsam::Pose3> T_identity =
       gtsam::transformPoseFrom(gtsam::transformPoseTo(T_w_i, T_w_r), T_r_i);
     graph_.addExpressionFactor(
-      T_identity, gtsam::Pose3(), utilities::makeNoise6(0, 0));
+      T_identity, gtsam::Pose3(), utilities::makeNoise6(1e-8, 1e-8));
     imu->addPoseFactorKey(imu_keys.t, getLastFactorKey());
 // #define IDENTITY_CHECK
 #ifdef IDENTITY_CHECK
@@ -315,9 +315,9 @@ double Optimizer::getCombinedImuFactorError(
   const auto ev = f.evaluateError(
     pv(v, f.key<1>()), vv(v, f.key<2>()), pv(v, f.key<3>()), vv(v, f.key<4>()),
     bv(v, f.key<5>()), bv(v, f.key<6>()));
+  // std::cout << k << " combined imu error: " << ev.block<6, 1>(3, 0).transpose()
+  //          << std::endl;
   // 9-dim error: (rotation, position, velocity)
-  std::cout << k << " combined imu error: " << ev.block<6, 1>(3, 0).transpose()
-            << std::endl;
   return (f.error(v));
 }
 
