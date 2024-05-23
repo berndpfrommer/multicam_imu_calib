@@ -111,25 +111,23 @@ void IMU::integrateMeasurement(
     return;
   }
   const double dt_sec = 1e-9 * dt;
-#if 0
-  std::cout << "state before: " << std::endl << current_state_ << std::endl;
+// #define DEBUG_INTEGRATION
+#ifdef DEBUG_INTEGRATION
+  std::cout << t << " state before: " << std::endl
+            << current_state_ << std::endl;
   std::cout << "integrating meas: " << acc.transpose()
             << " om: " << omega.transpose() << " dt: " << dt_sec << std::endl;
   std::cout << "velocity before: " << current_state_.velocity().transpose()
             << std::endl;
+  std::cout << "current state: " << current_state_ << std::endl;
 #endif
   accum_->integrateMeasurement(acc, omega, dt_sec);
-#if 0
-  std::cout << num_integrated_++ << " integrating meas: " << t << " "
-            << acc.transpose() << " om: " << omega.transpose()
-            << " dt: " << dt_sec << std::endl;
-#else
-  (void)t;
-#endif
+#ifdef DEBUG_INTEGRATION
   const auto nav2 = accum_->predict(
     current_state_, gtsam::imuBias::ConstantBias(gtsam::Vector6::Zero()));
-#if 0
   std::cout << "velocity after: " << nav2.velocity().transpose() << std::endl;
+#else
+  (void)t;
 #endif
 }
 
@@ -144,13 +142,12 @@ void IMU::updateWorldPose(uint64_t t, const gtsam::Pose3 & rigPose)
   current_state_ = accum_->predict(current_state_, zero_bias);
   // set the IMU world position identical to the rig position
   // TODO(Bernd) use translation from extrinsic calibration if given
-#if 0  
+#if 0
   current_state_ = gtsam::NavState(
     current_state_.attitude(), rigPose.translation(),
     gtsam::Velocity3(0, 0, 0) /*linear velocity*/);
 #else
   (void)rigPose;
-
 #ifdef PRINT_DEBUG
   std::cout << "state after pose update: " << std::endl
             << current_state_ << std::endl;
@@ -209,8 +206,6 @@ void IMU::initializeWorldPose(uint64_t t, const gtsam::Pose3 & rigPose)
   if (current_data_.acceleration.norm() < 1e-4) {
     BOMB_OUT("acceleration must be non-zero on init!");
   }
-  std::cout << "accel on init: " << current_data_.acceleration.transpose()
-            << std::endl;
   const gtsam::Vector3 g_i = current_data_.acceleration.normalized();
   // first rotate the measured acceleration vector such that it
   // is parallel to the z-axis. The axis to rotate along is thus
@@ -231,7 +226,6 @@ void IMU::initializeWorldPose(uint64_t t, const gtsam::Pose3 & rigPose)
   const gtsam::Rot3 rot(R_2.toRotationMatrix() * R_1);
   initial_pose_ = gtsam::Pose3(rot, rigPose.translation());
   current_state_ = gtsam::NavState(initial_pose_, gtsam::Vector3(0, 0, 0));
-  std::cout << "initial state: " << std::endl << current_state_ << std::endl;
   saveAttitude(t);
 }
 

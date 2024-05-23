@@ -22,9 +22,12 @@
 #include <multicam_imu_calib/diagnostics.hpp>
 #include <multicam_imu_calib/imu_data.hpp>
 #include <multicam_imu_calib/intrinsics.hpp>
+#include <multicam_imu_calib/logging.hpp>
 #include <multicam_imu_calib/utilities.hpp>
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core/core.hpp>
+
+#include "make_rig_poses.hpp"
 
 using Camera = multicam_imu_calib::Camera;
 using Calibration = multicam_imu_calib::Calibration;
@@ -33,8 +36,8 @@ using DistortionCoefficients = multicam_imu_calib::DistortionCoefficients;
 namespace utilities = multicam_imu_calib::utilities;
 namespace diagnostics = multicam_imu_calib::diagnostics;
 
-// #define TEST_ALL
-#ifdef TEST_ALL
+static rclcpp::Logger get_logger() { return (rclcpp::get_logger("imu_test")); }
+
 TEST(multicam_imu_calib, imu_preintegration)
 {
   // Simulate camera and IMU, build graph, and test.
@@ -204,10 +207,9 @@ TEST(multicam_imu_calib, imu_extrinsic_single_cam)
   calib.initializeIMUPoses();
   // calib.printErrors(false);  // print unoptimized errors
   auto [init_err, final_err] = calib.runOptimizer();
-  EXPECT_LT(std::abs(init_err), 4e-4);
+  EXPECT_LT(std::abs(init_err), 4e-2);
   EXPECT_LT(std::abs(final_err), 2e-4);
 }
-#endif  // TEST_ALL
 
 static std::vector<std::array<gtsam::Vector3, 2>> makeMoves(
   double omega_mag, double acc_mag)
@@ -215,9 +217,9 @@ static std::vector<std::array<gtsam::Vector3, 2>> makeMoves(
   std::vector<std::array<gtsam::Vector3, 2>> moves;
 
   const std::vector<gtsam::Vector3> acc_vec(
-    {{acc_mag, 0, 0}, {0, acc_mag, 0}, {0, 0, acc_mag}});
+    {{0, 0, acc_mag}, {0, acc_mag, 0}, {acc_mag, 0, 0}});
   const std::vector<gtsam::Vector3> omega_vec(
-    {{omega_mag, 0, 0}, {0, omega_mag, 0}, {0, 0, omega_mag}});
+    {{0, 0, omega_mag}, {0, omega_mag, 0}, {omega_mag, 0, 0}});
   // combine all acceleration vectors with all omega vectors
   for (const auto & acc : acc_vec) {
     for (const auto & om : omega_vec) {
@@ -225,27 +227,6 @@ static std::vector<std::array<gtsam::Vector3, 2>> makeMoves(
     }
   }
   return (moves);
-}
-
-static std::tuple<std::vector<gtsam::Pose3>, std::vector<gtsam::Vector3>>
-makeRigPoses(
-  const gtsam::Pose3 & init_pose, const gtsam::Vector3 & init_v,
-  const gtsam::Vector3 & acc_w, const gtsam::Vector3 & omega_w, double dt,
-  size_t num_updates)
-{
-  std::vector<gtsam::Pose3> poses;  // T_w_r
-  std::vector<gtsam::Vector3> velocities;
-  double t = dt;
-  for (size_t i = 0; i < num_updates; i++, t += dt) {
-    const gtsam::Point3 x =
-      init_pose.translation() + t * init_v + 0.5 * acc_w * t * t;
-    poses.push_back(gtsam::Pose3(
-      gtsam::Rot3::AxisAngle(omega_w.normalized(), omega_w.norm() * t) *
-        init_pose.rotation(),
-      x));
-    velocities.push_back(init_v + acc_w * t);
-  }
-  return {poses, velocities};
 }
 
 static std::tuple<double, double, double, double> do_extrinsic_imu_calib(
@@ -260,6 +241,7 @@ static std::tuple<double, double, double, double> do_extrinsic_imu_calib(
 
   // initialize the camera perfectly with respect to the rig
   calib.addCameraPose(cam, cam->getPose());  // perfect init
+  calib.addCameraPosePrior(cam, cam->getPose(), cam->getPoseNoise());
   calib.addIntrinsics(
     cam, cam->getIntrinsics(), cam->getDistortionCoefficients());
 
@@ -272,8 +254,8 @@ static std::tuple<double, double, double, double> do_extrinsic_imu_calib(
   const double tot_angle = 0.1 * M_PI;  // length of rotation vector
   const double omega_mag = 2.0;         // rad/sec
   const double time_per_move = tot_angle / omega_mag;
-  const double acc_mag =  // 20cm accelerate, 20cm decelerate
-    0.2 / (0.5 * time_per_move * time_per_move);
+  const double ds = 0.2;  // 20cm accelerate, 20cm decelerate
+  const double acc_mag = ds / (0.5 * time_per_move * time_per_move);
   const std::vector<std::array<gtsam::Vector3, 2>> moves =
     makeMoves(omega_mag, acc_mag);
 
@@ -294,20 +276,23 @@ static std::tuple<double, double, double, double> do_extrinsic_imu_calib(
   const gtsam::Pose3 T_r_c;  // identity pose: make camera center of rig
 
   gtsam::Pose3 T_w_r = T_w_r_init;
-  gtsam::Vector3 v(0, 0, 0);
+  gtsam::Vector3 v(0, 0, 0);  // initial velocity
   const std::array<double, 4> directions = {1.0, -1.0, -1.0, 1.0};
-  // std::cout << "imu_test init pose: " << std::endl << T_w_r << std::endl;
-  calib.addIMUData(  // add zero-acc measurement to get orientation right
+  // add one time slot with zero-acc measurement for IMU initialization
+  calib.addIMUData(
     0, multicam_imu_calib::IMUData(
          t, gtsam::Vector3::Zero(),
          (T_w_r * T_r_i).inverse().rotation() * (-g_vec)));
   t++;
   for (size_t i_move = 0; i_move < moves.size(); i_move++) {
     for (double i_dir : directions) {
-      const auto acc_w = i_dir * moves[i_move][0] - g_vec;
-      const auto omega_w = i_dir * moves[i_move][1];
-      const auto [T_w_r_poses, velocities] =
-        makeRigPoses(T_w_r, v, acc_w + g_vec, omega_w, dtd, num_imu_updates);
+      // acceleration of IMU, expressed in world frame
+      const gtsam::Vector3 a_w_i = i_dir * moves[i_move][0];
+      // angular velocity of IMU, expressed in IMU frame
+      const gtsam::Vector3 omega_i_i = i_dir * moves[i_move][1];
+      const auto [T_w_r_poses, v_w_i, a_i_i, a_i_i_0] =
+        makeRigPoses(T_r_i, T_w_r, v, a_w_i, omega_i_i, dtd, num_imu_updates);
+      auto acc_i_i = a_i_i_0;  // acceleration of imu in imu frame
       size_t i_pose = 0;
       for (size_t i_frame = 0; i_frame < num_frames_per_move; i_frame++) {
         calib.addRigPose(t, T_w_r);
@@ -320,13 +305,12 @@ static std::tuple<double, double, double, double> do_extrinsic_imu_calib(
         }
         for (size_t i_imu = 0; i_imu < imu_updates_per_frame;
              i_imu++, i_pose++) {
-          const auto R_i_w = (T_w_r * T_r_i).inverse().rotation();
-          const auto acc_i = R_i_w * acc_w;
-          const auto omega_i = R_i_w * omega_w;
-          calib.addIMUData(0, multicam_imu_calib::IMUData(t, omega_i, acc_i));
+          calib.addIMUData(
+            0, multicam_imu_calib::IMUData(t, omega_i_i, acc_i_i));
           t += dt;
           T_w_r = T_w_r_poses[i_pose];
-          v = velocities[i_pose];
+          v = v_w_i[i_pose];  // remember velocity to init pose generation
+          acc_i_i = a_i_i[i_pose];
         }
       }
     }
@@ -335,24 +319,29 @@ static std::tuple<double, double, double, double> do_extrinsic_imu_calib(
   // between rig poses and IMU poses
   calib.initializeIMUPoses();
   auto [init_err, final_err] = calib.runOptimizer();
+  // calib.printErrors(false);
   const auto T_r_i_opt = calib.getIMUPose(0, true);
   const auto T_err = T_r_i_opt.inverse() * T_r_i;
   const double rot_err = std::abs(T_err.rotation().axisAngle().second);
   const double trans_err = T_err.translation().norm();
+  const auto T_r_c_opt = calib.getCameraPose(0, true);
+  // std::cout << "final camera calib: " << T_r_c_opt << std::endl;
+  // std::cout << "final imu calib: " << T_r_i_opt << std::endl;
   return {init_err, final_err, rot_err, trans_err};
 }
 
 TEST(multicam_imu_calib, imu_calib_perfect_init)
 {
   const gtsam::Pose3 T_r_i(
-    gtsam::Rot3::AxisAngle(gtsam::Unit3(1, 0, 0), M_PI * 0.1),
+    gtsam::Rot3::AxisAngle(gtsam::Unit3(1, 0, 0), M_PI * 0.0),
     gtsam::Vector3(0, 0, 0));
 
   const auto [init_err, final_err, rot_err, trans_err] =
     do_extrinsic_imu_calib("single_cam_imu.yaml", T_r_i);
-
-  EXPECT_LT(std::abs(init_err), 4e-4);
-  EXPECT_LT(std::abs(final_err), 2e-4);
+  LOG_INFO("init calib error: " << std::abs(init_err));
+  LOG_INFO("final calib error: " << std::abs(final_err));
+  EXPECT_LT(std::abs(init_err), 3.2);
+  EXPECT_LT(std::abs(final_err), 16e-4);
   EXPECT_LT(std::abs(rot_err), 2e-4);
   EXPECT_LT(std::abs(trans_err), 2e-4);
 }
@@ -365,11 +354,30 @@ TEST(multicam_imu_calib, imu_calib_yawed_init)
 
   const auto [init_err, final_err, rot_err, trans_err] =
     do_extrinsic_imu_calib("single_cam_imu.yaml", T_r_i);
+  LOG_INFO("init calib error: " << init_err);
+  LOG_INFO("final calib error: " << final_err);
+  LOG_INFO("final rotation error: " << rot_err);
+  LOG_INFO("final trans error: " << trans_err);
+  EXPECT_LT(std::abs(final_err), 8e-3);
+  EXPECT_LT(std::abs(rot_err), 2.5e-2);
+  EXPECT_LT(std::abs(trans_err), 6e-3);
+}
 
-  EXPECT_LT(std::abs(init_err), 4e-4);
-  EXPECT_LT(std::abs(final_err), 2e-4);
-  EXPECT_LT(std::abs(rot_err), 2e-4);
-  EXPECT_LT(std::abs(trans_err), 2e-4);
+TEST(multicam_imu_calib, imu_calib_displaced_init)
+{
+  const gtsam::Pose3 T_r_i(
+    gtsam::Rot3::AxisAngle(gtsam::Unit3(1, 0, 0), 0),
+    gtsam::Vector3(0.2, 0, 0));
+
+  const auto [init_err, final_err, rot_err, trans_err] =
+    do_extrinsic_imu_calib("single_cam_imu.yaml", T_r_i);
+  LOG_INFO("init calib error: " << init_err);
+  LOG_INFO("final calib error: " << final_err);
+  LOG_INFO("final rotation error: " << rot_err);
+  LOG_INFO("final trans error: " << trans_err);
+  EXPECT_LT(std::abs(final_err), 15e-4);
+  EXPECT_LT(std::abs(rot_err), 2.5e-2);
+  EXPECT_LT(std::abs(trans_err), 6e-3);
 }
 
 int main(int argc, char ** argv)

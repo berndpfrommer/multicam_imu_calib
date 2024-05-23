@@ -79,7 +79,7 @@ void Optimizer::addIMUPose(
     gtsam::Expression<gtsam::Pose3> T_identity =
       gtsam::transformPoseFrom(gtsam::transformPoseTo(T_w_i, T_w_r), T_r_i);
     graph_.addExpressionFactor(
-      T_identity, gtsam::Pose3(), utilities::makeNoise6(1e-8, 1e-8));
+      T_identity, gtsam::Pose3(), utilities::makeNoise6(1e-6, 1e-6));
     imu->addPoseFactorKey(imu_keys.t, getLastFactorKey());
 // #define IDENTITY_CHECK
 #ifdef IDENTITY_CHECK
@@ -93,7 +93,7 @@ void Optimizer::addIMUPose(
               << values_.at<gtsam::Pose3>(rig_pose_key) << std::endl;
     std::cout << "T_r_i: " << std::endl
               << values_.at<gtsam::Pose3>(imu_calib_key) << std::endl;
-    std::cout << "id pose: " << std::endl;
+    std::cout << imu_keys.t << " id pose: " << std::endl;
     std::cout << I << std::endl;
 #endif
   }
@@ -169,8 +169,8 @@ std::tuple<uint64_t, factor_key_t> Optimizer::addPreintegratedFactor(
     prev_keys.pose_key, prev_keys.velocity_key, curr_keys.pose_key,
     curr_keys.velocity_key, prev_keys.bias_key, curr_keys.bias_key, accum));
 #if 0
-  std::cout << curr_keys.t << " add imu factor " << getLastFactorKey()
-            << " err: " << getCombinedImuFactorError(getLastFactorKey(), false)
+  std::cout << curr_keys.t << " add imu factor  " << getLastFactorKey()
+            << " err: " << getCombinedIMUFactorError(getLastFactorKey(), false)
             << std::endl;
 #endif
   return {curr_keys.t, getLastFactorKey()};
@@ -304,11 +304,13 @@ static gtsam::imuBias::ConstantBias bv(const gtsam::Values & v, factor_key_t k)
   return (v.at<gtsam::imuBias::ConstantBias>(k));
 }
 
-double Optimizer::getCombinedImuFactorError(
-  factor_key_t k, bool optimized) const
+std::tuple<gtsam::Vector3, gtsam::Vector3, gtsam::Vector3>
+Optimizer::getCombinedIMUFactorError(factor_key_t k, bool optimized) const
 {
   if (k < 0) {
-    return (-1.0);
+    return {
+      gtsam::Vector3(-1, -1, 1), gtsam::Vector3(-1, -1, 1),
+      gtsam::Vector3(-1, -1, 1)};
   }
   const auto & v = optimized ? optimized_values_ : values_;
   const auto & f = reinterpret_cast<gtsam::CombinedImuFactor &>(*graph_.at(k));
@@ -318,7 +320,19 @@ double Optimizer::getCombinedImuFactorError(
   // std::cout << k << " combined imu error: " << ev.block<6, 1>(3, 0).transpose()
   //          << std::endl;
   // 9-dim error: (rotation, position, velocity)
-  return (f.error(v));
+  return {ev.block<3, 1>(0, 0), ev.block<3, 1>(3, 0), ev.block<3, 1>(6, 0)};
+}
+
+std::tuple<double, gtsam::Vector3, gtsam::Vector3>
+Optimizer::getIMUExtrinsicsError(factor_key_t k, bool optimized) const
+{
+  const auto f = graph_.at(k);
+  const gtsam::NoiseModelFactor & nmf =
+    *reinterpret_cast<gtsam::NoiseModelFactor *>(f.get());
+  gtsam::Vector v = nmf.whitenedError(optimized ? optimized_values_ : values_);
+  const double e_tot = nmf.error(optimized ? optimized_values_ : values_);
+  // std::cout << "imu ext err " << v << std::endl;
+  return {e_tot, v.block<3, 1>(0, 0), v.block<3, 1>(3, 0)};
 }
 
 void Optimizer::printErrors(const gtsam::Values & vals) const

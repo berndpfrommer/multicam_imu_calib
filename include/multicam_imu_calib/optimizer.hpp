@@ -81,7 +81,10 @@ public:
     return (optimized_values_.at<T>(key));
   }
   double getError(factor_key_t k, bool optimized) const;
-  double getCombinedImuFactorError(factor_key_t k, bool optimized) const;
+  std::tuple<double, gtsam::Vector3, gtsam::Vector3> getIMUExtrinsicsError(
+    factor_key_t k, bool optimized) const;
+  std::tuple<gtsam::Vector3, gtsam::Vector3, gtsam::Vector3>
+  getCombinedIMUFactorError(factor_key_t k, bool optimized) const;
   void printErrors(const gtsam::Values & vals) const;
 
 private:

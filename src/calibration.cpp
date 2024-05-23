@@ -598,15 +598,16 @@ void Calibration::printErrors(bool optimized)
     const auto pfk = imu->getFactorKeys();
     for (const auto & fk : pfk) {
       const auto & fks = fk.second;
-#if 1
-      const double e_pose = optimizer_->getError(fks.pose, optimized);
-      const double e_pre = optimizer_->getError(fks.preintegrated, optimized);
+      const auto [e_pose_tot, e_pose_rot, e_pose_pos] =
+        optimizer_->getIMUExtrinsicsError(fks.pose, optimized);
+      const auto [e_rot, e_pos, e_vel] =
+        optimizer_->getCombinedIMUFactorError(fks.preintegrated, optimized);
       LOG_INFO(
-        fks.t << " preint(" << fks.preintegrated << ") " << e_pre << " pose("
-              << fks.pose << ") " << e_pose);
-#else
-      (void)optimizer_->getCombinedImuFactorError(fks.preintegrated, optimized);
-#endif
+        fks.t << " preint(" << fks.preintegrated
+              << ") rot: " << e_rot.transpose() << " pos: " << e_pos.transpose()
+              << " vel: " << e_vel.transpose() << " pose(" << fks.pose
+              << ") tot: " << e_pose_tot << " rot: " << e_pose_rot.transpose()
+              << " pos: " << e_pose_pos.transpose());
     }
   }
   LOG_INFO("------------ camera errors -----------");
@@ -627,6 +628,11 @@ void Calibration::printErrors(bool optimized)
 gtsam::Pose3 Calibration::getIMUPose(size_t imu_idx, bool opt) const
 {
   return (optimizer_->getPose(imu_list_[imu_idx]->getPoseKey(), opt));
+}
+
+gtsam::Pose3 Calibration::getCameraPose(size_t cam_idx, bool opt) const
+{
+  return (optimizer_->getPose(camera_list_[cam_idx]->getPoseKey(), opt));
 }
 
 }  // namespace multicam_imu_calib

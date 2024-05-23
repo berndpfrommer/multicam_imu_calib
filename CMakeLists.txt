@@ -140,7 +140,6 @@ if(BUILD_TESTING)
 
   # ----------- setup gtests
   find_package(ament_cmake_gtest REQUIRED)
-  # if(FALSE)
   set(CAMERA_TEST "${PROJECT_NAME}_camera_test")
   ament_add_gtest(${CAMERA_TEST} test/camera_test.cpp
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/test)
@@ -151,9 +150,8 @@ if(BUILD_TESTING)
   target_compile_features(${CAMERA_TEST} PRIVATE cxx_std_17)
   ament_target_dependencies(${CAMERA_TEST} rclcpp)
   target_link_libraries(${CAMERA_TEST} ${PROJECT_NAME} opencv_core opencv_calib3d yaml-cpp gtsam)
-  # endif()
   set(IMU_TEST "${PROJECT_NAME}_imu_test")
-  ament_add_gtest(${IMU_TEST} test/imu_test.cpp
+  ament_add_gtest(${IMU_TEST} test/imu_test.cpp test/make_rig_poses.cpp
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/test)
   target_include_directories(${IMU_TEST}
     PUBLIC
@@ -162,6 +160,16 @@ if(BUILD_TESTING)
   target_compile_features(${IMU_TEST} PRIVATE cxx_std_17)
   ament_target_dependencies(${IMU_TEST} rclcpp)
   target_link_libraries(${IMU_TEST} ${PROJECT_NAME} opencv_core opencv_calib3d yaml-cpp gtsam)
+  set(KINEMATICS_TEST "${PROJECT_NAME}_kinematics_test")
+  ament_add_gtest(${KINEMATICS_TEST} test/kinematics_test.cpp test/make_rig_poses.cpp
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/test)
+  target_include_directories(${KINEMATICS_TEST}
+    PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>)
+  target_compile_features(${KINEMATICS_TEST} PRIVATE cxx_std_17)
+  ament_target_dependencies(${KINEMATICS_TEST} rclcpp)
+  target_link_libraries(${KINEMATICS_TEST} ${PROJECT_NAME} gtsam)
 
 endif()
 

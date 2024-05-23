@@ -76,6 +76,7 @@ public:
   void initializeIMUPoses();
   void printErrors(bool optimized);
   gtsam::Pose3 getIMUPose(size_t imu_idx, bool opt) const;
+  gtsam::Pose3 getCameraPose(size_t cam_idx, bool opt) const;
 
 private:
   void parseIntrinsicsAndDistortionModel(
