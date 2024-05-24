@@ -69,26 +69,44 @@ static gtsam::SharedNoiseModel parsePoseNoise(const YAML::Node & yn)
 
 static double safeSqrt(double x) { return (x > 0 ? std::sqrt(x) : x); }
 
+template <typename T>
+std::string fmt_fixed(const T & x, const int n)
+{
+  std::ostringstream out;
+  out.precision(n);
+  out << std::fixed << x;
+  return (std::move(out).str());
+}
+
+template <typename T>
+std::string fmt_float(const T & x, const int n)
+{
+  std::ostringstream out;
+  out.precision(n);
+  out << x;
+  return (std::move(out).str());
+}
+
 static YAML::Node poseWithNoiseToYaml(
   const gtsam::Pose3 & pose, const gtsam::Matrix & margCov)
 {
   YAML::Node n;
   const gtsam::Point3 pt = pose.translation();
-  n["position"]["x"] = pt(0);
-  n["position"]["y"] = pt(1);
-  n["position"]["z"] = pt(2);
-  n["position_sigma"]["x"] = safeSqrt(margCov(3, 3));
-  n["position_sigma"]["y"] = safeSqrt(margCov(4, 4));
-  n["position_sigma"]["z"] = safeSqrt(margCov(5, 5));
+  n["position"]["x"] = fmt_float(pt(0), 5);
+  n["position"]["y"] = fmt_float(pt(1), 5);
+  n["position"]["z"] = fmt_float(pt(2), 5);
+  n["position_sigma"]["x"] = fmt_float(safeSqrt(margCov(3, 3)), 6);
+  n["position_sigma"]["y"] = fmt_float(safeSqrt(margCov(4, 4)), 6);
+  n["position_sigma"]["z"] = fmt_float(safeSqrt(margCov(5, 5)), 6);
   const gtsam::Quaternion q = pose.rotation().toQuaternion();
-  n["orientation"]["x"] = q.x();
-  n["orientation"]["y"] = q.y();
-  n["orientation"]["z"] = q.z();
-  n["orientation"]["w"] = q.w();
+  n["orientation"]["x"] = fmt_float(q.x(), 8);
+  n["orientation"]["y"] = fmt_float(q.y(), 8);
+  n["orientation"]["z"] = fmt_float(q.z(), 8);
+  n["orientation"]["w"] = fmt_float(q.w(), 8);
   // covariances
-  n["orientation_sigma"]["x"] = safeSqrt(margCov(0, 0));
-  n["orientation_sigma"]["y"] = safeSqrt(margCov(1, 1));
-  n["orientation_sigma"]["z"] = safeSqrt(margCov(2, 2));
+  n["orientation_sigma"]["x"] = fmt_float(safeSqrt(margCov(0, 0)), 8);
+  n["orientation_sigma"]["y"] = fmt_float(safeSqrt(margCov(1, 1)), 8);
+  n["orientation_sigma"]["z"] = fmt_float(safeSqrt(margCov(2, 2)), 8);
   return (n);
 }
 
@@ -266,22 +284,13 @@ void Calibration::readConfigFile(const std::string & file)
   }
 }
 
-template <typename T>
-std::string fmt(const T & x, const int n)
-{
-  std::ostringstream out;
-  out.precision(n);
-  out << std::fixed << x;
-  return (std::move(out).str());
-}
-
 static YAML::Node makeIntrinsics(const gtsam::Vector4 & v)
 {
   YAML::Node intr;
-  intr["fx"] = fmt(v[0], 2);
-  intr["fy"] = fmt(v[1], 2);
-  intr["cx"] = fmt(v[2], 2);
-  intr["cy"] = fmt(v[3], 2);
+  intr["fx"] = fmt_fixed(v[0], 2);
+  intr["fy"] = fmt_fixed(v[1], 2);
+  intr["cx"] = fmt_fixed(v[2], 2);
+  intr["cy"] = fmt_fixed(v[3], 2);
   return intr;
 }
 
@@ -290,7 +299,7 @@ static YAML::Node vectorToYaml(
 {
   YAML::Node dist;
   for (int i = 4; i < v.rows(); i++) {
-    dist.push_back(fmt(v(reorder[i]), precision));
+    dist.push_back(fmt_fixed(v(reorder[i]), precision));
   }
   return (dist);
 }
