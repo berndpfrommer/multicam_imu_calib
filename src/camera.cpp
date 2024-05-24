@@ -37,8 +37,11 @@ void Camera::setDistortionModel(const std::string & model)
 {
   if (model == "radtan" || model == "plumb_bob") {
     distortion_model_ = RADTAN;
+    // reordering from GTSAM to opencv
+    reorder_ = {0, 1, 2, 3, 6, 7, 4, 5, 8, 9, 10, 11};
   } else if (model == "equidistant" || model == "fisheye") {
     distortion_model_ = EQUIDISTANT;
+    reorder_ = {0, 1, 2, 3, 4, 5, 6, 7, 8};
   } else {
     BOMB_OUT("bad distortion model: " << model);
   }

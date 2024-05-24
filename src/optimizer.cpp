@@ -280,6 +280,38 @@ gtsam::Pose3 Optimizer::getPose(value_key_t k, bool optimized) const
   return ((optimized ? optimized_values_ : values_).at<gtsam::Pose3>(k));
 }
 
+gtsam::Matrix6 Optimizer::getMarginalizedPoseCovariance(
+  value_key_t k, bool optimized) const
+{
+  auto & vars = optimized ? optimized_values_ : values_;
+  try {
+    gtsam::Marginals marg(graph_, vars);
+    const auto cov = marg.marginalCovariance(k);
+    return (cov);
+  } catch (const gtsam::IndeterminantLinearSystemException & e) {
+    LOG_ERROR("error occured at variable with key: " << e.nearbyVariable());
+    vars.print();
+    graph_.print();
+    throw(e);
+  }
+}
+
+gtsam::Matrix12 Optimizer::getCal3DS3Covariance(
+  value_key_t k, bool optimized) const
+{
+  auto & vars = optimized ? optimized_values_ : values_;
+  try {
+    gtsam::Marginals marg(graph_, vars);
+    const auto cov = marg.marginalCovariance(k);
+    return (cov);
+  } catch (const gtsam::IndeterminantLinearSystemException & e) {
+    LOG_ERROR("error occured at variable with key: " << e.nearbyVariable());
+    vars.print();
+    graph_.print();
+    throw(e);
+  }
+}
+
 double Optimizer::getError(factor_key_t k, bool optimized) const
 {
   if (k < 0) {

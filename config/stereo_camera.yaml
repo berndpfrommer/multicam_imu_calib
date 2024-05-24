@@ -34,18 +34,18 @@ cameras:
         y: 0.0
         z: 0.0
       position_sigma:
-        x: 10.0
-        y: 10.0
-        z: 10.0
+        x: 1.e-6
+        y: 1.e-6
+        z: 1.e-6
       orientation:
         x: 0.0
         y: 0.0
         z: 0.0
         w: 1.0
       orientation_sigma:
-        x: 6.28
-        y: 6.28
-        z: 6.28
+        x: 1.e-6
+        y: 1.e-6
+        z: 1.e-6
   - name: "camera_1"
     ros_topic: "/cam_sync/cam_1/image_raw"
     pixel_noise: 1.0

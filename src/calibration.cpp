@@ -67,6 +67,31 @@ static gtsam::SharedNoiseModel parsePoseNoise(const YAML::Node & yn)
   return (gtsam::noiseModel::Diagonal::Sigmas(sig));
 }
 
+static double safeSqrt(double x) { return (x > 0 ? std::sqrt(x) : x); }
+
+static YAML::Node poseWithNoiseToYaml(
+  const gtsam::Pose3 & pose, const gtsam::Matrix & margCov)
+{
+  YAML::Node n;
+  const gtsam::Point3 pt = pose.translation();
+  n["position"]["x"] = pt(0);
+  n["position"]["y"] = pt(1);
+  n["position"]["z"] = pt(2);
+  n["position_sigma"]["x"] = safeSqrt(margCov(3, 3));
+  n["position_sigma"]["y"] = safeSqrt(margCov(4, 4));
+  n["position_sigma"]["z"] = safeSqrt(margCov(5, 5));
+  const gtsam::Quaternion q = pose.rotation().toQuaternion();
+  n["orientation"]["x"] = q.x();
+  n["orientation"]["y"] = q.y();
+  n["orientation"]["z"] = q.z();
+  n["orientation"]["w"] = q.w();
+  // covariances
+  n["orientation_sigma"]["x"] = safeSqrt(margCov(0, 0));
+  n["orientation_sigma"]["y"] = safeSqrt(margCov(1, 1));
+  n["orientation_sigma"]["z"] = safeSqrt(margCov(2, 2));
+  return (n);
+}
+
 void Calibration::parseIntrinsicsAndDistortionModel(
   const Camera::SharedPtr & cam, const YAML::Node & intr,
   const YAML::Node & dist)
@@ -250,24 +275,42 @@ std::string fmt(const T & x, const int n)
   return (std::move(out).str());
 }
 
-static YAML::Node makeIntrinsics(double fx, double fy, double cx, double cy)
+static YAML::Node makeIntrinsics(const gtsam::Vector4 & v)
 {
   YAML::Node intr;
-  intr["fx"] = fmt(fx, 2);
-  intr["fy"] = fmt(fy, 2);
-  intr["cx"] = fmt(cx, 2);
-  intr["cy"] = fmt(cy, 2);
+  intr["fx"] = fmt(v[0], 2);
+  intr["fy"] = fmt(v[1], 2);
+  intr["cx"] = fmt(v[2], 2);
+  intr["cy"] = fmt(v[3], 2);
   return intr;
 }
 
-template <class T>
-static YAML::Node makeDistortionCoefficients(const T & d)
+static YAML::Node vectorToYaml(
+  const gtsam::Vector & v, const std::vector<int> & reorder, int precision)
 {
   YAML::Node dist;
-  for (const auto c : d) {
-    dist.push_back(fmt(c, 4));
+  for (int i = 4; i < v.rows(); i++) {
+    dist.push_back(fmt(v(reorder[i]), precision));
   }
   return (dist);
+}
+
+static YAML::Node updateIntrinsicsAndDistortion(
+  const YAML::Node & orig_node, const gtsam::Vector & mean,
+  const gtsam::Matrix & cov, const std::vector<int> & reorder)
+{
+  YAML::Node n = orig_node;
+  YAML::Node dist = orig_node["distortion_model"];  // make copy
+  // for pretty ordering remove, then add node again
+  n.remove("intrinsics");
+  n.remove("intrinsics_sigma");
+  n.remove("distortion_model");
+  n["intrinsics"] = makeIntrinsics(mean.block<4, 1>(0, 0));
+  n["intrinsics_sigma"] = makeIntrinsics(cov.diagonal(0).block<4, 1>(0, 0));
+  dist["coefficients"] = vectorToYaml(mean, reorder, 4);
+  dist["coefficient_sigma"] = vectorToYaml(cov.diagonal(0), reorder, 6);
+  n["distortion_model"] = dist;
+  return (n);  // updated node
 }
 
 void Calibration::writeResults(const std::string & out_dir)
@@ -276,28 +319,29 @@ void Calibration::writeResults(const std::string & out_dir)
   auto calib(config_);
   for (size_t cam_id = 0; cam_id < camera_list_.size(); cam_id++) {
     const auto & cam = camera_list_[cam_id];
+    gtsam::Vector mean;
     switch (cam->getDistortionModel()) {
       case RADTAN: {
-        const auto intr =
-          optimizer_->getOptimizedIntrinsics<Cal3DS3>(cam->getIntrinsicsKey());
-        calib["cameras"][cam_id]["intrinsics"] =
-          makeIntrinsics(intr.fx(), intr.fy(), intr.p1(), intr.p2());
-        calib["cameras"][cam_id]["distortion_model"]["coefficients"] =
-          makeDistortionCoefficients(intr.k());
+        mean =
+          optimizer_->getIntrinsics<Cal3DS3>(cam->getIntrinsicsKey(), true);
         break;
       }
       case EQUIDISTANT: {
-        const auto intr =
-          optimizer_->getOptimizedIntrinsics<Cal3FS2>(cam->getIntrinsicsKey());
-        calib["cameras"][cam_id]["intrinsics"] =
-          makeIntrinsics(intr.fx(), intr.fy(), intr.px(), intr.py());
-        calib["cameras"][cam_id]["distortion_model"]["coefficients"] =
-          makeDistortionCoefficients(intr.k());
+        mean =
+          optimizer_->getIntrinsics<Cal3FS2>(cam->getIntrinsicsKey(), true);
         break;
       }
       default:
         BOMB_OUT("invalid distortion model!");
     }
+    const gtsam::Matrix cov =
+      optimizer_->getMarginalCovariance(cam->getIntrinsicsKey(), true);
+    calib["cameras"][cam_id] = updateIntrinsicsAndDistortion(
+      calib["cameras"][cam_id], mean, cov, cam->getReOrder());
+    calib["cameras"][cam_id].remove("pose");  // for pretty display in output
+    calib["cameras"][cam_id]["pose"] = poseWithNoiseToYaml(
+      optimizer_->getPose(cam->getPoseKey(), true),
+      optimizer_->getMarginalCovariance(cam->getPoseKey(), true));
   }
   using Path = std::filesystem::path;
   std::ofstream new_calib(Path(out_dir) / Path("calibration.yaml"));

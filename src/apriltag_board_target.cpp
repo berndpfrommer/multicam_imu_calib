@@ -35,7 +35,6 @@ using ApriltagArray = apriltag_msgs::msg::AprilTagDetectionArray;
 AprilTagBoardTarget::~AprilTagBoardTarget()
 {
   detector_.reset();  // remove reference explicitly for debugging
-  std::cout << "destroyed board/detector" << std::endl;
 }
 
 Detection::SharedPtr AprilTagBoardTarget::detect(

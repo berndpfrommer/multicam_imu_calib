@@ -57,6 +57,7 @@ public:
   std::vector<double> getCoefficientMask() const;
   const auto & getTopic() const { return (topic_); }
   const auto & getFactorKeys() const { return (factor_keys_); }
+  const auto & getReOrder() const { return (reorder_); }
 
   // ------------ setters
   void setPoseWithNoise(
@@ -109,6 +110,7 @@ private:
   std::vector<double> coefficientSigma_;  // coefficient noise
   std::string topic_;
   std::map<uint64_t, std::vector<factor_key_t>> factor_keys_;
+  std::vector<int> reorder_;
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__CAMERA_HPP_

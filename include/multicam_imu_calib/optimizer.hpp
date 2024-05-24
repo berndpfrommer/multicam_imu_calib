@@ -17,6 +17,7 @@
 #define MULTICAM_IMU_CALIB__OPTIMIZER_HPP_
 #include <gtsam/nonlinear/ExpressionFactorGraph.h>
 #include <gtsam/nonlinear/ISAM2.h>
+#include <gtsam/nonlinear/Marginals.h>
 #include <gtsam/nonlinear/NonlinearFactor.h>
 #include <gtsam/nonlinear/PriorFactor.h>
 
@@ -74,12 +75,36 @@ public:
     const gtsam::PreintegratedCombinedMeasurements & accum);
 
   gtsam::Pose3 getPose(value_key_t k, bool optimized) const;
+  gtsam::Matrix6 getMarginalizedPoseCovariance(
+    value_key_t k, bool optimized) const;
+  gtsam::Matrix12 getCal3DS3Covariance(value_key_t k, bool optimized) const;
+
+  gtsam::Matrix getMarginalCovariance(value_key_t k, bool optimized) const
+  {
+    auto & vars = optimized ? optimized_values_ : values_;
+    try {
+      gtsam::Marginals marg(graph_, vars);
+      const gtsam::Matrix cov = marg.marginalCovariance(k);
+      return (cov);
+    } catch (const gtsam::IndeterminantLinearSystemException & e) {
+      vars.print();
+      graph_.print();
+      throw(e);
+    }
+  }
+
+  template <class T>
+  gtsam::Vector getIntrinsics(value_key_t key, bool opt)
+  {
+    return ((opt ? optimized_values_ : values_).at<T>(key).vector());
+  }
 
   template <class T>
   T getOptimizedIntrinsics(value_key_t key)
   {
     return (optimized_values_.at<T>(key));
   }
+
   double getError(factor_key_t k, bool optimized) const;
   std::tuple<double, gtsam::Vector3, gtsam::Vector3> getIMUExtrinsicsError(
     factor_key_t k, bool optimized) const;

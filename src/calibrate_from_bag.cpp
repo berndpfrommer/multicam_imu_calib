@@ -75,6 +75,8 @@ initializeCalibrationCameras(Calibration * cal)
     }
     topic_to_cam.insert({cam->getTopic(), cam_idx});
     cal->addCameraPose(cam, cam->getPose());
+    // TODO(Bernd): make up priors when none are specified in yaml file
+    cal->addCameraPosePrior(cam, cam->getPose(), cam->getPoseNoise());
     cal->addIntrinsics(
       cam, cam->getIntrinsics(), cam->getDistortionCoefficients());
   }
@@ -184,6 +186,7 @@ void calibrate_from_bag(
     "ratio of IMU to camera frames: "
     << num_imu_frames / static_cast<double>(std::max(size_t(1), num_frames)));
   cal.runOptimizer();
+  //  cal.printErrors(true);
   cal.writeResults(out_dir);
   cal.runDiagnostics(Path(out_dir) / Path("projections.txt"));
 }
