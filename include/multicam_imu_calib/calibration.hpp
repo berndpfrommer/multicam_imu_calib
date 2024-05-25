@@ -44,6 +44,7 @@ public:
   Calibration();
   void readConfigFile(const std::string & file);
   std::tuple<double, double> runOptimizer();
+  void sanityChecks() const;
   void runDiagnostics(const std::string & error_file);
   void setAddInitialIMUPosePrior(bool f) { add_initial_imu_pose_prior_ = f; }
 
@@ -80,14 +81,20 @@ public:
 
 private:
   void parseIntrinsicsAndDistortionModel(
-    const Camera::SharedPtr & cam, const YAML::Node & intr,
-    const YAML::Node & dist);
+    const Camera::SharedPtr & cam, const YAML::Node & cam_node);
   void parseCameras(const YAML::Node & cameras);
   void parseIMUs(const YAML::Node & imus);
   bool applyIMUData(uint64_t t);
   std::vector<StampedAttitude> getRigAttitudes(
     const std::vector<uint64_t> & times) const;
   gtsam::Pose3 getRigPose(uint64_t t, bool optimized) const;
+
+  std::tuple<std::vector<double>, std::vector<int>, std::vector<double>>
+  sanitizeCoefficients(
+    const Camera & cam, const std::vector<double> & coeffs,
+    const std::vector<int> & c_masks,
+    const std::vector<double> & c_sigmas) const;
+
   // ------------- variables -------------
   std::shared_ptr<Optimizer> optimizer_;
   std::unordered_map<std::string, Camera::SharedPtr> cameras_;

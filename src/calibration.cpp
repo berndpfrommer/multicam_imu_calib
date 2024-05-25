@@ -110,76 +110,114 @@ static YAML::Node poseWithNoiseToYaml(
   return (n);
 }
 
-void Calibration::parseIntrinsicsAndDistortionModel(
-  const Camera::SharedPtr & cam, const YAML::Node & intr,
-  const YAML::Node & dist)
+static gtsam::Vector intrinsicsFromYaml(const YAML::Node & intr)
 {
-  YAML::Node coeffs = dist["coefficients"];
-  std::vector<double> vd = coeffs.as<std::vector<double>>();
-  std::vector<int> cm;
-  if (dist["coefficient_mask"]) {
-    cm = dist["coefficient_mask"].as<std::vector<int>>();
-    if (vd.size() != cm.size()) {
-      BOMB_OUT("coefficient_mask must have same size as coefficients!");
-    }
-  } else {
-    cm.resize(vd.size(), 1);
+  gtsam::Vector v(4);
+  v(0) = intr["fx"].as<double>();
+  v(1) = intr["fy"].as<double>();
+  v(2) = intr["cx"].as<double>();
+  v(3) = intr["cy"].as<double>();
+  return (v);
+}
+
+std::tuple<std::vector<double>, std::vector<int>, std::vector<double>>
+Calibration::sanitizeCoefficients(
+  const Camera & cam, const std::vector<double> & coeffs,
+  const std::vector<int> & c_masks, const std::vector<double> & c_sigmas) const
+{
+  if (coeffs.size() != c_sigmas.size()) {
+    BOMB_OUT(
+      cam.getName() << ": mismatch between number of dist coeffs and sigmas!");
   }
-  std::vector<double> cs;
-  if (dist["coefficient_sigma"]) {
-    cs = dist["coefficient_sigma"].as<std::vector<double>>();
-    if (vd.size() != cs.size()) {
-      BOMB_OUT("coefficient_sigma must have same size as coefficients!");
-    }
-    const double max = *std::max_element(cs.begin(), cs.end());
-    const double min = *std::min_element(cs.begin(), cs.end());
-    if (min <= 1e-6 || min * 1000 < max) {
-      BOMB_OUT("whacky max/min ratio of coefficient sigma!");
+  if (coeffs.size() != c_masks.size()) {
+    BOMB_OUT(
+      cam.getName()
+      << " coefficient_mask must have same size as coefficients!");
+  }
+
+  std::vector<double> csv;
+  for (const auto & cs : c_sigmas) {
+    csv.push_back(std::min(std::max(cs, 1e-6), 1e2));
+    if (cs != csv.back()) {
+      LOG_WARN(
+        cam.getName() << " adj dist coeff sigma: " << cs << " -> "
+                      << csv.back());
     }
   }
+  const double max = *std::max_element(csv.begin(), csv.end());
+  const double min = *std::min_element(csv.begin(), csv.end());
+  if (min * 1000 < max) {
+    LOG_WARN(
+      cam.getName() << " whacky max/min ratio for dist coeff sigma: "
+                    << max / min);
+  }
+  return {coeffs, c_masks, csv};
+}
+
+template <class T>
+static std::tuple<std::vector<T>, std::vector<bool>> yamlToVector(
+  const YAML::Node & n, const std::string & name, size_t sz, T def)
+{
+  std::vector<T> v(sz, def);
+  std::vector<bool> given(sz, false);
+  if (n[name]) {
+    const auto v_conf = n[name].as<std::vector<T>>();
+    for (size_t i = 0; i < std::min(v_conf.size(), sz); i++) {
+      v[i] = v_conf[i];
+      given[i] = true;
+    }
+  }
+  return {v, given};
+}
+
+static std::vector<int> yamlToMask(
+  const YAML::Node & n, const std::string & name,
+  const std::vector<bool> & coeff_given)
+{
+  std::vector<int> mask(coeff_given.size(), 0);
+  for (size_t i = 0; i < mask.size(); i++) {
+    mask[i] = coeff_given[i] ? 1 : 0;
+  }
+  if (n[name]) {
+    const auto v_conf = n[name].as<std::vector<int>>();
+    for (size_t i = 0; i < std::min(v_conf.size(), mask.size()); i++) {
+      mask[i] = v_conf[i];
+    }
+  }
+  return (mask);
+}
+
+void Calibration::parseIntrinsicsAndDistortionModel(
+  const Camera::SharedPtr & cam, const YAML::Node & cam_node)
+{
+  const YAML::Node & intr = cam_node["intrinsics"];
+  const YAML::Node & dist = cam_node["distortion_model"];
+
   cam->setDistortionModel(dist["type"].as<std::string>());
-  cam->setDistortionCoefficients(vd);
-  cam->setCoefficientMask(cm);
-  cam->setCoefficientSigma(cs);
-  const double fx = intr["fx"].as<double>();
-  const double fy = intr["fy"].as<double>();
-  const double cx = intr["cx"].as<double>();
-  const double cy = intr["cy"].as<double>();
-  cam->setIntrinsics(fx, fy, cx, cy);
-  switch (cam->getDistortionModel()) {
-    case RADTAN: {
-      Eigen::Matrix<double, 12, 1> sig;
-      Eigen::Matrix<double, 8, 1> n = Eigen::Matrix<double, 8, 1>::Ones() * 0.5;
-      if (cs.size() > 8) {
-        BOMB_OUT("too many coefficient_sigmas specified!");
-      }
-      for (size_t i = 0; i < cs.size(); i++) {
-        n(i, 0) = cs[i];  // override default with user-specified sigma
-      }
-      // optimizer arrangement: fx, fy, cx, cy, p1, p2, k1-6
-      const double nf = 2.0;  // noise factor for intrinsics
-      sig << fx * nf, fy * nf, cx * nf, cy * nf, n;
-      cam->setIntrinsicsNoise(gtsam::noiseModel::Diagonal::Sigmas(sig));
-      break;
-    }
-    case EQUIDISTANT: {
-      Eigen::Matrix<double, 8, 1> sig;
-      Eigen::Matrix<double, 4, 1> n = Eigen::Matrix<double, 4, 1>::Ones() * 0.5;
-      if (cs.size() > 4) {
-        BOMB_OUT("too many coefficient_sigmas specified!");
-      }
-      // optimizer arrangement: fx, fy, cx, cy, k1-4
-      const double nf = 2.0;  // noise factor for intrinsics
-      for (size_t i = 0; i < cs.size(); i++) {
-        n(i, 0) = cs[i];  // override default with user-specified sigma
-      }
-      sig << fx * nf, fy * nf, cx * nf, cy * nf, n;
-      cam->setIntrinsicsNoise(gtsam::noiseModel::Diagonal::Sigmas(sig));
-      break;
-    }
-    default:
-      BOMB_OUT("invalid distortion model!");
+  const std::vector<int> reorder = cam->getReOrderConfToOpt();
+  const size_t num_coeffs = reorder.size() - 4;
+  const auto [vd, vd_given] =
+    yamlToVector<double>(dist, "coefficients", num_coeffs, 0);
+  const auto [cs, cs_given] =
+    yamlToVector<double>(dist, "coefficient_sigma", num_coeffs, 0.5);
+  const auto cm = yamlToMask(dist, "coefficient_mask", vd_given);
+  auto [vd_a, cm_a, cs_a] = sanitizeCoefficients(*cam, vd, cm, cs);
+  const gtsam::Vector intr_vec = intrinsicsFromYaml(intr);
+  // default noise for intrinsics to 2 * estimated focal length
+  const gtsam::Vector intr_sig =
+    cam_node["intrinsics_sigma"]
+      ? intrinsicsFromYaml(cam_node["intrinsics_sigma"])
+      : 2 * intr_vec;
+  gtsam::Vector all_sig(reorder.size());
+  for (size_t i = 0; i < std::min(reorder.size(), cs_a.size() + 4); i++) {
+    all_sig(i) = (i < 4) ? intr_sig(i) : cs_a[reorder[i] - 4];
   }
+
+  cam->setDistortionCoefficients(vd_a);
+  cam->setCoefficientMask(cm_a);
+  cam->setCoefficientSigma(cs_a);
+  cam->setIntrinsics(intr_vec(0), intr_vec(1), intr_vec(2), intr_vec(3));
+  cam->setIntrinsicsNoise(gtsam::noiseModel::Diagonal::Sigmas(all_sig));
 }
 
 void Calibration::parseCameras(const YAML::Node & cameras)
@@ -189,9 +227,10 @@ void Calibration::parseCameras(const YAML::Node & cameras)
       LOG_WARN("ignoring camera with missing name!");
       continue;
     }
+    LOG_INFO("found camera: " << c["name"]);
     const auto pp = c["pose"];
     if (!pp) {
-      LOG_WARN("ignoring camera with missing pose!");
+      LOG_WARN("ignoring camera " << c["name"] << " with missing pose!");
       continue;
     }
     const auto pose = parsePose(pp);
@@ -201,12 +240,10 @@ void Calibration::parseCameras(const YAML::Node & cameras)
     const double pxn = c["pixel_noise"] ? c["pixel_noise"].as<double>() : 1.0;
     cam->setPixelNoise(
       gtsam::noiseModel::Diagonal::Sigmas(gtsam::Vector2::Constant(pxn)));
-    parseIntrinsicsAndDistortionModel(
-      cam, c["intrinsics"], c["distortion_model"]);
+    parseIntrinsicsAndDistortionModel(cam, c);
     cam->setTopic(
       c["ros_topic"] ? c["ros_topic"].as<std::string>() : std::string(""));
     optimizer_->addCamera(cam);
-    LOG_INFO("found camera: " << c["name"]);
     cameras_.insert({cam->getName(), cam});
     camera_list_.push_back(cam);
   }
@@ -343,14 +380,21 @@ void Calibration::writeResults(const std::string & out_dir)
       default:
         BOMB_OUT("invalid distortion model!");
     }
-    const gtsam::Matrix cov =
+    const gtsam::Matrix intr_cov =
       optimizer_->getMarginalCovariance(cam->getIntrinsicsKey(), true);
     calib["cameras"][cam_id] = updateIntrinsicsAndDistortion(
-      calib["cameras"][cam_id], mean, cov, cam->getReOrder());
+      calib["cameras"][cam_id], mean, intr_cov, cam->getReOrderOptToConf());
     calib["cameras"][cam_id].remove("pose");  // for pretty display in output
     calib["cameras"][cam_id]["pose"] = poseWithNoiseToYaml(
       optimizer_->getPose(cam->getPoseKey(), true),
       optimizer_->getMarginalCovariance(cam->getPoseKey(), true));
+  }
+  for (size_t imu_id = 0; imu_id < imu_list_.size(); imu_id++) {
+    const auto & imu = imu_list_[imu_id];
+    calib["imus"][imu_id].remove("pose");  // for pretty display in output
+    calib["imus"][imu_id]["pose"] = poseWithNoiseToYaml(
+      optimizer_->getPose(imu->getPoseKey(), true),
+      optimizer_->getMarginalCovariance(imu->getPoseKey(), true));
   }
   using Path = std::filesystem::path;
   std::ofstream new_calib(Path(out_dir) / Path("calibration.yaml"));
@@ -452,7 +496,8 @@ bool Calibration::applyIMUData(uint64_t t)
       if (imu->isPreintegrating()) {
         // found data preceeding t, can initialize IMU pose from accelerometer
         imu->initializeWorldPose(t, getRigPose(t, false));
-        imu->addValueKeys(optimizer_->addIMUState(t, imu->getCurrentState()));
+        imu->addValueKeys(
+          optimizer_->addIMUState(t, imu, imu->getCurrentState()));
         const auto vk = imu->getValueKeys().back();
         // add prior for start velocity to be zero
         (void)optimizer_->addPrior(
@@ -475,7 +520,8 @@ bool Calibration::applyIMUData(uint64_t t)
           t, getRigPose(t, false));  // updates current nav state
         const auto prev_keys = imu->getValueKeys().back();
         if (t > prev_keys.t) {
-          imu->addValueKeys(optimizer_->addIMUState(t, imu->getCurrentState()));
+          imu->addValueKeys(
+            optimizer_->addIMUState(t, imu, imu->getCurrentState()));
           const auto current_keys = imu->getValueKeys().back();
           const auto [t, fk] = optimizer_->addPreintegratedFactor(
             prev_keys, current_keys, *(imu->getAccum()));
@@ -602,6 +648,11 @@ void Calibration::initializeIMUPoses()
 std::tuple<double, double> Calibration::runOptimizer()
 {
   return (optimizer_->optimize());
+}
+
+void Calibration::sanityChecks() const
+{
+  optimizer_->checkForUnconstrainedVariables();
 }
 
 void Calibration::runDiagnostics(const std::string & error_file)

@@ -35,13 +35,16 @@ void Camera::setIntrinsics(double fx, double fy, double cx, double cy)
 }
 void Camera::setDistortionModel(const std::string & model)
 {
+  // Reordering from GTSAM to opencv and vice versa
+  // The forward and backwards arrays happen to be identical
   if (model == "radtan" || model == "plumb_bob") {
     distortion_model_ = RADTAN;
-    // reordering from GTSAM to opencv
-    reorder_ = {0, 1, 2, 3, 6, 7, 4, 5, 8, 9, 10, 11};
+    order_opt_to_conf_ = {0, 1, 2, 3, 6, 7, 4, 5, 8, 9, 10, 11};
+    order_conf_to_opt_ = {0, 1, 2, 3, 6, 7, 4, 5, 8, 9, 10, 11};
   } else if (model == "equidistant" || model == "fisheye") {
     distortion_model_ = EQUIDISTANT;
-    reorder_ = {0, 1, 2, 3, 4, 5, 6, 7, 8};
+    order_opt_to_conf_ = {0, 1, 2, 3, 4, 5, 6, 7};
+    order_conf_to_opt_ = {0, 1, 2, 3, 4, 5, 6, 7};
   } else {
     BOMB_OUT("bad distortion model: " << model);
   }

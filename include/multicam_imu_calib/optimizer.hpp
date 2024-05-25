@@ -33,6 +33,7 @@
 #include <unordered_map>
 #include <vector>
 
+#define DEBUG_SINGULARITIES
 namespace multicam_imu_calib
 {
 class Optimizer
@@ -68,7 +69,8 @@ public:
     const std::vector<std::array<double, 3>> & wc,
     const std::vector<std::array<double, 2>> & ic);
   value_key_t addRigPose(uint64_t t, const gtsam::Pose3 & pose);
-  StampedIMUValueKeys addIMUState(uint64_t t, const gtsam::NavState & nav);
+  StampedIMUValueKeys addIMUState(
+    uint64_t t, const IMU::SharedPtr & imu, const gtsam::NavState & nav);
   std::tuple<uint64_t, factor_key_t> addPreintegratedFactor(
     const StampedIMUValueKeys & prev_keys,
     const StampedIMUValueKeys & curr_keys,
@@ -111,6 +113,7 @@ public:
   std::tuple<gtsam::Vector3, gtsam::Vector3, gtsam::Vector3>
   getCombinedIMUFactorError(factor_key_t k, bool optimized) const;
   void printErrors(const gtsam::Values & vals) const;
+  void checkForUnconstrainedVariables() const;
 
 private:
   value_key_t getNextKey() { return (key_++); }
@@ -129,6 +132,9 @@ private:
   value_key_t current_rig_pose_key_{-1};
   gtsam::Pose3 current_rig_pose_;
   gtsam::SharedNoiseModel pixel_noise_;
+#ifdef DEBUG_SINGULARITIES
+  std::map<value_key_t, std::string> key_to_name_;
+#endif
 };
 
 }  // namespace multicam_imu_calib

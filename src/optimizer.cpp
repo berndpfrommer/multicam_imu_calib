@@ -54,6 +54,9 @@ void Optimizer::addCameraPose(
   const auto pose_key = getNextKey();
   cam->setPoseKey(pose_key);
   values_.insert(pose_key, T_r_c);
+#ifdef DEBUG_SINGULARITIES
+  key_to_name_.insert({pose_key, "extr pose " + cam->getName()});
+#endif
 }
 
 void Optimizer::addIMUPose(
@@ -64,6 +67,10 @@ void Optimizer::addIMUPose(
   const auto imu_calib_key = getNextKey();
   imu->setPoseKey(imu_calib_key);
   values_.insert(imu_calib_key, T_r_i_pose);
+#ifdef DEBUG_SINGULARITIES
+  key_to_name_.insert({imu_calib_key, "extr pose " + imu->getName()});
+#endif
+
   // add all the factors
   for (const auto & imu_keys : imu->getValueKeys()) {
     auto it = rig_keys.find(imu_keys.t);
@@ -111,6 +118,9 @@ factor_key_t Optimizer::addCameraIntrinsics(
       const auto intr_value =
         cam->makeRadTanModel(intr, distortion_coefficients);
       values_.insert(intr_key, intr_value);
+#ifdef DEBUG_SINGULARITIES
+      key_to_name_.insert({intr_key, "intrinsics " + cam->getName()});
+#endif
       graph_.add(gtsam::PriorFactor<Cal3DS3>(
         intr_key, intr_value, cam->getIntrinsicsNoise()));
       break;
@@ -119,6 +129,9 @@ factor_key_t Optimizer::addCameraIntrinsics(
       const auto intr_value =
         cam->makeEquidistantModel(intr, distortion_coefficients);
       values_.insert(intr_key, intr_value);
+#ifdef DEBUG_SINGULARITIES
+      key_to_name_.insert({intr_key, "intrinsics " + cam->getName()});
+#endif
       graph_.push_back(gtsam::PriorFactor<Cal3FS2>(
         intr_key, intr_value, cam->getIntrinsicsNoise()));
       break;
@@ -148,16 +161,26 @@ value_key_t Optimizer::addRigPose(uint64_t t, const gtsam::Pose3 & pose)
   current_rig_pose_ = pose;
   current_rig_pose_key_ = getNextKey();
   values_.insert(current_rig_pose_key_, pose);
+#ifdef DEBUG_SINGULARITIES
+  key_to_name_.insert(
+    {current_rig_pose_key_, "rig pose t=" + std::to_string(t)});
+#endif
   return (current_rig_pose_key_);
 }
 
 StampedIMUValueKeys Optimizer::addIMUState(
-  uint64_t t, const gtsam::NavState & nav)
+  uint64_t t, const IMU::SharedPtr & imu, const gtsam::NavState & nav)
 {
   StampedIMUValueKeys vk(t, getNextKey(), getNextKey(), getNextKey());
   values_.insert(vk.pose_key, nav.pose());
   values_.insert(vk.velocity_key, nav.v());
   values_.insert(vk.bias_key, gtsam::imuBias::ConstantBias());  // 0 bias init
+#ifdef DEBUG_SINGULARITIES
+  const auto ts = " t= " + std::to_string(t);
+  key_to_name_.insert({vk.pose_key, "nav state " + imu->getName() + ts});
+  key_to_name_.insert({vk.velocity_key, "velocity " + imu->getName() + ts});
+  key_to_name_.insert({vk.bias_key, "bias " + imu->getName() + ts});
+#endif
   return (vk);
 }
 
@@ -372,6 +395,45 @@ void Optimizer::printErrors(const gtsam::Values & vals) const
   for (size_t i = 0; i < graph_.size(); i++) {
     std::cout << "factor " << i << " has error: " << graph_.at(i)->error(vals)
               << std::endl;
+  }
+}
+
+void Optimizer::checkForUnconstrainedVariables() const
+{
+  std::unordered_map<value_key_t, size_t> ref_cnt;
+  for (const auto & f : graph_) {
+    for (auto k : f->keys()) {
+      if (ref_cnt.find(k) == ref_cnt.end()) {
+        ref_cnt.insert({k, 0});
+      }
+      ref_cnt[k]++;
+    }
+  }
+  std::map<size_t, std::vector<value_key_t>> cnt_to_keys;
+  for (const auto & kv : ref_cnt) {
+    if (cnt_to_keys.find(kv.second) == cnt_to_keys.end()) {
+      cnt_to_keys.insert({kv.second, std::vector<value_key_t>()});
+    }
+    cnt_to_keys[kv.second].push_back(kv.first);
+  }
+  for (const auto & kv : cnt_to_keys) {
+    std::stringstream ss;
+    for (const auto & k : kv.second) {
+      ss << " " << k;
+    }
+    LOG_INFO(kv.first << " key: " << ss.str());
+#ifdef DEBUG_SINGULARITIES
+    if (kv.first < 2) {
+      for (const auto & k : kv.second) {
+        const auto it = key_to_name_.find(k);
+        if (it != key_to_name_.end()) {
+          LOG_INFO(k << " is " << it->second);
+        } else {
+          LOG_WARN(k << " has no clear text name");
+        }
+      }
+    }
+#endif
   }
 }
 

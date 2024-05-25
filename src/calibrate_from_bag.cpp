@@ -185,6 +185,8 @@ void calibrate_from_bag(
   LOG_INFO(
     "ratio of IMU to camera frames: "
     << num_imu_frames / static_cast<double>(std::max(size_t(1), num_frames)));
+  cal.initializeIMUPoses();
+  cal.sanityChecks();
   cal.runOptimizer();
   //  cal.printErrors(true);
   cal.writeResults(out_dir);
