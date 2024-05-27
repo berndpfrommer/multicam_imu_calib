@@ -45,7 +45,7 @@ public:
   void readConfigFile(const std::string & file);
   std::tuple<double, double> runOptimizer();
   void sanityChecks() const;
-  void runDiagnostics(const std::string & error_file);
+  void runDiagnostics(const std::string & out_dir);
   void setAddInitialIMUPosePrior(bool f) { add_initial_imu_pose_prior_ = f; }
 
   void writeResults(const std::string & outDir);

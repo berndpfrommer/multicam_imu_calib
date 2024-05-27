@@ -87,7 +87,7 @@ public:
   void drainOldData(uint64_t t);
   void preintegrateUpTo(uint64_t t);
   bool isPreintegratedUpTo(uint64_t t) const;
-  void addData(const IMUData & d) { data_.push_back(d); }
+  void addData(const IMUData & d);
   void addValueKeys(const StampedIMUValueKeys & k);
   void addPreintegratedFactorKey(uint64_t t, factor_key_t k);
   void addPoseFactorKey(uint64_t t, factor_key_t k);
@@ -101,6 +101,7 @@ public:
   void resetPreintegration();
   void saveAttitude(uint64_t t);
   bool testAttitudes(const std::vector<StampedAttitude> & sa) const;
+  gtsam::imuBias::ConstantBias getPreliminaryBiasEstimate() const;
 
 private:
   std::string name_;
@@ -128,6 +129,7 @@ private:
   std::map<uint64_t, StampedIMUFactorKeys> factor_keys_;
   StampedIMUValueKeys current_value_keys_;
   size_t num_integrated_{0};  // XXX remove once debugged
+  IMUData avg_data_;
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__IMU_HPP_

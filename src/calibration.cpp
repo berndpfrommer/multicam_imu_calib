@@ -28,6 +28,8 @@
 
 namespace multicam_imu_calib
 {
+using Path = std::filesystem::path;
+
 static rclcpp::Logger get_logger()
 {
   return (rclcpp::get_logger("calibration"));
@@ -396,7 +398,6 @@ void Calibration::writeResults(const std::string & out_dir)
       optimizer_->getPose(imu->getPoseKey(), true),
       optimizer_->getMarginalCovariance(imu->getPoseKey(), true));
   }
-  using Path = std::filesystem::path;
   std::ofstream new_calib(Path(out_dir) / Path("calibration.yaml"));
   new_calib << calib;
 }
@@ -496,8 +497,8 @@ bool Calibration::applyIMUData(uint64_t t)
       if (imu->isPreintegrating()) {
         // found data preceeding t, can initialize IMU pose from accelerometer
         imu->initializeWorldPose(t, getRigPose(t, false));
-        imu->addValueKeys(
-          optimizer_->addIMUState(t, imu, imu->getCurrentState()));
+        imu->addValueKeys(optimizer_->addIMUState(
+          t, imu, imu->getCurrentState(), imu->getPreliminaryBiasEstimate()));
         const auto vk = imu->getValueKeys().back();
         // add prior for start velocity to be zero
         (void)optimizer_->addPrior(
@@ -520,8 +521,8 @@ bool Calibration::applyIMUData(uint64_t t)
           t, getRigPose(t, false));  // updates current nav state
         const auto prev_keys = imu->getValueKeys().back();
         if (t > prev_keys.t) {
-          imu->addValueKeys(
-            optimizer_->addIMUState(t, imu, imu->getCurrentState()));
+          imu->addValueKeys(optimizer_->addIMUState(
+            t, imu, imu->getCurrentState(), imu->getPreliminaryBiasEstimate()));
           const auto current_keys = imu->getValueKeys().back();
           const auto [t, fk] = optimizer_->addPreintegratedFactor(
             prev_keys, current_keys, *(imu->getAccum()));
@@ -655,8 +656,9 @@ void Calibration::sanityChecks() const
   optimizer_->checkForUnconstrainedVariables();
 }
 
-void Calibration::runDiagnostics(const std::string & error_file)
+void Calibration::runDiagnostics(const std::string & out_dir)
 {
+  const std::string error_file = Path(out_dir) / Path("projections.txt");
   try {
     std::filesystem::remove(error_file);
   } catch (const std::filesystem::filesystem_error &) {
@@ -691,6 +693,31 @@ void Calibration::runDiagnostics(const std::string & error_file)
       "cam %5s avg pix err: %15.2f  max pix err: %15.2f at idx: %6zu",
       cam->getName().c_str(), std::sqrt(sum_err / num_points),
       std::sqrt(max_err), max_idx);
+  }
+  const std::string imu_err_file = Path(out_dir) / Path("imu_errors.txt");
+  try {
+    std::filesystem::remove(imu_err_file);
+  } catch (const std::filesystem::filesystem_error &) {
+  }
+  std::ofstream imu_file(imu_err_file);
+  for (const auto & imu : imu_list_) {
+    const auto fac_keys = imu->getFactorKeys();
+    for (const auto kv : fac_keys) {  // map t -> factor_keys
+      if (kv.second.preintegrated < 0) {
+        continue;
+      }
+      const auto f = optimizer_->getIMUFactor(kv.second.preintegrated);
+      imu_file << kv.first << " angle error:";
+      for (const auto & opt : std::array<bool, 2>({false, true})) {
+        const gtsam::Pose3 T_w_i_prev = optimizer_->getPose(f->key1(), opt);
+        const gtsam::Pose3 T_w_i = optimizer_->getPose(f->key3(), opt);
+        const auto dR = T_w_i.rotation().inverse() * T_w_i_prev.rotation();
+        const auto & preint = f->preintegratedMeasurements();
+        const auto ang_err = preint.deltaRij().logmap(dR.inverse());
+        imu_file << " " << ang_err.transpose();
+      }
+      imu_file << std::endl;
+    }
   }
 }
 

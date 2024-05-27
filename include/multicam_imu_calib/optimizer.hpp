@@ -15,6 +15,7 @@
 
 #ifndef MULTICAM_IMU_CALIB__OPTIMIZER_HPP_
 #define MULTICAM_IMU_CALIB__OPTIMIZER_HPP_
+#include <gtsam/navigation/ImuFactor.h>
 #include <gtsam/nonlinear/ExpressionFactorGraph.h>
 #include <gtsam/nonlinear/ISAM2.h>
 #include <gtsam/nonlinear/Marginals.h>
@@ -70,17 +71,21 @@ public:
     const std::vector<std::array<double, 2>> & ic);
   value_key_t addRigPose(uint64_t t, const gtsam::Pose3 & pose);
   StampedIMUValueKeys addIMUState(
-    uint64_t t, const IMU::SharedPtr & imu, const gtsam::NavState & nav);
+    uint64_t t, const IMU::SharedPtr & imu, const gtsam::NavState & nav,
+    const gtsam::imuBias::ConstantBias & bias_estim);
   std::tuple<uint64_t, factor_key_t> addPreintegratedFactor(
     const StampedIMUValueKeys & prev_keys,
     const StampedIMUValueKeys & curr_keys,
     const gtsam::PreintegratedCombinedMeasurements & accum);
-
   gtsam::Pose3 getPose(value_key_t k, bool optimized) const;
+  gtsam::CombinedImuFactor::shared_ptr getIMUFactor(factor_key_t k) const
+  {
+    return (boost::dynamic_pointer_cast<gtsam::CombinedImuFactor>(graph_[k]));
+  }
+
   gtsam::Matrix6 getMarginalizedPoseCovariance(
     value_key_t k, bool optimized) const;
   gtsam::Matrix12 getCal3DS3Covariance(value_key_t k, bool optimized) const;
-
   gtsam::Matrix getMarginalCovariance(value_key_t k, bool optimized) const
   {
     auto & vars = optimized ? optimized_values_ : values_;

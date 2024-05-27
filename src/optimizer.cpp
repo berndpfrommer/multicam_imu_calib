@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <gtsam/navigation/ImuFactor.h>
 #include <gtsam/nonlinear/LevenbergMarquardtOptimizer.h>
 #include <gtsam/slam/BetweenFactor.h>
 #include <gtsam/slam/expressions.h>
@@ -88,12 +87,12 @@ void Optimizer::addIMUPose(
     graph_.addExpressionFactor(
       T_identity, gtsam::Pose3(), utilities::makeNoise6(1e-6, 1e-6));
     imu->addPoseFactorKey(imu_keys.t, getLastFactorKey());
-// #define IDENTITY_CHECK
-#ifdef IDENTITY_CHECK
     const gtsam::Pose3 I =
       (values_.at<gtsam::Pose3>(imu_keys.pose_key).inverse() *
        values_.at<gtsam::Pose3>(rig_pose_key)) *
       values_.at<gtsam::Pose3>(imu_calib_key);
+// #define IDENTITY_CHECK
+#ifdef IDENTITY_CHECK
     std::cout << "T_w_i: " << std::endl
               << values_.at<gtsam::Pose3>(imu_keys.pose_key) << std::endl;
     std::cout << "T_w_r: " << std::endl
@@ -169,12 +168,13 @@ value_key_t Optimizer::addRigPose(uint64_t t, const gtsam::Pose3 & pose)
 }
 
 StampedIMUValueKeys Optimizer::addIMUState(
-  uint64_t t, const IMU::SharedPtr & imu, const gtsam::NavState & nav)
+  uint64_t t, const IMU::SharedPtr & imu, const gtsam::NavState & nav,
+  const gtsam::imuBias::ConstantBias & bias_estim)
 {
   StampedIMUValueKeys vk(t, getNextKey(), getNextKey(), getNextKey());
   values_.insert(vk.pose_key, nav.pose());
   values_.insert(vk.velocity_key, nav.v());
-  values_.insert(vk.bias_key, gtsam::imuBias::ConstantBias());  // 0 bias init
+  values_.insert(vk.bias_key, bias_estim);  // 0 bias init
 #ifdef DEBUG_SINGULARITIES
   const auto ts = " t= " + std::to_string(t);
   key_to_name_.insert({vk.pose_key, "nav state " + imu->getName() + ts});

@@ -101,7 +101,16 @@ gtsam::Rot3 averageRotationDifference(
     }
   }
   const Eigen::Vector4d v = solver.eigenvectors().col(i_max).real();
-  return (gtsam::Quaternion(v(3), v(0), v(1), v(2)));
+  const gtsam::Quaternion dq_opt(v(3), v(0), v(1), v(2));
+
+  for (size_t i = 0; i < sa1.size(); i++) {
+    const auto dR = sa1[i].rotation.inverse() * sa2[i].rotation;
+    const auto dR_corrected =
+      (gtsam::Rot3(dq_opt).inverse() * dR).axisAngle().second;
+    std::cout << 0 << " angle error: " << dR_corrected << std::endl;
+  }
+
+  return (dq_opt);
 }
 
 gtsam::SharedNoiseModel makeNoise6(double sig_a, double sig_b)

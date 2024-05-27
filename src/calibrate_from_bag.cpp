@@ -41,10 +41,9 @@ void usage()
 namespace multicam_imu_calib
 {
 
+using rclcpp::Time;
 using sensor_msgs::msg::Image;
 using sensor_msgs::msg::Imu;
-using Path = std::filesystem::path;
-using rclcpp::Time;
 
 static rclcpp::Logger get_logger()
 {
@@ -181,6 +180,9 @@ void calibrate_from_bag(
     if (it != topic_to_imu.end()) {
       num_imu_frames += handleIMU(&cal, it->second, imu_list[it->second], msg);
     }
+    // if (num_frames >= 100) {
+    // break;
+    // }
   }
   LOG_INFO(
     "ratio of IMU to camera frames: "
@@ -190,7 +192,7 @@ void calibrate_from_bag(
   cal.runOptimizer();
   //  cal.printErrors(true);
   cal.writeResults(out_dir);
-  cal.runDiagnostics(Path(out_dir) / Path("projections.txt"));
+  cal.runDiagnostics(out_dir);
 }
 
 }  // namespace multicam_imu_calib

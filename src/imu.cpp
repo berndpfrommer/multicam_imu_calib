@@ -266,6 +266,21 @@ void IMU::preintegrateUpTo(uint64_t t)
   }
 }
 
+void IMU::addData(const IMUData & d)
+{
+  data_.push_back(d);
+  avg_data_.t++;  // abuse time as counter
+  avg_data_.acceleration += d.acceleration;
+  avg_data_.omega += d.omega;
+}
+
+gtsam::imuBias::ConstantBias IMU::getPreliminaryBiasEstimate() const
+{
+  const double norm = avg_data_.t != 0 ? (1.0 / avg_data_.t) : 0;
+  return (gtsam::imuBias::ConstantBias(
+    avg_data_.acceleration * norm, avg_data_.omega * norm));
+}
+
 void IMU::addValueKeys(const StampedIMUValueKeys & k)
 {
   value_keys_.push_back(k);
