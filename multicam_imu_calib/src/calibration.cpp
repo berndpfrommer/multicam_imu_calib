@@ -122,6 +122,19 @@ static gtsam::Vector intrinsicsFromYaml(const YAML::Node & intr)
   return (v);
 }
 
+template <typename T>
+static std::unordered_map<std::string, size_t> buildTopicMap(
+  const std::vector<typename T::SharedPtr> & devs)
+{
+  std::unordered_map<std::string, size_t> map;
+  for (size_t i = 0; i < devs.size(); i++) {
+    if (!devs[i]->getTopic().empty()) {
+      map.insert({devs[i]->getTopic(), i});
+    }
+  }
+  return (map);
+}
+
 std::tuple<std::vector<double>, std::vector<int>, std::vector<double>>
 Calibration::sanitizeCoefficients(
   const Camera & cam, const std::vector<double> & coeffs,
@@ -639,6 +652,16 @@ std::vector<StampedAttitude> Calibration::getRigAttitudes(
   return (att);
 }
 
+void Calibration::initializeCameraPosesAndIntrinsics()
+{
+  for (const auto & cam : camera_list_) {
+    addCameraPose(cam, cam->getPose());
+    // TODO(Bernd): make up priors when none are specified in yaml file
+    addCameraPosePrior(cam, cam->getPose(), cam->getPoseNoise());
+    addIntrinsics(cam, cam->getIntrinsics(), cam->getDistortionCoefficients());
+  }
+}
+
 void Calibration::initializeIMUPoses()
 {
   for (const auto & imu : imu_list_) {
@@ -653,6 +676,16 @@ void Calibration::initializeIMUPoses()
     optimizer_->addIMUPose(
       imu, gtsam::Pose3(T_r_i_est, gtsam::Point3(0, 0, 0)), time_to_rig_pose_);
   }
+}
+
+std::unordered_map<std::string, size_t> Calibration::getTopicToCamera() const
+{
+  return (buildTopicMap<Camera>(camera_list_));
+}
+
+std::unordered_map<std::string, size_t> Calibration::getTopicToIMU() const
+{
+  return (buildTopicMap<IMU>(imu_list_));
 }
 
 std::tuple<double, double> Calibration::runOptimizer()

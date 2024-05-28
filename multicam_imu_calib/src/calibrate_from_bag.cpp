@@ -76,42 +76,6 @@ static std::set<std::string> findDetectionTopics(
   return (det_topics);
 }
 
-static std::tuple<
-  Calibration::CameraList, std::unordered_map<std::string, size_t>>
-initializeCalibrationCameras(Calibration * cal)
-{
-  std::unordered_map<std::string, size_t> topic_to_cam;
-  auto cam_list = cal->getCameraList();
-  for (size_t cam_idx = 0; cam_idx < cam_list.size(); cam_idx++) {
-    const auto & cam = cam_list[cam_idx];
-    if (cam->getTopic().empty()) {
-      BOMB_OUT("camera " << cam->getName() << " has no ros topic configured!");
-    }
-    topic_to_cam.insert({cam->getTopic(), cam_idx});
-    cal->addCameraPose(cam, cam->getPose());
-    // TODO(Bernd): make up priors when none are specified in yaml file
-    cal->addCameraPosePrior(cam, cam->getPose(), cam->getPoseNoise());
-    cal->addIntrinsics(
-      cam, cam->getIntrinsics(), cam->getDistortionCoefficients());
-  }
-  return {cam_list, topic_to_cam};
-}
-
-static std::tuple<Calibration::IMUList, std::unordered_map<std::string, size_t>>
-initializeCalibrationIMUs(Calibration * cal)
-{
-  std::unordered_map<std::string, size_t> topic_to_imu;
-  auto imu_list = cal->getIMUList();
-  for (size_t imu_idx = 0; imu_idx < imu_list.size(); imu_idx++) {
-    const auto & imu = imu_list[imu_idx];
-    if (imu->getTopic().empty()) {
-      BOMB_OUT("imu " << imu->getName() << " has no ros topic configured!");
-    }
-    topic_to_imu.insert({imu->getTopic(), imu_idx});
-  }
-  return {imu_list, topic_to_imu};
-}
-
 static size_t handleDetection(
   Calibration * cal, size_t cam_idx, const Camera::SharedPtr & cam, uint64_t t,
   const Detection & det)
@@ -198,8 +162,11 @@ void calibrate_from_bag(
   cal.readConfigFile(config_file);
   front_end.readConfigFile(config_file);
 
-  const auto [cam_list, topic_to_cam] = initializeCalibrationCameras(&cal);
-  const auto [imu_list, topic_to_imu] = initializeCalibrationIMUs(&cal);
+  cal.initializeCameraPosesAndIntrinsics();
+  const auto cam_list = cal.getCameraList();
+  const auto topic_to_cam = cal.getTopicToCamera();
+  const auto imu_list = cal.getIMUList();
+  const auto topic_to_imu = cal.getTopicToIMU();
 
   rosbag2_cpp::Reader reader;
   reader.open(inFile);

@@ -67,6 +67,9 @@ public:
     const std::vector<std::array<double, 2>> & ic);
   void addDetection(size_t cam_idx, uint64_t t, const Detection & detection);
   void addIMUData(size_t imu_idx, const IMUData & data);
+  void initializeCameraPosesAndIntrinsics();
+  std::unordered_map<std::string, size_t> getTopicToCamera() const;
+  std::unordered_map<std::string, size_t> getTopicToIMU() const;
 
   bool hasRigPose(uint64_t t) const;
   std::vector<gtsam::Pose3> getRigPoses(bool optimized) const;
