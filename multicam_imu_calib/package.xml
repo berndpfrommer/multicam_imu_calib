@@ -10,18 +10,22 @@
   <buildtool_depend>ament_cmake_ros</buildtool_depend>
   <buildtool_depend>ament_cmake_auto</buildtool_depend>
 
-  <depend>rclcpp</depend>
-  <depend>rclcpp_components</depend>
   <depend>apriltag_msgs</depend>
   <depend>apriltag_detector</depend>
-  <depend>image_transport</depend>
-  <depend>sensor_msgs</depend>
   <depend>cv_bridge</depend>
-  <depend>gtsam</depend>
-  <depend>yaml-cpp</depend>
-  <depend>rosbag2_cpp</depend>
-  <depend>pluginlib</depend>
   <depend>eigen</depend>
+  <depend>geometry_msgs</depend>
+  <depend>gtsam</depend>
+  <depend>image_transport</depend>
+  <depend>multicam_imu_calib_msgs</depend>
+  <depend>pluginlib</depend>
+  <depend>rosbag2_cpp</depend>
+  <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
+  <depend>sensor_msgs</depend>
+  <depend>yaml-cpp</depend>
+
+  <depend>ament_cmake_auto</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

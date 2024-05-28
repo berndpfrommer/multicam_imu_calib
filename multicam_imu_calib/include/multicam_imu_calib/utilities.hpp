@@ -19,6 +19,7 @@
 #include <gtsam/geometry/Pose3.h>
 #include <gtsam/linear/NoiseModel.h>
 
+#include <geometry_msgs/msg/point.hpp>
 #include <multicam_imu_calib/intrinsics.hpp>
 #include <multicam_imu_calib/stamped_attitude.hpp>
 #include <opencv2/core/core.hpp>
@@ -41,6 +42,7 @@ gtsam::Rot3 averageRotationDifference(
   const std::vector<StampedAttitude> & sa2);
 gtsam::SharedNoiseModel makeNoise6(double sig_a, double sig_b);
 gtsam::SharedNoiseModel makeNoise3(double sig_a);
+geometry_msgs::msg::Point makePoint(double x, double y, double z = 0);
 }  // namespace utilities
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__UTILITIES_HPP_

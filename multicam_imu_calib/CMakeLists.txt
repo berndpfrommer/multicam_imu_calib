@@ -28,15 +28,17 @@ find_package(GTSAM REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 set(ament_dependencies
+  "apriltag_detector"
+  "apriltag_msgs"
+  "cv_bridge"
+  "geometry_msgs"
+  "image_transport"
+  "multicam_imu_calib_msgs"
+  "pluginlib"
   "rclcpp"
   "rclcpp_components"
   "rosbag2_cpp"
-  "image_transport"
-  "cv_bridge"
-  "sensor_msgs"
-  "apriltag_detector"
-  "pluginlib"
-  "apriltag_msgs")
+  "sensor_msgs")
 
 foreach(pkg ${ament_dependencies})
   find_package(${pkg} REQUIRED)
@@ -57,6 +59,10 @@ add_library(${PROJECT_NAME} SHARED
   src/optimizer.cpp
   src/utilities.cpp
   src/diagnostics.cpp
+  src/front_end.cpp
+  src/target.cpp
+  src/apriltag_board_target.cpp
+  src/detector_loader.cpp
   src/gtsam_extensions/Cal3DS3.cpp
   src/gtsam_extensions/Cal3FS2.cpp
 )
@@ -85,13 +91,16 @@ target_compile_features(${PROJECT_NAME}_node PRIVATE cxx_std_17)
 #
 add_executable(calibrate_from_bag
   src/calibrate_from_bag.cpp
-  src/init_pose.cpp
-  src/target.cpp
-  src/apriltag_board_target.cpp
-  src/detector_loader.cpp
-  src/front_end.cpp)
+  src/init_pose.cpp)
 target_link_libraries(calibrate_from_bag ${PROJECT_NAME} opencv_calib3d)
 target_compile_features(calibrate_from_bag PRIVATE cxx_std_17)
+
+#
+# -------- detect
+#
+add_executable(detect  src/detect.cpp)
+target_link_libraries(detect ${PROJECT_NAME} opencv_calib3d)
+target_compile_features(detect PRIVATE cxx_std_17)
 
 # the node must go into the project specific lib directory or else
 # the launch file will not find it
@@ -99,6 +108,7 @@ target_compile_features(calibrate_from_bag PRIVATE cxx_std_17)
 install(TARGETS
   ${PROJECT_NAME}_node
   calibrate_from_bag
+  detect
   DESTINATION lib/${PROJECT_NAME}/)
 
 # the shared library goes into the global lib dir so it can

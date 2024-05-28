@@ -19,7 +19,7 @@
 #include <gtsam/geometry/Pose3.h>
 
 #include <multicam_imu_calib/camera.hpp>
-#include <multicam_imu_calib/detection.hpp>
+#include <multicam_imu_calib_msgs/msg/detection.hpp>
 #include <optional>
 
 namespace multicam_imu_calib
@@ -27,7 +27,8 @@ namespace multicam_imu_calib
 namespace init_pose
 {
 std::optional<gtsam::Pose3> findCameraPose(
-  const Camera::SharedPtr & cam, const Detection::SharedPtr & det);
+  const Camera::SharedPtr & cam,
+  const multicam_imu_calib_msgs::msg::Detection & det);
 }
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__INIT_POSE_HPP_

@@ -40,7 +40,7 @@ void FrontEnd::readConfigFile(const std::string & file)
   }
 }
 
-Detection::SharedPtr FrontEnd::detect(
+FrontEnd::Detection FrontEnd::detect(
   const Target::SharedPtr & target, const Image::ConstSharedPtr & img) const
 {
   return (target->detect(img));

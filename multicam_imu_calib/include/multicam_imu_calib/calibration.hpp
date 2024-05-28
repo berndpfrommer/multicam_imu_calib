@@ -22,10 +22,10 @@
 #include <deque>
 #include <memory>
 #include <multicam_imu_calib/camera.hpp>
-#include <multicam_imu_calib/detection.hpp>
 #include <multicam_imu_calib/imu.hpp>
 #include <multicam_imu_calib/intrinsics.hpp>
 #include <multicam_imu_calib/stamped_attitude.hpp>
+#include <multicam_imu_calib_msgs/msg/detection.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <string>
 #include <unordered_map>
@@ -41,6 +41,7 @@ public:
   using SharedNoiseModel = gtsam::SharedNoiseModel;
   using CameraList = std::vector<Camera::SharedPtr>;
   using IMUList = std::vector<IMU::SharedPtr>;
+  using Detection = multicam_imu_calib_msgs::msg::Detection;
   Calibration();
   void readConfigFile(const std::string & file);
   std::tuple<double, double> runOptimizer();
@@ -64,8 +65,7 @@ public:
   void addProjectionFactors(
     size_t cam_idx, uint64_t t, const std::vector<std::array<double, 3>> & wc,
     const std::vector<std::array<double, 2>> & ic);
-  void addDetection(
-    size_t cam_idx, uint64_t t, const Detection::SharedPtr & detection);
+  void addDetection(size_t cam_idx, uint64_t t, const Detection & detection);
   void addIMUData(size_t imu_idx, const IMUData & data);
 
   bool hasRigPose(uint64_t t) const;

@@ -24,6 +24,7 @@
 #include <multicam_imu_calib/intrinsics.hpp>
 #include <multicam_imu_calib/logging.hpp>
 #include <multicam_imu_calib/utilities.hpp>
+#include <multicam_imu_calib_msgs/msg/detection.hpp>
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core/core.hpp>
 
@@ -37,6 +38,20 @@ namespace utilities = multicam_imu_calib::utilities;
 namespace diagnostics = multicam_imu_calib::diagnostics;
 
 static rclcpp::Logger get_logger() { return (rclcpp::get_logger("imu_test")); }
+
+static multicam_imu_calib_msgs::msg::Detection makeDetection(
+  const std::vector<std::array<double, 3>> & wp,
+  const std::vector<std::array<double, 2>> & ip)
+{
+  multicam_imu_calib_msgs::msg::Detection msg;
+  for (const auto & w : wp) {
+    msg.object_points.push_back(utilities::makePoint(w[0], w[1], w[2]));
+  }
+  for (const auto & i : ip) {
+    msg.image_points.push_back(utilities::makePoint(i[0], i[1]));
+  }
+  return (msg);
+}
 
 TEST(multicam_imu_calib, imu_preintegration)
 {
@@ -104,7 +119,7 @@ TEST(multicam_imu_calib, imu_preintegration)
           cam->getIntrinsics(), cam->getDistortionModel(),
           cam->getDistortionCoefficients(), T_w_c, wc);
         if (calib.hasRigPose(t)) {  // should always be true
-          auto det = std::make_shared<multicam_imu_calib::Detection>(wc, ip);
+          auto det = makeDetection(wc, ip);
           calib.addDetection(0, t, det);
         }
         imu_attitudes.push_back(
@@ -189,7 +204,7 @@ TEST(multicam_imu_calib, imu_extrinsic_single_cam)
           cam->getIntrinsics(), cam->getDistortionModel(),
           cam->getDistortionCoefficients(), T_w_c, wc);
         if (calib.hasRigPose(t)) {  // should always be true
-          auto det = std::make_shared<multicam_imu_calib::Detection>(wc, ip);
+          auto det = makeDetection(wc, ip);
           calib.addDetection(0, t, det);
         }
         imu_attitudes.push_back(
@@ -300,7 +315,7 @@ static std::tuple<double, double, double, double> do_extrinsic_imu_calib(
           cam->getIntrinsics(), cam->getDistortionModel(),
           cam->getDistortionCoefficients(), T_w_r * T_r_c, wc);
         if (calib.hasRigPose(t)) {  // should always be true
-          auto det = std::make_shared<multicam_imu_calib::Detection>(wc, ip);
+          auto det = makeDetection(wc, ip);
           calib.addDetection(0, t, det);
         }
         for (size_t i_imu = 0; i_imu < imu_updates_per_frame;

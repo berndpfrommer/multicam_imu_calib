@@ -476,9 +476,18 @@ void Calibration::addProjectionFactors(
 }
 
 void Calibration::addDetection(
-  size_t cam_idx, uint64_t t, const Detection::SharedPtr & det)
+  size_t cam_idx, uint64_t t, const Detection & det)
 {
-  addProjectionFactors(cam_idx, t, det->world_points, det->image_points);
+  std::vector<std::array<double, 3>> w_pts;
+  for (const auto & wp : det.object_points) {
+    w_pts.push_back({wp.x, wp.y, wp.z});
+  }
+  std::vector<std::array<double, 2>> i_pts;
+  for (const auto & ip : det.image_points) {
+    i_pts.push_back({ip.x, ip.y});
+  }
+
+  addProjectionFactors(cam_idx, t, w_pts, i_pts);
 }
 
 void Calibration::addIMUData(size_t imu_idx, const IMUData & data)

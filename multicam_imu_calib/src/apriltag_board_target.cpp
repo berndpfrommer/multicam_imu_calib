@@ -17,6 +17,7 @@
 #include <multicam_imu_calib/apriltag_board_target.hpp>
 #include <multicam_imu_calib/front_end.hpp>
 #include <multicam_imu_calib/logging.hpp>
+#include <multicam_imu_calib/utilities.hpp>
 
 #ifdef USE_CV_BRIDGE_HPP
 #include <cv_bridge/cv_bridge.hpp>
@@ -37,13 +38,13 @@ AprilTagBoardTarget::~AprilTagBoardTarget()
   detector_.reset();  // remove reference explicitly for debugging
 }
 
-Detection::SharedPtr AprilTagBoardTarget::detect(
+AprilTagBoardTarget::Detection AprilTagBoardTarget::detect(
   const Image::ConstSharedPtr & img)
 {
-  auto det = std::make_shared<Detection>();
   const auto cvImg = cv_bridge::toCvShare(img, "mono8");
   ApriltagArray tagArray;
   detector_->detect(cvImg->image, &tagArray);
+  Detection det;
   if (!tagArray.detections.empty()) {
     for (const auto & tag : tagArray.detections) {
       const auto it = id_to_wp_.find(tag.id);
@@ -52,15 +53,14 @@ Detection::SharedPtr AprilTagBoardTarget::detect(
         continue;
       }
       for (const auto & wp : it->second) {
-        det->world_points.push_back({wp[0], wp[1], 0});
+        det.object_points.push_back(utilities::makePoint(wp[0], wp[1]));
       }
       for (const auto & p : tag.corners) {
-        det->image_points.push_back({p.x, p.y});
+        det.image_points.push_back(utilities::makePoint(p.x, p.y));
       }
     }
-    return (det);
   }
-  return (nullptr);
+  return (det);
 }
 
 AprilTagBoardTarget::SharedPtr AprilTagBoardTarget::make(

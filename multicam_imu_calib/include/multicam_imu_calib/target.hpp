@@ -19,7 +19,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include <memory>
-#include <multicam_imu_calib/detection.hpp>
+#include <multicam_imu_calib_msgs/msg/detection.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <string>
 
@@ -32,9 +32,10 @@ public:
   virtual ~Target() {}
   using SharedPtr = std::shared_ptr<Target>;
   using Image = sensor_msgs::msg::Image;
+  using Detection = multicam_imu_calib_msgs::msg::Detection;
   enum Type { INVALID, APRILTAG_BOARD };
   void setName(const std::string & s) { name_ = s; }
-  virtual Detection::SharedPtr detect(const Image::ConstSharedPtr & img) = 0;
+  virtual Detection detect(const Image::ConstSharedPtr & img) = 0;
   Type getType() const { return (type_); }
   static SharedPtr make(FrontEnd * fe, const YAML::Node & node);
   const auto & getName() { return (name_); }
