@@ -31,7 +31,7 @@ def launch_setup(context, *args, **kwargs):
         output='screen',
         namespace=LaunchConfig('name'),
         # prefix=['xterm -e gdb -ex run --args'],
-        name='multicam_imu_calib',
+        name='calibration',
         parameters=[{'config_file': LaunchConfig('config_file')}],
     )
     return [node]

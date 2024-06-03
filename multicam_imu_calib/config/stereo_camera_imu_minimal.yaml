@@ -1,0 +1,143 @@
+#
+# Test file for stereo camera calibration from tag board including IMU
+#
+#
+targets:
+  - name: "apriltag board"
+    type: "apriltag_board"
+    detector: "umich"
+    family: "tf36h11"
+    starting_tag_id: 0
+    tag_size: 0.07
+    rows: 3
+    distance_rows: 0.087
+    columns: 4
+    distance_columns: 0.087
+
+imus:
+  - name: "imu_0"
+    topic: "/vectornav/imu_uncompensated"
+    gyroscope_noise_density: 1e-6 # in rad/sec *  1/sqrt(Hz)
+    accelerometer_noise_density: 1e-6 # in m/sec^2 *  1/sqrt(Hz)
+    gyroscope_random_walk: 1e-4 # gyro bias random walk in rad/sec^2 *  1/sqrt(Hz)
+    accelerometer_random_walk: 1e-4 # accel bias in m/sec^3 *  1/sqrt(Hz)
+    gyro_bias_prior:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      sigma: 0.1 # gives strength of gyro bias prior in rad/s
+    accelerometer_bias_prior:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      sigma: 0.1 # gives strength of accelerometer bias prior in m/s^2
+    pose:
+      position:
+        x: 0.0
+        y: 0.0
+        z: 0.0
+      position_sigma:
+        x: 1.0
+        y: 1.0
+        z: 1.0
+      orientation:
+        x: 0.0
+        y: 0.0
+        z: 0.0
+        w: 1.0
+      orientation_sigma:
+        x: 6.28
+        y: 6.28
+        z: 6.28
+
+cameras:
+  - name: camera_0
+    image_topic: /cam_sync/cam_0/image_raw
+    detections_topic: /cam_sync/cam_0/image_raw/detections
+    pixel_noise: 1.0
+    intrinsics:
+      fx: 840.28
+      fy: 838.01
+      cx: 746.80
+      cy: 550.76
+    intrinsics_sigma:
+      fx: 0.06
+      fy: 0.06
+      cx: 0.04
+      cy: 0.02
+    distortion_model:
+      type: equidistant
+      coefficients:
+        - -0.0121
+        - -0.0075
+        - 0.0017
+        - 0.0007
+      coefficient_mask: [1, 1, 1, 1]
+      coefficient_sigma:
+        - 0.000002
+        - 0.000027
+        - 0.000058
+        - 0.000014
+    pose:
+      position:
+        x: -1.8763e-15
+        y: -1.0508e-17
+        z: 4.9952e-17
+      position_sigma:
+        x: 1e-06
+        y: 1e-06
+        z: 1e-06
+      orientation:
+        x: 7.8517384e-17
+        y: -2.8488314e-16
+        z: -2.6478535e-17
+        w: 1
+      orientation_sigma:
+        x: 1e-06
+        y: 1e-06
+        z: 1e-06
+  - name: camera_1
+    image_topic: /cam_sync/cam_1/image_raw
+    detections_topic: /cam_sync/cam_1/image_raw/detections
+    pixel_noise: 1.0
+    intrinsics:
+      fx: 840.36
+      fy: 837.82
+      cx: 728.53
+      cy: 586.51
+    intrinsics_sigma:
+      fx: 0.05
+      fy: 0.06
+      cx: 0.04
+      cy: 0.02
+    distortion_model:
+      type: equidistant
+      coefficients:
+        - -0.0160
+        - 0.0088
+        - -0.0183
+        - 0.0084
+      coefficient_mask: [1, 1, 1, 1]
+      coefficient_sigma:
+        - 0.000001
+        - 0.000015
+        - 0.000025
+        - 0.000005
+    pose:
+      position:
+        x: 0.18767
+        y: 0.00086755
+        z: -0.0028985
+      position_sigma:
+        x: 2.59613e-05
+        y: 2.1584e-05
+        z: 6.82993e-05
+      orientation:
+        x: -0.0030962486
+        y: 0.011157443
+        z: 0.0010374553
+        w: 0.99993242
+      orientation_sigma:
+        x: 0.00014753637
+        y: 0.00021534493
+        z: 3.758381e-05
