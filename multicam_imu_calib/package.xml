@@ -25,6 +25,7 @@
   <depend>rclcpp_components</depend>
   <depend>sensor_msgs</depend>
   <depend>yaml-cpp</depend>
+  <depend>boost</depend> <!-- to work around gtsam bug on noble? -->
 
   <depend>ament_cmake_auto</depend>
 

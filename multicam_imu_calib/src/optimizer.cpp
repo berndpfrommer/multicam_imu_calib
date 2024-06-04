@@ -410,20 +410,6 @@ void Optimizer::printErrors(const gtsam::Values & vals) const
   }
 }
 
-#if 0
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-function"
-static boost::shared_ptr<gtsam::CombinedImuFactor> my_cast(
-    const boost::shared_ptr<gtsam::NonlinearFactor> & p) {
-    return (boost::dynamic_pointer_cast<gtsam::CombinedImuFactor>(p));
-}
-static std::shared_ptr<gtsam::CombinedImuFactor> my_cast(
-   const std::shared_ptr<gtsam::NonlinearFactor> & p) {
-   return (std::dynamic_pointer_cast<gtsam::CombinedImuFactor>(p));
-}
-#pragma GCC diagnostic pop
-#endif
-
 gtsam::CombinedImuFactor::shared_ptr Optimizer::getIMUFactor(
   factor_key_t k) const
 {
