@@ -42,7 +42,6 @@
 
 #include <gtsam/geometry/Point2.h>
 
-#include <boost/shared_ptr.hpp>
 #include <vector>
 
 /**
@@ -188,16 +187,6 @@ public:
   Eigen::Matrix<double, 2, 12> D2d_calibration(const gtsam::Point2 & p) const;
 
   /// @}
-  /// @name Clone
-  /// @{
-
-  /// @return a deep copy of this object
-  virtual boost::shared_ptr<Cal3DS3> clone() const
-  {
-    return boost::shared_ptr<Cal3DS3>(new Cal3DS3(*this));
-  }
-
-  /// @}
 
   void setCoefficientMask(const std::vector<double> & mask);
 
@@ -206,26 +195,6 @@ private:
   /// @name Advanced Interface
   /// @{
 
-#if 0
-  /** Serialization function */
-  friend class boost::serialization::access;
-  template <class Archive>
-  void serialize(Archive & ar, const unsigned int /*version*/)
-  {
-    ar & BOOST_SERIALIZATION_NVP(fx_);
-    ar & BOOST_SERIALIZATION_NVP(fy_);
-    ar & BOOST_SERIALIZATION_NVP(u0_);
-    ar & BOOST_SERIALIZATION_NVP(v0_);
-    ar & BOOST_SERIALIZATION_NVP(p1_);
-    ar & BOOST_SERIALIZATION_NVP(p2_);
-    ar & BOOST_SERIALIZATION_NVP(k_[0]);
-    ar & BOOST_SERIALIZATION_NVP(k_[1]);
-    ar & BOOST_SERIALIZATION_NVP(k_[2]);
-    ar & BOOST_SERIALIZATION_NVP(k_[3]);
-    ar & BOOST_SERIALIZATION_NVP(k_[4]);
-    ar & BOOST_SERIALIZATION_NVP(k_[5]);
-  }
-#endif
   /// @}
 };
 // This is really ugly, injecting stuff into gtsam's namespace!

@@ -21,7 +21,6 @@
 #include <gtsam/nonlinear/Marginals.h>
 #include <gtsam/nonlinear/NonlinearFactor.h>
 #include <gtsam/nonlinear/PriorFactor.h>
-#include <boost/shared_ptr.hpp>
 
 #include <array>
 #include <map>

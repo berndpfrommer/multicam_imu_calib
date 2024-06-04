@@ -43,7 +43,6 @@
 #include <gtsam/geometry/Point2.h>
 
 #include <array>
-#include <boost/shared_ptr.hpp>
 #include <vector>
 
 /**
@@ -182,16 +181,6 @@ public:
   gtsam::Matrix28 D2d_calibration(const gtsam::Point2 & p) const;
 
   /// @}
-  /// @name Clone
-  /// @{
-
-  /// @return a deep copy of this object
-  virtual boost::shared_ptr<Cal3FS2> clone() const
-  {
-    return boost::shared_ptr<Cal3FS2>(new Cal3FS2(*this));
-  }
-
-  /// @}
   void setCoefficientMask(const std::vector<double> & mask);
 
 private:
@@ -199,22 +188,6 @@ private:
   /// @name Advanced Interface
   /// @{
 
-#if 0
-  /** Serialization function */
-  friend class boost::serialization::access;
-  template <class Archive>
-  void serialize(Archive & ar, const unsigned int /*version*/)
-  {
-    ar & BOOST_SERIALIZATION_NVP(fx_);
-    ar & BOOST_SERIALIZATION_NVP(fy_);
-    ar & BOOST_SERIALIZATION_NVP(u0_);
-    ar & BOOST_SERIALIZATION_NVP(v0_);
-    ar & BOOST_SERIALIZATION_NVP(k1_);
-    ar & BOOST_SERIALIZATION_NVP(k2_);
-    ar & BOOST_SERIALIZATION_NVP(k3_);
-    ar & BOOST_SERIALIZATION_NVP(k4_);
-  }
-#endif
   /// @}
 };
 // This is really ugly, injecting stuff into gtsam's namespace!
