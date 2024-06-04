@@ -424,16 +424,16 @@ static std::shared_ptr<gtsam::CombinedImuFactor> my_cast(
 #pragma GCC diagnostic pop
 #endif
 
-gtsam::CombinedImuFactor::shared_ptr Optimizer::getIMUFactor(factor_key_t k) const
+gtsam::CombinedImuFactor::shared_ptr Optimizer::getIMUFactor(
+  factor_key_t k) const
 {
   using T = gtsam::CombinedImuFactor::shared_ptr;
   using E = T::element_type;
-  auto ps = graph_[k]; // <boost/std>::shared_ptr<gtsam::NonlinearFactor>
-  E * p = dynamic_cast< E* >(ps.get());
+  auto ps = graph_[k];  // <boost/std>::shared_ptr<gtsam::NonlinearFactor>
+  E * p = dynamic_cast<E *>(ps.get());
   return (p ? T(ps, p) : T());
   // return (my_cast(graph_[k]));
 }
-  
 
 void Optimizer::checkForUnconstrainedVariables() const
 {

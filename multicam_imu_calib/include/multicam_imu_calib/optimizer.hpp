@@ -37,7 +37,7 @@
 #define DEBUG_SINGULARITIES
 namespace multicam_imu_calib
 {
-  
+
 class Optimizer
 {
 public:
