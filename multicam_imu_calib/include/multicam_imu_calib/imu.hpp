@@ -23,6 +23,7 @@
 #include <gtsam/navigation/ImuBias.h>
 #include <gtsam/navigation/NavState.h>
 
+#include <boost/shared_ptr.hpp>
 #include <deque>
 #include <map>
 #include <memory>
@@ -110,7 +111,10 @@ private:
   gtsam::Pose3 pose_;            // prior pose
   SharedNoiseModel pose_noise_;  // prior pose noise
   std::unique_ptr<gtsam::PreintegratedCombinedMeasurements> accum_;
-  boost::shared_ptr<gtsam::PreintegratedCombinedMeasurements::Params> params_;
+  decltype(std::declval<gtsam::PreintegrationCombinedParams>().MakeSharedD(
+    0.0)) params_;
+  //std::result_of<decltype(gtsam::PreintegrationCombinedParams::MakeSharedD(
+  //    double))>::type params_;
   gtsam::Vector3 gyro_bias_prior_;
   double gyro_bias_prior_sigma_{0};
   gtsam::Vector3 accel_bias_prior_;

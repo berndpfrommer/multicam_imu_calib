@@ -21,6 +21,7 @@
 #include <gtsam/nonlinear/Marginals.h>
 #include <gtsam/nonlinear/NonlinearFactor.h>
 #include <gtsam/nonlinear/PriorFactor.h>
+#include <boost/shared_ptr.hpp>
 
 #include <array>
 #include <map>
@@ -37,6 +38,7 @@
 #define DEBUG_SINGULARITIES
 namespace multicam_imu_calib
 {
+  
 class Optimizer
 {
 public:
@@ -78,10 +80,7 @@ public:
     const StampedIMUValueKeys & curr_keys,
     const gtsam::PreintegratedCombinedMeasurements & accum);
   gtsam::Pose3 getPose(value_key_t k, bool optimized) const;
-  gtsam::CombinedImuFactor::shared_ptr getIMUFactor(factor_key_t k) const
-  {
-    return (boost::dynamic_pointer_cast<gtsam::CombinedImuFactor>(graph_[k]));
-  }
+  gtsam::CombinedImuFactor::shared_ptr getIMUFactor(factor_key_t k) const;
 
   gtsam::Matrix6 getMarginalizedPoseCovariance(
     value_key_t k, bool optimized) const;

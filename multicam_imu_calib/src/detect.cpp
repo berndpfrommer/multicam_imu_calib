@@ -119,7 +119,14 @@ size_t detectInImage(
   serialization.serialize_message(&detections, serialized_msg.get());
 #endif
   writer->write(
-    serialized_msg, topic, detection_array_type, rclcpp::Time(msg->time_stamp));
+    serialized_msg, topic, detection_array_type,
+    rclcpp::Time(
+#ifdef USE_RECV_TIMESTAMP
+      msg->recv_timestamp
+#else
+      msg->time_stamp
+#endif
+      ));
   return (num_points_detected);
 }
 
