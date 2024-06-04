@@ -27,6 +27,7 @@
 #include <multicam_imu_calib/stamped_attitude.hpp>
 #include <multicam_imu_calib_msgs/msg/detection.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <set>
 #include <string>
 #include <unordered_map>
 
@@ -68,7 +69,8 @@ public:
   void addDetection(size_t cam_idx, uint64_t t, const Detection & detection);
   void addIMUData(size_t imu_idx, const IMUData & data);
   void initializeCameraPosesAndIntrinsics();
-  std::unordered_map<std::string, size_t> getTopicToCamera() const;
+  std::unordered_map<std::string, size_t> getTopicToCamera(
+    const std::set<std::string> & det_topics) const;
   std::unordered_map<std::string, size_t> getTopicToIMU() const;
 
   bool hasRigPose(uint64_t t) const;
@@ -79,6 +81,7 @@ public:
     const Camera::SharedPtr & cam) const;
   void initializeIMUPoses();
   void printErrors(bool optimized);
+  gtsam::Pose3 getRigPose(uint64_t t, bool optimized) const;
   gtsam::Pose3 getIMUPose(size_t imu_idx, bool opt) const;
   gtsam::Pose3 getCameraPose(size_t cam_idx, bool opt) const;
 
@@ -90,7 +93,6 @@ private:
   bool applyIMUData(uint64_t t);
   std::vector<StampedAttitude> getRigAttitudes(
     const std::vector<uint64_t> & times) const;
-  gtsam::Pose3 getRigPose(uint64_t t, bool optimized) const;
 
   std::tuple<std::vector<double>, std::vector<int>, std::vector<double>>
   sanitizeCoefficients(

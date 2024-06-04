@@ -32,6 +32,7 @@ set(ament_dependencies
   "apriltag_msgs"
   "cv_bridge"
   "geometry_msgs"
+  "nav_msgs"
   "image_transport"
   "multicam_imu_calib_msgs"
   "pluginlib"
@@ -65,6 +66,7 @@ add_library(${PROJECT_NAME} SHARED
   src/detector_loader.cpp
   src/gtsam_extensions/Cal3DS3.cpp
   src/gtsam_extensions/Cal3FS2.cpp
+  src/init_pose.cpp
 )
 
 ament_target_dependencies(${PROJECT_NAME} ${ament_dependencies})
@@ -77,30 +79,51 @@ target_include_directories(
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
 
-rclcpp_components_register_nodes(${PROJECT_NAME} "${PROJECT_NAME}_ros::MulticamIMUCalib")
+#
+# --------- calibration component
+#
+add_library(${PROJECT_NAME}_component SHARED
+  src/calibration_component.cpp)
+  target_link_libraries(${PROJECT_NAME}_component ${PROJECT_NAME})
+
+rclcpp_components_register_nodes(${PROJECT_NAME}_component "${PROJECT_NAME}::CalibrationComponent")
 
 #
-# -------- node
+# -------- calibration node
 #
-add_executable(${PROJECT_NAME}_node src/multicam_imu_calib_node.cpp)
-target_link_libraries(${PROJECT_NAME}_node ${PROJECT_NAME})
+add_executable(${PROJECT_NAME}_node src/calibration_node.cpp)
+target_link_libraries(${PROJECT_NAME}_node ${PROJECT_NAME}_component)
 target_compile_features(${PROJECT_NAME}_node PRIVATE cxx_std_17)
+
+#
+# --------- front_end component
+#
+add_library(front_end_component SHARED
+  src/front_end_component.cpp)
+  target_link_libraries(front_end_component ${PROJECT_NAME})
+
+rclcpp_components_register_nodes(front_end_component "${PROJECT_NAME}::FrontEndComponent")
+
 
 #
 # -------- calibrate from bag
 #
 add_executable(calibrate_from_bag
-  src/calibrate_from_bag.cpp
-  src/init_pose.cpp)
+  src/calibrate_from_bag.cpp)
 target_link_libraries(calibrate_from_bag ${PROJECT_NAME} opencv_calib3d)
 target_compile_features(calibrate_from_bag PRIVATE cxx_std_17)
 
 #
-# -------- detect
+# -------- detect from bag
 #
 add_executable(detect  src/detect.cpp)
 target_link_libraries(detect ${PROJECT_NAME} opencv_calib3d)
 target_compile_features(detect PRIVATE cxx_std_17)
+
+
+#
+# ------------ installation ----------------------
+#
 
 # the node must go into the project specific lib directory or else
 # the launch file will not find it
@@ -111,13 +134,16 @@ install(TARGETS
   detect
   DESTINATION lib/${PROJECT_NAME}/)
 
-# the shared library goes into the global lib dir so it can
+# the shared libraries go into the global lib dir so they can
 # be used as a composable node by other projects
 
 install(TARGETS
   ${PROJECT_NAME}
+  ${PROJECT_NAME}_component
+  front_end_component
   DESTINATION lib
 )
+
 install(PROGRAMS
   src/diagnostics.py
   DESTINATION lib/${PROJECT_NAME}/)

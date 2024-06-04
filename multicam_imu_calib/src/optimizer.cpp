@@ -153,18 +153,16 @@ void Optimizer::addIMU(const IMU::SharedPtr & imu)
 
 value_key_t Optimizer::addRigPose(uint64_t t, const gtsam::Pose3 & pose)
 {
-  if (t <= current_rig_pose_time_) {
-    BOMB_OUT("repeated or late time for rig pose initialization!");
+  if (time_to_rig_pose_key_.find(t) != time_to_rig_pose_key_.end()) {
+    BOMB_OUT("duplicate rig pose inserted for time " << t);
   }
-  current_rig_pose_time_ = t;
-  current_rig_pose_ = pose;
-  current_rig_pose_key_ = getNextKey();
-  values_.insert(current_rig_pose_key_, pose);
+  const auto pose_key = getNextKey();
+  time_to_rig_pose_key_.insert({t, pose_key});
+  values_.insert(pose_key, pose);
 #ifdef DEBUG_SINGULARITIES
-  key_to_name_.insert(
-    {current_rig_pose_key_, "rig pose t=" + std::to_string(t)});
+  key_to_name_.insert({pose_key, "rig pose t=" + std::to_string(t)});
 #endif
-  return (current_rig_pose_key_);
+  return (pose_key);
 }
 
 StampedIMUValueKeys Optimizer::addIMUState(
@@ -191,10 +189,23 @@ std::tuple<uint64_t, factor_key_t> Optimizer::addPreintegratedFactor(
   graph_.add(gtsam::CombinedImuFactor(
     prev_keys.pose_key, prev_keys.velocity_key, curr_keys.pose_key,
     curr_keys.velocity_key, prev_keys.bias_key, curr_keys.bias_key, accum));
-#if 0
-  std::cout << curr_keys.t << " add imu factor  " << getLastFactorKey()
-            << " err: " << getCombinedIMUFactorError(getLastFactorKey(), false)
+// #define DEBUG_IMUFACTOR
+#ifdef DEBUG_IMUFACTOR
+  std::cout << "adding CombinedImuFactor:" << std::endl;
+  std::cout << "accum: " << std::endl << accum << std::endl;
+  std::cout << "prev bias: " << std::endl
+            << values_.at<gtsam::imuBias::ConstantBias>(prev_keys.bias_key)
             << std::endl;
+  gtsam::NavState state(
+    values_.at<gtsam::Pose3>(prev_keys.pose_key),
+    values_.at<gtsam::Vector3>(prev_keys.velocity_key));
+  std::cout << "prev state: " << std::endl << state << std::endl;
+  const auto nav2 = accum.predict(
+    state, values_.at<gtsam::imuBias::ConstantBias>(prev_keys.bias_key));
+  std::cout << "predicted state: " << std::endl << nav2 << std::endl;
+  const auto [rot_err, pos_err, v_err] =
+    getCombinedIMUFactorError(getLastFactorKey(), false);
+  std::cout << "rot err: " << rot_err.transpose() << std::endl;
 #endif
   return {curr_keys.t, getLastFactorKey()};
 }
@@ -208,13 +219,13 @@ std::vector<factor_key_t> Optimizer::addProjectionFactors(
   if (wc.size() != ic.size()) {
     BOMB_OUT("different number of image and world corners!");
   }
-  if (t != current_rig_pose_time_) {
-    BOMB_OUT(
-      "time: " << t << " does not match rig pose estimate time: "
-               << current_rig_pose_time_);
+  const auto it = time_to_rig_pose_key_.find(t);
+  if (it == time_to_rig_pose_key_.end()) {
+    BOMB_OUT("no rig pose initialized for time " << t);
   }
+  const auto pose_key = it->second;
   gtsam::Expression<gtsam::Pose3> T_r_c(cam->getPoseKey());
-  gtsam::Expression<gtsam::Pose3> T_w_r(current_rig_pose_key_);
+  gtsam::Expression<gtsam::Pose3> T_w_r(pose_key);
 
   for (size_t i = 0; i < wc.size(); i++) {
     const gtsam::Point2 img_point(ic[i][0], ic[i][1]);
@@ -372,8 +383,6 @@ Optimizer::getCombinedIMUFactorError(factor_key_t k, bool optimized) const
   const auto ev = f.evaluateError(
     pv(v, f.key<1>()), vv(v, f.key<2>()), pv(v, f.key<3>()), vv(v, f.key<4>()),
     bv(v, f.key<5>()), bv(v, f.key<6>()));
-  // std::cout << k << " combined imu error: " << ev.block<6, 1>(3, 0).transpose()
-  //          << std::endl;
   // 9-dim error: (rotation, position, velocity)
   return {ev.block<3, 1>(0, 0), ev.block<3, 1>(3, 0), ev.block<3, 1>(6, 0)};
 }
@@ -381,6 +390,9 @@ Optimizer::getCombinedIMUFactorError(factor_key_t k, bool optimized) const
 std::tuple<double, gtsam::Vector3, gtsam::Vector3>
 Optimizer::getIMUExtrinsicsError(factor_key_t k, bool optimized) const
 {
+  if (k < 0) {
+    return {-1.0, gtsam::Vector3::Zero(), gtsam::Vector3::Zero()};
+  }
   const auto f = graph_.at(k);
   const gtsam::NoiseModelFactor & nmf =
     *reinterpret_cast<gtsam::NoiseModelFactor *>(f.get());

@@ -32,7 +32,8 @@ namespace multicam_imu_calib
 {
 static rclcpp::Logger get_logger() { return (rclcpp::get_logger("imu")); }
 
-IMU::IMU(const std::string & name) : name_(name) {}
+IMU::IMU(const std::string & name, size_t idx) : name_(name), index_(idx) {}
+
 IMU::~IMU() {}
 
 void IMU::setGravity(double g)
@@ -117,15 +118,12 @@ void IMU::integrateMeasurement(
             << current_state_ << std::endl;
   std::cout << "integrating meas: " << acc.transpose()
             << " om: " << omega.transpose() << " dt: " << dt_sec << std::endl;
-  std::cout << "velocity before: " << current_state_.velocity().transpose()
-            << std::endl;
-  std::cout << "current state: " << current_state_ << std::endl;
 #endif
   accum_->integrateMeasurement(acc, omega, dt_sec);
 #ifdef DEBUG_INTEGRATION
   const auto nav2 = accum_->predict(
     current_state_, gtsam::imuBias::ConstantBias(gtsam::Vector6::Zero()));
-  std::cout << "velocity after: " << nav2.velocity().transpose() << std::endl;
+  std::cout << "state after virtual update: " << std::endl << nav2 << std::endl;
 #else
   (void)t;
 #endif
@@ -226,6 +224,12 @@ void IMU::initializeWorldPose(uint64_t t, const gtsam::Pose3 & rigPose)
   const gtsam::Rot3 rot(R_2.toRotationMatrix() * R_1);
   initial_pose_ = gtsam::Pose3(rot, rigPose.translation());
   current_state_ = gtsam::NavState(initial_pose_, gtsam::Vector3(0, 0, 0));
+// #define DEBUG_INIT
+#ifdef DEBUG_INIT
+  LOG_INFO("acc vector: " << current_data_.acceleration.transpose());
+  LOG_INFO("initial RIG world pose: " << std::endl << rigPose);
+  LOG_INFO("initial IMU world pose: " << std::endl << initial_pose_);
+#endif
   saveAttitude(t);
 }
 
@@ -276,9 +280,15 @@ void IMU::addData(const IMUData & d)
 
 gtsam::imuBias::ConstantBias IMU::getPreliminaryBiasEstimate() const
 {
+#define DISABLE_BIAS_ESTIMATE
+#ifdef DISABLE_BIAS_ESTIMATE
+  return (gtsam::imuBias::ConstantBias(
+    gtsam::Vector3::Zero(), gtsam::Vector3::Zero()));
+#else
   const double norm = avg_data_.t != 0 ? (1.0 / avg_data_.t) : 0;
   return (gtsam::imuBias::ConstantBias(
     avg_data_.acceleration * norm, avg_data_.omega * norm));
+#endif
 }
 
 void IMU::addValueKeys(const StampedIMUValueKeys & k)

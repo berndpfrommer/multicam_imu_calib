@@ -99,4 +99,11 @@ const Cal3FS2 Camera::makeEquidistantModel(
   return (intr_value);
 }
 
+const std::string Camera::getDetectionsTopic() const
+{
+  return (
+    !detections_topic_.empty() ? detections_topic_
+                               : image_topic_ + "/detections");
+}
+
 }  // namespace multicam_imu_calib

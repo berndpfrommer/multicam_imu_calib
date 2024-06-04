@@ -37,8 +37,6 @@ MulticamIMUCalib::MulticamIMUCalib(const rclcpp::NodeOptions & options)
     rclcpp::NodeOptions(options)
       .automatically_declare_parameters_from_overrides(true))
 {
-  calibration_ = std::make_shared<Calibration>();
-  calibration_->readConfigFile(safe_declare<std::string>("config_file", ""));
 }
 MulticamIMUCalib::~MulticamIMUCalib() {}
 

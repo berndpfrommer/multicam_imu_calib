@@ -164,14 +164,16 @@ void calibrate_from_bag(
 
   cal.initializeCameraPosesAndIntrinsics();
   const auto cam_list = cal.getCameraList();
-  const auto topic_to_cam = cal.getTopicToCamera();
   const auto imu_list = cal.getIMUList();
-  const auto topic_to_imu = cal.getTopicToIMU();
 
   rosbag2_cpp::Reader reader;
   reader.open(inFile);
   auto detection_topics =
     findDetectionTopics(reader.get_all_topics_and_types());
+
+  const auto topic_to_cam = cal.getTopicToCamera(detection_topics);
+  const auto topic_to_imu = cal.getTopicToIMU();
+
   size_t num_points{0}, tot_cam_frames{0}, num_imu_frames{0};
   std::vector<size_t> num_cam_frames(cam_list.size(), 0);
 

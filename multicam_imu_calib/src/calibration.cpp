@@ -122,19 +122,6 @@ static gtsam::Vector intrinsicsFromYaml(const YAML::Node & intr)
   return (v);
 }
 
-template <typename T>
-static std::unordered_map<std::string, size_t> buildTopicMap(
-  const std::vector<typename T::SharedPtr> & devs)
-{
-  std::unordered_map<std::string, size_t> map;
-  for (size_t i = 0; i < devs.size(); i++) {
-    if (!devs[i]->getTopic().empty()) {
-      map.insert({devs[i]->getTopic(), i});
-    }
-  }
-  return (map);
-}
-
 std::tuple<std::vector<double>, std::vector<int>, std::vector<double>>
 Calibration::sanitizeCoefficients(
   const Camera & cam, const std::vector<double> & coeffs,
@@ -237,6 +224,7 @@ void Calibration::parseIntrinsicsAndDistortionModel(
 
 void Calibration::parseCameras(const YAML::Node & cameras)
 {
+  size_t cam_idx{0};
   for (const auto & c : cameras) {
     if (!c["name"]) {
       LOG_WARN("ignoring camera with missing name!");
@@ -250,14 +238,17 @@ void Calibration::parseCameras(const YAML::Node & cameras)
     }
     const auto pose = parsePose(pp);
     gtsam::SharedNoiseModel poseNoise = parsePoseNoise(pp);
-    auto cam = std::make_shared<Camera>(c["name"].as<std::string>());
+    auto cam = std::make_shared<Camera>(c["name"].as<std::string>(), cam_idx++);
     cam->setPoseWithNoise(pose, poseNoise);
     const double pxn = c["pixel_noise"] ? c["pixel_noise"].as<double>() : 1.0;
     cam->setPixelNoise(
       gtsam::noiseModel::Diagonal::Sigmas(gtsam::Vector2::Constant(pxn)));
     parseIntrinsicsAndDistortionModel(cam, c);
-    cam->setTopic(
-      c["ros_topic"] ? c["ros_topic"].as<std::string>() : std::string(""));
+    cam->setImageTopic(
+      c["image_topic"] ? c["image_topic"].as<std::string>() : std::string(""));
+    cam->setDetectionsTopic(
+      c["detections_topic"] ? c["detections_topic"].as<std::string>()
+                            : std::string(""));
     optimizer_->addCamera(cam);
     cameras_.insert({cam->getName(), cam});
     camera_list_.push_back(cam);
@@ -269,6 +260,7 @@ void Calibration::parseCameras(const YAML::Node & cameras)
 
 void Calibration::parseIMUs(const YAML::Node & imus)
 {
+  size_t idx{0};
   for (const auto & i : imus) {
     if (!i["name"]) {
       LOG_WARN("ignoring imu with missing name!");
@@ -279,7 +271,7 @@ void Calibration::parseIMUs(const YAML::Node & imus)
       LOG_WARN("ignoring imu with missing pose!");
       continue;
     }
-    auto imu = std::make_shared<IMU>(i["name"].as<std::string>());
+    auto imu = std::make_shared<IMU>(i["name"].as<std::string>(), idx++);
     imu->setGravity(i["gravity"] ? i["gravity"].as<double>() : 9.81);
     imu->setGyroNoiseDensity(
       i["gyroscope_noise_density"].as<double>());  // rad/sec *  1/sqrt(Hz)
@@ -304,8 +296,7 @@ void Calibration::parseIMUs(const YAML::Node & imus)
     const auto pose = parsePose(pp);
     gtsam::SharedNoiseModel poseNoise = parsePoseNoise(pp);
     imu->setPoseWithNoise(pose, poseNoise);
-    imu->setTopic(
-      i["ros_topic"] ? i["ros_topic"].as<std::string>() : std::string(""));
+    imu->setTopic(i["topic"] ? i["topic"].as<std::string>() : std::string(""));
     imu->parametersComplete();
     optimizer_->addIMU(imu);
 
@@ -678,14 +669,30 @@ void Calibration::initializeIMUPoses()
   }
 }
 
-std::unordered_map<std::string, size_t> Calibration::getTopicToCamera() const
+std::unordered_map<std::string, size_t> Calibration::getTopicToCamera(
+  const std::set<std::string> & det_topics) const
 {
-  return (buildTopicMap<Camera>(camera_list_));
+  std::unordered_map<std::string, size_t> map;
+  for (size_t i = 0; i < camera_list_.size(); i++) {
+    const auto & cam = camera_list_[i];
+    if (det_topics.find(cam->getDetectionsTopic()) != det_topics.end()) {
+      map.insert({camera_list_[i]->getDetectionsTopic(), i});
+    } else {
+      map.insert({camera_list_[i]->getImageTopic(), i});
+    }
+  }
+  return (map);
 }
 
 std::unordered_map<std::string, size_t> Calibration::getTopicToIMU() const
 {
-  return (buildTopicMap<IMU>(imu_list_));
+  std::unordered_map<std::string, size_t> map;
+  for (size_t i = 0; i < imu_list_.size(); i++) {
+    if (!imu_list_[i]->getTopic().empty()) {
+      map.insert({imu_list_[i]->getTopic(), i});
+    }
+  }
+  return (map);
 }
 
 std::tuple<double, double> Calibration::runOptimizer()
@@ -771,14 +778,14 @@ void Calibration::printErrors(bool optimized)
     const auto pfk = imu->getFactorKeys();
     for (const auto & fk : pfk) {
       const auto & fks = fk.second;
-      const auto [e_pose_tot, e_pose_rot, e_pose_pos] =
-        optimizer_->getIMUExtrinsicsError(fks.pose, optimized);
       const auto [e_rot, e_pos, e_vel] =
         optimizer_->getCombinedIMUFactorError(fks.preintegrated, optimized);
+      const auto [e_pose_tot, e_pose_rot, e_pose_pos] =
+        optimizer_->getIMUExtrinsicsError(fks.pose, optimized);
       LOG_INFO(
-        fks.t << " preint(" << fks.preintegrated
+        fks.t << " imufac(" << fks.preintegrated
               << ") rot: " << e_rot.transpose() << " pos: " << e_pos.transpose()
-              << " vel: " << e_vel.transpose() << " pose(" << fks.pose
+              << " vel: " << e_vel.transpose() << " posfac(" << fks.pose
               << ") tot: " << e_pose_tot << " rot: " << e_pose_rot.transpose()
               << " pos: " << e_pose_pos.transpose());
     }

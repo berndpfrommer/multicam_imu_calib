@@ -139,6 +139,7 @@ TEST(multicam_imu_calib, imu_preintegration)
     (T_r_i_est.inverse() * T_r_i.rotation()).axisAngle().second;
   EXPECT_TRUE(std::abs(err) < 1e-6);
   EXPECT_TRUE(imu.testAttitudes(imu_attitudes));
+  // calib.printErrors(false);
   auto [init_err, final_err] = calib.runOptimizer();
   EXPECT_LT(std::abs(init_err), 4e-4);
   EXPECT_LT(std::abs(final_err), 1e-10);
@@ -398,5 +399,6 @@ TEST(multicam_imu_calib, imu_calib_displaced_init)
 int main(int argc, char ** argv)
 {
   testing::InitGoogleTest(&argc, argv);
+  // ::testing::GTEST_FLAG(filter) = "multicam_imu_calib.imu_preintegration";
   return RUN_ALL_TESTS();
 }

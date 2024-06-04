@@ -52,7 +52,7 @@ using rclcpp::Time;
 using sensor_msgs::msg::Image;
 using sensor_msgs::msg::Imu;
 
-static const std::string detection_array_type =
+static const char * detection_array_type =
   "multicam_imu_calib_msgs/msg/DetectionArray";
 
 static rclcpp::Logger get_logger() { return (rclcpp::get_logger("detect")); }

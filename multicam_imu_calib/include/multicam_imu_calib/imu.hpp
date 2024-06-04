@@ -42,11 +42,12 @@ class IMU
 public:
   using SharedPtr = std::shared_ptr<IMU>;
   using SharedNoiseModel = gtsam::SharedNoiseModel;
-  explicit IMU(const std::string & name);
+  explicit IMU(const std::string & name, size_t idx);
   ~IMU();
 
   // ------------ getters
   const auto & getName() const { return (name_); }
+  const auto & getIndex() const { return (index_); }
   const auto & getPose() const { return (pose_); }
   const auto & getPoseNoise() const { return (pose_noise_); }
   const auto getPoseKey() const { return (pose_key_); }
@@ -105,6 +106,7 @@ public:
 
 private:
   std::string name_;
+  size_t index_;
   gtsam::Pose3 pose_;            // prior pose
   SharedNoiseModel pose_noise_;  // prior pose noise
   std::unique_ptr<gtsam::PreintegratedCombinedMeasurements> accum_;

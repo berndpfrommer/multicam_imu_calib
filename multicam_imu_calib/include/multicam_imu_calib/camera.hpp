@@ -37,10 +37,14 @@ public:
   using SharedPtr = std::shared_ptr<Camera>;
   using KMatrix = Eigen::Matrix3d;
   using SharedNoiseModel = gtsam::SharedNoiseModel;
-  explicit Camera(const std::string & name) : name_(name) {}
+  explicit Camera(const std::string & name, size_t idx)
+  : name_(name), index_(idx)
+  {
+  }
 
   // ------------ getters
   const auto & getName() const { return (name_); }
+  const auto & getIndex() const { return (index_); }
   const auto & getPose() const { return (pose_); }
   const auto & getPoseNoise() const { return (pose_noise_); }
   const auto & getIntrinsicsNoise() const { return (intrinsics_noise_); }
@@ -55,7 +59,8 @@ public:
   const auto getIntrinsicsKey() const { return (intrinsics_key_); }
   const auto getPosePriorKey() const { return (pose_prior_key_); }
   std::vector<double> getCoefficientMask() const;
-  const auto & getTopic() const { return (topic_); }
+  const auto & getImageTopic() const { return (image_topic_); }
+  const std::string getDetectionsTopic() const;
   const auto & getFactorKeys() const { return (factor_keys_); }
   const auto & getReOrderConfToOpt() const { return (order_conf_to_opt_); }
   const auto & getReOrderOptToConf() const { return (order_opt_to_conf_); }
@@ -79,7 +84,11 @@ public:
   {
     coefficientSigma_ = cs;
   }
-  void setTopic(const std::string & topic) { topic_ = topic; }
+  void setImageTopic(const std::string & topic) { image_topic_ = topic; }
+  void setDetectionsTopic(const std::string & topic)
+  {
+    detections_topic_ = topic;
+  }
   void setIntrinsicsPriorKey(factor_key_t k) { intrinsics_prior_key_ = k; }
 
   // ------------ other public methods
@@ -96,6 +105,7 @@ public:
 
 private:
   std::string name_;
+  size_t index_;
   gtsam::Pose3 pose_;
   SharedNoiseModel pose_noise_;
   SharedNoiseModel intrinsics_noise_;
@@ -109,7 +119,8 @@ private:
   DistortionCoefficients distortion_coefficients_;
   std::vector<int> mask_;
   std::vector<double> coefficientSigma_;  // coefficient noise
-  std::string topic_;
+  std::string image_topic_;
+  std::string detections_topic_;
   std::map<uint64_t, std::vector<factor_key_t>> factor_keys_;
   std::vector<int> order_opt_to_conf_;
   std::vector<int> order_conf_to_opt_;

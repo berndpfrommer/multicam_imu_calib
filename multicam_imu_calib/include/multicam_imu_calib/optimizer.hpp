@@ -133,9 +133,7 @@ private:
   gtsam::Values optimized_values_;
   std::shared_ptr<gtsam::ISAM2> isam2_;
   value_key_t key_{0};  // starts at zero, gets incremented
-  uint64_t current_rig_pose_time_{0};
-  value_key_t current_rig_pose_key_{-1};
-  gtsam::Pose3 current_rig_pose_;
+  std::unordered_map<uint64_t, value_key_t> time_to_rig_pose_key_;
   gtsam::SharedNoiseModel pixel_noise_;
 #ifdef DEBUG_SINGULARITIES
   std::map<value_key_t, std::string> key_to_name_;
