@@ -42,9 +42,23 @@ class IMU
 public:
   using SharedPtr = std::shared_ptr<IMU>;
   using SharedNoiseModel = gtsam::SharedNoiseModel;
+  class Accumulator
+  {
+  public:
+    explicit Accumulator(const std::string & name) : name_(name) {}
+    void add(const gtsam::Vector3 & a, const gtsam::Vector3 & b);
+    void computeTransform();
+
+  private:
+    gtsam::Matrix3 sum_sq_{gtsam::Matrix3::Zero()};
+    gtsam::Vector3 sum_a_{gtsam::Vector3::Zero()};
+    gtsam::Vector3 sum_b_{gtsam::Vector3::Zero()};
+    size_t cnt_{0};
+    std::string name_;
+  };
+
   explicit IMU(const std::string & name, size_t idx);
   ~IMU();
-
   // ------------ getters
   const auto & getName() const { return (name_); }
   const auto & getIndex() const { return (index_); }
@@ -133,6 +147,9 @@ private:
   StampedIMUValueKeys current_value_keys_;
   size_t num_integrated_{0};  // XXX remove once debugged
   IMUData avg_data_;
+  std::deque<std::pair<uint64_t, gtsam::Pose3>> rig_poses_;
+  Accumulator accum_omega_;
+  Accumulator accum_acc_;
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__IMU_HPP_

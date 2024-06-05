@@ -109,6 +109,7 @@ private:
   std::vector<value_key_t> rig_pose_keys_;
   std::vector<value_key_t> imu_pose_keys_;
   std::unordered_map<uint64_t, value_key_t> time_to_rig_pose_;
+  uint64_t t_rig_{0};
   std::vector<std::vector<uint64_t>>
     detection_times_;  // only camera frame detections
   // image_points_[cam_idx][detection_idx][point_index][x/y]

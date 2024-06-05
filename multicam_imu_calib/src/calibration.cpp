@@ -438,6 +438,10 @@ gtsam::Pose3 Calibration::getRigPose(uint64_t t, bool optimized) const
 
 void Calibration::addRigPose(uint64_t t, const gtsam::Pose3 & pose)
 {
+  if (t <= t_rig_) {
+    BOMB_OUT("got rig pose with t= " << t << " already have: " << t_rig_);
+  }
+  t_rig_ = t;
 #define USE_CAMERA
 #ifdef USE_CAMERA
   rig_pose_keys_.push_back(optimizer_->addRigPose(t, pose));

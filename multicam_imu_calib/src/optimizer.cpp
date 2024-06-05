@@ -175,7 +175,7 @@ StampedIMUValueKeys Optimizer::addIMUState(
   values_.insert(vk.bias_key, bias_estim);  // 0 bias init
 #ifdef DEBUG_SINGULARITIES
   const auto ts = " t= " + std::to_string(t);
-  key_to_name_.insert({vk.pose_key, "nav state " + imu->getName() + ts});
+  key_to_name_.insert({vk.pose_key, "T_w_i " + imu->getName() + ts});
   key_to_name_.insert({vk.velocity_key, "velocity " + imu->getName() + ts});
   key_to_name_.insert({vk.bias_key, "bias " + imu->getName() + ts});
 #endif

@@ -32,7 +32,10 @@ namespace multicam_imu_calib
 {
 static rclcpp::Logger get_logger() { return (rclcpp::get_logger("imu")); }
 
-IMU::IMU(const std::string & name, size_t idx) : name_(name), index_(idx) {}
+IMU::IMU(const std::string & name, size_t idx)
+: name_(name), index_(idx), accum_omega_("omega"), accum_acc_("acc")
+{
+}
 
 IMU::~IMU() {}
 
@@ -129,6 +132,41 @@ void IMU::integrateMeasurement(
 #endif
 }
 
+void IMU::Accumulator::add(const gtsam::Vector3 & a, const gtsam::Vector3 & b)
+{
+  sum_sq_ += a * b.transpose();
+  sum_a_ += a;
+  sum_b_ += b;
+  cnt_++;
+}
+
+void IMU::Accumulator::computeTransform()
+{
+  if (cnt_ < 2) {
+    return;  // not enough for statistic
+  }
+  // Procrustes problem  https://en.wikipedia.org/wiki/Orthogonal_Procrustes_problem
+  // The "A" matrix consist of the vectors in the IMU frame, the "B" matrix in
+  // rig frame, so RA = B means R transforms from IMU to rig.
+  const double n_inv = 1.0 / cnt_;
+  const auto a_mean = sum_a_ * n_inv;
+  const auto b_mean = sum_b_ * n_inv;
+  const auto sq = sum_sq_ * n_inv;
+  const auto sq_bar = a_mean * b_mean.transpose();
+  const gtsam::Matrix3 M = sq - sq_bar;
+  Eigen::BDCSVD<gtsam::Matrix3> svd(
+    M, Eigen::ComputeFullU | Eigen::ComputeFullV);
+  const gtsam::Matrix3 Rr = svd.matrixV() * svd.matrixU().transpose();
+  const auto R = Rr * Rr.determinant();
+#if 0
+  std::cout << name_ << std::endl
+            << " sing values: "
+            << svd.singularValues().asDiagonal().diagonal().transpose()
+            << std::endl;
+#endif
+  const auto rot = gtsam::Rot3(R);
+}
+
 static const gtsam::imuBias::ConstantBias zero_bias(gtsam::Vector6::Zero());
 
 void IMU::updateWorldPose(uint64_t t, const gtsam::Pose3 & rigPose)
@@ -137,20 +175,45 @@ void IMU::updateWorldPose(uint64_t t, const gtsam::Pose3 & rigPose)
   std::cout << "state before pose update: " << std::endl
             << current_state_ << std::endl;
 #endif
+  auto old_state = current_state_;
+#if 1
   current_state_ = accum_->predict(current_state_, zero_bias);
+#else
   // set the IMU world position identical to the rig position
   // TODO(Bernd) use translation from extrinsic calibration if given
-#if 0
   current_state_ = gtsam::NavState(
     current_state_.attitude(), rigPose.translation(),
     gtsam::Velocity3(0, 0, 0) /*linear velocity*/);
-#else
-  (void)rigPose;
+#endif
 #ifdef PRINT_DEBUG
   std::cout << "state after pose update: " << std::endl
             << current_state_ << std::endl;
 #endif
-#endif
+  rig_poses_.push_back({t, rigPose});
+  if (rig_poses_.size() > 2) {
+    const double t0 = rig_poses_[0].first * 1e-9;  // oldest
+    const auto p0 = rig_poses_[0].second;
+    const double t1 = rig_poses_[1].first * 1e-9;
+    const auto & p1 = rig_poses_[1].second;
+    const double t2 = rig_poses_[2].first * 1e-9;  // most recent
+    const auto & p2 = rig_poses_[2].second;
+    const double dt_1 = std::max(1e-6, t1 - t0);
+    const double dt_2 = std::max(1e-6, t2 - t1);
+    const auto v1_r_w = (p1.translation() - p0.translation()) * (1.0 / dt_1);
+    const auto v2_r_w = (p2.translation() - p1.translation()) * (1.0 / dt_2);
+    const auto dv_r_r = p1.rotation().inverse() * (v2_r_w - v1_r_w);
+    const auto dv_i_i =
+      current_state_.bodyVelocity() - old_state.bodyVelocity();
+
+    // logmap() takes *this into argument()
+    const gtsam::Vector3 omega_r_r = p1.rotation().logmap(p2.rotation());
+    const gtsam::Vector3 omega_i_i = gtsam::Rot3::Logmap(accum_->deltaRij());
+    accum_omega_.add(omega_i_i, omega_r_r);
+    accum_acc_.add(dv_i_i, dv_r_r);
+    accum_omega_.computeTransform();
+    rig_poses_.pop_front();
+  }
+
   saveAttitude(t);
 }
 
