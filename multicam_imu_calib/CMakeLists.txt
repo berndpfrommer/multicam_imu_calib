@@ -53,7 +53,6 @@ endif()
 # --------- library
 #
 add_library(${PROJECT_NAME} SHARED
-  src/multicam_imu_calib.cpp
   src/calibration.cpp
   src/imu.cpp
   src/camera.cpp
