@@ -25,7 +25,16 @@ void Camera::setPoseWithNoise(
 {
   pose_noise_ = noise;
   pose_ = pose;
+  has_valid_pose_ = true;
+  has_pose_prior_ = true;
 }
+
+void Camera::setPose(const gtsam::Pose3 & pose)
+{
+  pose_ = pose;
+  has_valid_pose_ = true;
+}
+
 void Camera::setIntrinsics(double fx, double fy, double cx, double cy)
 {
   intrinsics_[0] = fx;

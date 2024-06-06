@@ -172,10 +172,11 @@ bool IMU::Accumulator::computeTransform()
             << " sing values: "
             << svd.singularValues().asDiagonal().diagonal().transpose()
             << std::endl;
-  std::cout << "singval: " << sv.transpose() << std::endl;
 #endif
   tf_ = gtsam::Pose3(gtsam::Rot3(R), gtsam::Vector3(0, 0, 0));
-  const double thresh = 2e-9;
+  // const double thresh = 2e-9;
+  const double thresh = 1e-5;
+  // std::cout << "singval: " << sv.transpose() << std::endl;
   return (std::min(std::min(sv(0), sv(1)), sv(2)) > thresh);
 }
 

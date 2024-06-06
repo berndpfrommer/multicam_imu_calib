@@ -225,21 +225,20 @@ void Calibration::parseIntrinsicsAndDistortionModel(
 void Calibration::parseCameras(const YAML::Node & cameras)
 {
   size_t cam_idx{0};
+  bool found_pose{false};
   for (const auto & c : cameras) {
     if (!c["name"]) {
       LOG_WARN("ignoring camera with missing name!");
       continue;
     }
     LOG_INFO("found camera: " << c["name"]);
-    const auto pp = c["pose"];
-    if (!pp) {
-      LOG_WARN("ignoring camera " << c["name"] << " with missing pose!");
-      continue;
-    }
-    const auto pose = parsePose(pp);
-    gtsam::SharedNoiseModel poseNoise = parsePoseNoise(pp);
     auto cam = std::make_shared<Camera>(c["name"].as<std::string>(), cam_idx++);
-    cam->setPoseWithNoise(pose, poseNoise);
+    if (c["pose"]) {
+      const auto pose = parsePose(c["pose"]);
+      gtsam::SharedNoiseModel poseNoise = parsePoseNoise(c["pose"]);
+      cam->setPoseWithNoise(pose, poseNoise);
+      found_pose = true;
+    }
     const double pxn = c["pixel_noise"] ? c["pixel_noise"].as<double>() : 1.0;
     cam->setPixelNoise(
       gtsam::noiseModel::Diagonal::Sigmas(gtsam::Vector2::Constant(pxn)));
@@ -253,6 +252,18 @@ void Calibration::parseCameras(const YAML::Node & cameras)
     cameras_.insert({cam->getName(), cam});
     camera_list_.push_back(cam);
   }
+  if (camera_list_.empty()) {
+    BOMB_OUT("no cameras found in config file!");
+  }
+
+  if (!found_pose) {
+    auto cam0 = camera_list_[0];
+    LOG_INFO("cam poses missing, placing " << cam0->getName() << " at origin!");
+    const auto sig = Eigen::Matrix<double, 6, 1>::Ones() * 1e-6;
+    cam0->setPoseWithNoise(
+      gtsam::Pose3(), gtsam::noiseModel::Diagonal::Sigmas(sig));
+  }
+
   image_points_.resize(camera_list_.size());
   world_points_.resize(camera_list_.size());
   detection_times_.resize(camera_list_.size());

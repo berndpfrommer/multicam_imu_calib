@@ -75,6 +75,7 @@ public:
   ~IMU();
   // ------------ getters
   const auto & getName() const { return (name_); }
+  const auto & getFrameId() const { return (frame_id_); }
   const auto & getIndex() const { return (index_); }
   const auto & getPose() const { return (pose_); }
   const auto & getPoseNoise() const { return (pose_noise_); }
@@ -114,6 +115,7 @@ public:
   void setCurrentTime(uint64_t t) { current_data_.t = t; }
   void setBiasPriorKey(factor_key_t k) { bias_prior_key_ = k; }
   void setCurrentState(const gtsam::NavState & s) { current_state_ = s; }
+  void setFrameId(const std::string & id) { frame_id_ = id; }
 
   // ------------ others
   void parametersComplete();
@@ -141,6 +143,7 @@ public:
 
 private:
   std::string name_;
+  std::string frame_id_;
   size_t index_;
   gtsam::Pose3 pose_;            // prior pose
   SharedNoiseModel pose_noise_;  // prior pose noise

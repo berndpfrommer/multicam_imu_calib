@@ -44,6 +44,7 @@ public:
 
   // ------------ getters
   const auto & getName() const { return (name_); }
+  const auto & getFrameId() const { return (frame_id_); }
   const auto & getIndex() const { return (index_); }
   const auto & getPose() const { return (pose_); }
   const auto & getPoseNoise() const { return (pose_noise_); }
@@ -64,8 +65,11 @@ public:
   const auto & getFactorKeys() const { return (factor_keys_); }
   const auto & getReOrderConfToOpt() const { return (order_conf_to_opt_); }
   const auto & getReOrderOptToConf() const { return (order_opt_to_conf_); }
+  bool hasValidPose() const { return (has_valid_pose_); }
+  bool hasPosePrior() const { return (has_pose_prior_); }
 
   // ------------ setters
+  void setPose(const gtsam::Pose3 & pose);
   void setPoseWithNoise(
     const gtsam::Pose3 & pose, const SharedNoiseModel & noise);
   void setPoseKey(value_key_t k) { pose_key_ = k; }
@@ -90,6 +94,7 @@ public:
     detections_topic_ = topic;
   }
   void setIntrinsicsPriorKey(factor_key_t k) { intrinsics_prior_key_ = k; }
+  void setFrameId(const std::string & id) { frame_id_ = id; }
 
   // ------------ other public methods
 
@@ -105,6 +110,7 @@ public:
 
 private:
   std::string name_;
+  std::string frame_id_;
   size_t index_;
   gtsam::Pose3 pose_;
   SharedNoiseModel pose_noise_;
@@ -124,6 +130,8 @@ private:
   std::map<uint64_t, std::vector<factor_key_t>> factor_keys_;
   std::vector<int> order_opt_to_conf_;
   std::vector<int> order_conf_to_opt_;
+  bool has_pose_prior_{false};
+  bool has_valid_pose_{false};
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__CAMERA_HPP_

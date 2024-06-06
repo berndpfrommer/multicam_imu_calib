@@ -10,8 +10,10 @@
   <buildtool_depend>ament_cmake_ros</buildtool_depend>
   <buildtool_depend>ament_cmake_auto</buildtool_depend>
 
+  <depend>ament_cmake_auto</depend>
   <depend>apriltag_msgs</depend>
   <depend>apriltag_detector</depend>
+  <depend>boost</depend> <!-- to work around gtsam bug on noble? -->
   <depend>cv_bridge</depend>
   <depend>eigen</depend>
   <depend>geometry_msgs</depend>
@@ -24,10 +26,9 @@
   <depend>rclcpp</depend>
   <depend>rclcpp_components</depend>
   <depend>sensor_msgs</depend>
+  <depend>tf2_ros</depend>
   <depend>yaml-cpp</depend>
-  <depend>boost</depend> <!-- to work around gtsam bug on noble? -->
-
-  <depend>ament_cmake_auto</depend>
+  
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

@@ -16,6 +16,8 @@
 #ifndef MULTICAM_IMU_CALIB__CALIBRATION_COMPONENT_HPP_
 #define MULTICAM_IMU_CALIB__CALIBRATION_COMPONENT_HPP_
 
+#include <tf2_ros/transform_broadcaster.h>
+
 #include <deque>
 #include <multicam_imu_calib/calibration.hpp>
 #include <multicam_imu_calib/camera.hpp>
@@ -23,6 +25,7 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
+#include <geometry_msgs/msg/transform_stamped.hpp>
 
 namespace multicam_imu_calib
 {
@@ -32,6 +35,7 @@ public:
   using DetectionArray = multicam_imu_calib_msgs::msg::DetectionArray;
   using Imu = sensor_msgs::msg::Imu;
   using Odometry = nav_msgs::msg::Odometry;
+  using TFMsg = geometry_msgs::msg::TransformStamped;
   explicit CalibrationComponent(const rclcpp::NodeOptions & options);
   CalibrationComponent(const CalibrationComponent &) = delete;
   CalibrationComponent & operator=(const CalibrationComponent &) = delete;
@@ -102,6 +106,9 @@ private:
   std::vector<IMUHandler::UniquePtr> imu_handlers_;
   std::shared_ptr<rclcpp::Publisher<Odometry>> odom_pub_;
   std::string world_frame_id_;
+  std::string rig_frame_id_;
+  
+  std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__CALIBRATION_COMPONENT_HPP_
