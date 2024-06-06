@@ -266,11 +266,6 @@ void Calibration::parseIMUs(const YAML::Node & imus)
       LOG_WARN("ignoring imu with missing name!");
       continue;
     }
-    const auto pp = i["pose"];
-    if (!pp) {
-      LOG_WARN("ignoring imu with missing pose!");
-      continue;
-    }
     auto imu = std::make_shared<IMU>(i["name"].as<std::string>(), idx++);
     imu->setGravity(i["gravity"] ? i["gravity"].as<double>() : 9.81);
     imu->setGyroNoiseDensity(
@@ -293,9 +288,12 @@ void Calibration::parseIMUs(const YAML::Node & imus)
         p["x"].as<double>(), p["y"].as<double>(), p["z"].as<double>(),
         p["sigma"].as<double>());  // m/s^2
     }
-    const auto pose = parsePose(pp);
-    gtsam::SharedNoiseModel poseNoise = parsePoseNoise(pp);
-    imu->setPoseWithNoise(pose, poseNoise);
+
+    if (i["pose"]) {
+      const auto pose = parsePose(i["pose"]);
+      gtsam::SharedNoiseModel poseNoise = parsePoseNoise(i["pose"]);
+      imu->setPoseWithNoise(pose, poseNoise);
+    }
     imu->setTopic(i["topic"] ? i["topic"].as<std::string>() : std::string(""));
     imu->parametersComplete();
     optimizer_->addIMU(imu);
@@ -503,49 +501,83 @@ void Calibration::addIMUData(size_t imu_idx, const IMUData & data)
   imu_list_[imu_idx]->addData(data);
 }
 
+void Calibration::initializeIMUGraph(
+  uint64_t t_curr, const IMU::SharedPtr & imu)
+{
+  LOG_INFO("initializing IMU graph!");
+  (void)t_curr;
+  const auto & preint = imu->getSavedPreint();
+  assert(!preint.empty());
+  // t_1 is time when integration started, not ended
+  const auto t0 = preint[0].t_1;
+  imu->setCurrentState(gtsam::NavState(
+    getRigPose(t0, false) * imu->getPose(), gtsam::Vector3::Zero()));
+  imu->addValueKeys(optimizer_->addIMUState(
+    t0, imu, imu->getCurrentState(), imu->getPreliminaryBiasEstimate()));
+  const auto vk = imu->getValueKeys().back();
+  // add prior for start velocity to be zero
+  (void)optimizer_->addPrior(
+    vk.velocity_key, gtsam::Vector3(gtsam::Vector3::Zero()),
+    utilities::makeNoise3(1e-3));
+  // and set some bias for the starting prior
+  imu->setBiasPriorKey(optimizer_->addPrior(
+    vk.bias_key, imu->getBiasPrior(), imu->getBiasPriorNoise()));
+  if (add_initial_imu_pose_prior_) {
+    // pin down initial IMU pose for testing
+    (void)optimizer_->addPrior(
+      vk.pose_key, imu->getCurrentState().pose(),
+      utilities::makeNoise6(1e-3 /*angle*/, 1e-3));
+  }
+  for (size_t i = 0; i < preint.size(); i++) {
+    const auto & p = preint[i];
+    auto prev_keys = imu->getValueKeys().back();
+    imu->setCurrentState(gtsam::NavState(
+      getRigPose(p.t_2, false) * imu->getPose(), gtsam::Vector3::Zero()));
+    imu->addValueKeys(optimizer_->addIMUState(
+      p.t_2, imu, imu->getCurrentState(), imu->getPreliminaryBiasEstimate()));
+    const auto current_keys = imu->getValueKeys().back();
+    // LOG_INFO("adding imu factor for t = " << current_keys.t << " vs " << p.t_2);
+    const auto [t, fk] =
+      optimizer_->addPreintegratedFactor(prev_keys, current_keys, p.preint);
+    imu->addPreintegratedFactorKey(t, fk);
+  }
+}
+
 bool Calibration::applyIMUData(uint64_t t)
 {
-  // std::cout << "applying imu data for t = " << t << std::endl;
   size_t num_imus_caught_up = 0;
   for (size_t imu_idx = 0; imu_idx < imu_list_.size(); imu_idx++) {
     auto & imu = imu_list_[imu_idx];
     if (!imu->isPreintegrating()) {
-      imu->drainOldData(t);
+      imu->drainOldData(t);  // draining changes preint state
       if (imu->isPreintegrating()) {
-        // found data preceeding t, can initialize IMU pose from accelerometer
-        imu->initializeWorldPose(t, getRigPose(t, false));
-        imu->addValueKeys(optimizer_->addIMUState(
-          t, imu, imu->getCurrentState(), imu->getPreliminaryBiasEstimate()));
-        const auto vk = imu->getValueKeys().back();
-        // add prior for start velocity to be zero
-        (void)optimizer_->addPrior(
-          vk.velocity_key, gtsam::Vector3(gtsam::Vector3::Zero()),
-          utilities::makeNoise3(1e-3));
-        imu->setBiasPriorKey(optimizer_->addPrior(
-          vk.bias_key, imu->getBiasPrior(), imu->getBiasPriorNoise()));
-        if (add_initial_imu_pose_prior_) {
-          // pin down initial IMU pose for testing
-          (void)optimizer_->addPrior(
-            vk.pose_key, imu->getCurrentState().pose(),
-            utilities::makeNoise6(1e-3 /*angle*/, 1e-3));
-        }
+        imu->resetPreintegration(t);
       }
     }
     if (imu->isPreintegrating()) {
       imu->preintegrateUpTo(t);
       if (imu->isPreintegratedUpTo(t)) {
-        imu->updateWorldPose(
-          t, getRigPose(t, false));  // updates current nav state
-        const auto prev_keys = imu->getValueKeys().back();
-        if (t > prev_keys.t) {
-          imu->addValueKeys(optimizer_->addIMUState(
-            t, imu, imu->getCurrentState(), imu->getPreliminaryBiasEstimate()));
-          const auto current_keys = imu->getValueKeys().back();
-          const auto [t, fk] = optimizer_->addPreintegratedFactor(
-            prev_keys, current_keys, *(imu->getAccum()));
-          imu->addPreintegratedFactorKey(t, fk);
+        if (!imu->hasValidPose()) {
+          imu->updatePoseEstimate(t, getRigPose(t, false));
+          imu->savePreint(t);
+          if (imu->hasValidPose()) {
+            initializeIMUGraph(t, imu);
+          }
         }
-        imu->resetPreintegration();
+        if (imu->hasValidPose()) {
+          imu->updateNavState(t, getRigPose(t, false));
+          const auto prev_keys = imu->getValueKeys().back();
+          if (t > prev_keys.t) {
+            imu->addValueKeys(optimizer_->addIMUState(
+              t, imu, imu->getCurrentState(),
+              imu->getPreliminaryBiasEstimate()));
+            const auto current_keys = imu->getValueKeys().back();
+            const auto [t, fk] = optimizer_->addPreintegratedFactor(
+              prev_keys, current_keys, *(imu->getAccum()));
+            imu->addPreintegratedFactorKey(t, fk);
+          }
+        }
+        imu->resetPreintegration(t);
       }
     }
     if (imu->isPreintegrating() && imu->getCurrentData().t >= t) {
@@ -669,7 +701,8 @@ void Calibration::initializeIMUPoses()
     const auto att_r = getRigAttitudes(times);
     const auto T_r_i_est = utilities::averageRotationDifference(att_r, att_i);
     optimizer_->addIMUPose(
-      imu, gtsam::Pose3(T_r_i_est, gtsam::Point3(0, 0, 0)), time_to_rig_pose_);
+      imu, gtsam::Pose3(T_r_i_est, gtsam::Point3(0, 0, 0)));
+    optimizer_->addIMUPoseFactors(imu, time_to_rig_pose_);
   }
 }
 

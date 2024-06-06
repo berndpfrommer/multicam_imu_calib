@@ -16,6 +16,7 @@
 #ifndef MULTICAM_IMU_CALIB__CALIBRATION_COMPONENT_HPP_
 #define MULTICAM_IMU_CALIB__CALIBRATION_COMPONENT_HPP_
 
+#include <deque>
 #include <multicam_imu_calib/calibration.hpp>
 #include <multicam_imu_calib/camera.hpp>
 #include <multicam_imu_calib_msgs/msg/detection_array.hpp>
@@ -40,20 +41,27 @@ private:
   class DetectionHandler
   {
   public:
-    using SharedPtr = std::shared_ptr<DetectionHandler>;
-    using UniquePtr = std::unique_ptr<DetectionHandler>;
+    using UniquePtr = std::shared_ptr<DetectionHandler>;
     explicit DetectionHandler(
       CalibrationComponent * comp, const Camera::SharedPtr & cam,
       const Calibration::SharedPtr & calib);
     rclcpp::Logger get_logger() { return (component_->get_logger()); }
+    auto & getMsgs() { return (messages_); }
+    void processOldestMessage();
+    const auto & getCamera() { return (camera_); }
+    rcl_time_point_value_t getTime() const;
 
   private:
     void callback(const DetectionArray::ConstSharedPtr & p);
+    void processMsg(const DetectionArray::ConstSharedPtr & msg);
+    void processDetections();
     CalibrationComponent * component_{nullptr};
     Camera::SharedPtr camera_;
     Calibration::SharedPtr calib_;
     rclcpp::Subscription<DetectionArray>::SharedPtr sub_;
+    std::deque<DetectionArray::ConstSharedPtr> messages_;
   };
+
   class IMUHandler
   {
   public:
@@ -65,6 +73,7 @@ private:
 
   private:
     void callback(const Imu::ConstSharedPtr & p);
+    rclcpp::Logger get_logger() { return (component_->get_logger()); }
     CalibrationComponent * component_{nullptr};
     IMU::SharedPtr imu_;
     Calibration::SharedPtr calib_;
@@ -81,9 +90,14 @@ private:
     }
   }
   void subscribe();
-
+  void processMsg(const DetectionArray::ConstSharedPtr & msg);
+  void newDetectionArrived(DetectionHandler * handler);
+  void updateHandlerQueue(DetectionHandler * handler);
+  void printHandlerQueue(const std::string & tag) const;
   // ---------------- variables
   std::shared_ptr<Calibration> calib_;
+  std::multimap<rcl_time_point_value_t, DetectionHandler *>
+    detection_handler_queue_;
   std::vector<DetectionHandler::UniquePtr> detection_handlers_;
   std::vector<IMUHandler::UniquePtr> imu_handlers_;
   std::shared_ptr<rclcpp::Publisher<Odometry>> odom_pub_;

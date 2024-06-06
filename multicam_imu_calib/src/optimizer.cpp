@@ -59,17 +59,21 @@ void Optimizer::addCameraPose(
 }
 
 void Optimizer::addIMUPose(
-  const IMU::SharedPtr & imu, const gtsam::Pose3 & T_r_i_pose,
-  const std::unordered_map<uint64_t, value_key_t> & rig_keys)
+  const IMU::SharedPtr & imu, const gtsam::Pose3 & T_r_i)
 {
   // add the extrinsic calibration pose T_r_i
   const auto imu_calib_key = getNextKey();
   imu->setPoseKey(imu_calib_key);
-  values_.insert(imu_calib_key, T_r_i_pose);
+  values_.insert(imu_calib_key, T_r_i);
 #ifdef DEBUG_SINGULARITIES
   key_to_name_.insert({imu_calib_key, "extr pose " + imu->getName()});
 #endif
+}
 
+void Optimizer::addIMUPoseFactors(
+  const IMU::SharedPtr & imu,
+  const std::unordered_map<uint64_t, value_key_t> & rig_keys)
+{
   // add all the factors
   for (const auto & imu_keys : imu->getValueKeys()) {
     auto it = rig_keys.find(imu_keys.t);
@@ -79,7 +83,7 @@ void Optimizer::addIMUPose(
     auto rig_pose_key = (*it).second;
     gtsam::Expression<gtsam::Pose3> T_w_r(rig_pose_key);
     gtsam::Expression<gtsam::Pose3> T_w_i(imu_keys.pose_key);
-    gtsam::Expression<gtsam::Pose3> T_r_i(imu_calib_key);
+    gtsam::Expression<gtsam::Pose3> T_r_i(imu->getPoseKey());
     // transformPoseTo applies inverse of first pose to second
     // (T_w_i^-1 * T_w_r)^-1 * T_r_i === identity
     gtsam::Expression<gtsam::Pose3> T_identity =
@@ -87,12 +91,12 @@ void Optimizer::addIMUPose(
     graph_.addExpressionFactor(
       T_identity, gtsam::Pose3(), utilities::makeNoise6(1e-6, 1e-6));
     imu->addPoseFactorKey(imu_keys.t, getLastFactorKey());
+// #define IDENTITY_CHECK
+#ifdef IDENTITY_CHECK
     const gtsam::Pose3 I =
       (values_.at<gtsam::Pose3>(imu_keys.pose_key).inverse() *
        values_.at<gtsam::Pose3>(rig_pose_key)) *
-      values_.at<gtsam::Pose3>(imu_calib_key);
-// #define IDENTITY_CHECK
-#ifdef IDENTITY_CHECK
+      values_.at<gtsam::Pose3>(imu->getPoseKey());
     std::cout << "T_w_i: " << std::endl
               << values_.at<gtsam::Pose3>(imu_keys.pose_key) << std::endl;
     std::cout << "T_w_r: " << std::endl

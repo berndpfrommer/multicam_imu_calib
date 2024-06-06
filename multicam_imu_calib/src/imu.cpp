@@ -89,11 +89,19 @@ gtsam::SharedNoiseModel IMU::getBiasPriorNoise() const
     utilities::makeNoise6(accel_bias_prior_sigma_, gyro_bias_prior_sigma_));
 }
 
+void IMU::setPose(const gtsam::Pose3 & pose)
+{
+  pose_ = pose;
+  has_valid_pose_ = true;
+}
+
 void IMU::setPoseWithNoise(
   const gtsam::Pose3 & pose, const gtsam::SharedNoiseModel & noise)
 {
   pose_noise_ = noise;
   pose_ = pose;
+  has_pose_prior_ = true;
+  has_valid_pose_ = true;
 }
 
 void IMU::parametersComplete()
@@ -140,10 +148,10 @@ void IMU::Accumulator::add(const gtsam::Vector3 & a, const gtsam::Vector3 & b)
   cnt_++;
 }
 
-void IMU::Accumulator::computeTransform()
+bool IMU::Accumulator::computeTransform()
 {
   if (cnt_ < 2) {
-    return;  // not enough for statistic
+    return (false);  // not enough for statistic
   }
   // Procrustes problem  https://en.wikipedia.org/wiki/Orthogonal_Procrustes_problem
   // The "A" matrix consist of the vectors in the IMU frame, the "B" matrix in
@@ -158,63 +166,59 @@ void IMU::Accumulator::computeTransform()
     M, Eigen::ComputeFullU | Eigen::ComputeFullV);
   const gtsam::Matrix3 Rr = svd.matrixV() * svd.matrixU().transpose();
   const auto R = Rr * Rr.determinant();
+  const auto sv = svd.singularValues().asDiagonal().diagonal();
 #if 0
   std::cout << name_ << std::endl
             << " sing values: "
             << svd.singularValues().asDiagonal().diagonal().transpose()
             << std::endl;
+  std::cout << "singval: " << sv.transpose() << std::endl;
 #endif
-  const auto rot = gtsam::Rot3(R);
+  tf_ = gtsam::Pose3(gtsam::Rot3(R), gtsam::Vector3(0, 0, 0));
+  const double thresh = 2e-9;
+  return (std::min(std::min(sv(0), sv(1)), sv(2)) > thresh);
 }
 
 static const gtsam::imuBias::ConstantBias zero_bias(gtsam::Vector6::Zero());
 
-void IMU::updateWorldPose(uint64_t t, const gtsam::Pose3 & rigPose)
+void IMU::updateNavState(uint64_t t, const gtsam::Pose3 & T_w_r)
 {
-#ifdef PRINT_DEBUG
-  std::cout << "state before pose update: " << std::endl
-            << current_state_ << std::endl;
-#endif
-  auto old_state = current_state_;
-#if 1
+  (void)t;
+  (void)T_w_r;
   current_state_ = accum_->predict(current_state_, zero_bias);
-#else
-  // set the IMU world position identical to the rig position
-  // TODO(Bernd) use translation from extrinsic calibration if given
-  current_state_ = gtsam::NavState(
-    current_state_.attitude(), rigPose.translation(),
-    gtsam::Velocity3(0, 0, 0) /*linear velocity*/);
-#endif
-#ifdef PRINT_DEBUG
-  std::cout << "state after pose update: " << std::endl
-            << current_state_ << std::endl;
-#endif
+}
+
+void IMU::updatePoseEstimate(uint64_t t, const gtsam::Pose3 & rigPose)
+{
+  auto new_state_ = accum_->predict(current_state_, zero_bias);
   rig_poses_.push_back({t, rigPose});
   if (rig_poses_.size() > 2) {
-    const double t0 = rig_poses_[0].first * 1e-9;  // oldest
     const auto p0 = rig_poses_[0].second;
-    const double t1 = rig_poses_[1].first * 1e-9;
     const auto & p1 = rig_poses_[1].second;
-    const double t2 = rig_poses_[2].first * 1e-9;  // most recent
     const auto & p2 = rig_poses_[2].second;
+#ifdef USE_ACCEL_FOR_POSE_ESTIM
+    const double t0 = rig_poses_[0].first * 1e-9;  // oldest
+    const double t1 = rig_poses_[1].first * 1e-9;
+    const double t2 = rig_poses_[2].first * 1e-9;  // most recent
     const double dt_1 = std::max(1e-6, t1 - t0);
     const double dt_2 = std::max(1e-6, t2 - t1);
     const auto v1_r_w = (p1.translation() - p0.translation()) * (1.0 / dt_1);
     const auto v2_r_w = (p2.translation() - p1.translation()) * (1.0 / dt_2);
     const auto dv_r_r = p1.rotation().inverse() * (v2_r_w - v1_r_w);
     const auto dv_i_i =
-      current_state_.bodyVelocity() - old_state.bodyVelocity();
-
+      new_state_.bodyVelocity() - current_state_.bodyVelocity();
+    accum_acc_.add(
+      dv_i_i, dv_r_r);  // alternative way of computing approx rotation
+#endif
     // logmap() takes *this into argument()
     const gtsam::Vector3 omega_r_r = p1.rotation().logmap(p2.rotation());
     const gtsam::Vector3 omega_i_i = gtsam::Rot3::Logmap(accum_->deltaRij());
     accum_omega_.add(omega_i_i, omega_r_r);
-    accum_acc_.add(dv_i_i, dv_r_r);
-    accum_omega_.computeTransform();
+    if (accum_omega_.computeTransform()) {
+      setPose(accum_omega_.getTransform());
+    }
     rig_poses_.pop_front();
   }
-
-  saveAttitude(t);
 }
 
 void IMU::saveAttitude(uint64_t t)
@@ -224,9 +228,15 @@ void IMU::saveAttitude(uint64_t t)
   }
 }
 
-void IMU::resetPreintegration()
+void IMU::savePreint(uint64_t t2)
+{
+  saved_preint_.emplace_back(*accum_, accum_start_time_, t2);
+}
+
+void IMU::resetPreintegration(uint64_t t)
 {
   accum_->resetIntegrationAndSetBias(zero_bias);
+  accum_start_time_ = t;
   num_integrated_ = 0;
 }
 
@@ -377,5 +387,9 @@ void IMU::addPoseFactorKey(uint64_t t, factor_key_t k)
   }
   it->second.pose = k;
 }
-
+std::ostream & operator<<(std::ostream & os, const IMU::SavedPreint & p)
+{
+  os << "t1: " << p.t_1 << " t2: " << p.t_2;
+  return (os);
+}
 }  // namespace multicam_imu_calib

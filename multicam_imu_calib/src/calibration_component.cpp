@@ -34,9 +34,28 @@ CalibrationComponent::DetectionHandler::DetectionHandler(
       std::placeholders::_1));
 }
 
+rcl_time_point_value_t CalibrationComponent::DetectionHandler::getTime() const
+{
+  const auto & msgs = messages_;
+  return (
+    msgs.empty() ? std::numeric_limits<rcl_time_point_value_t>::min()
+                 : rclcpp::Time(msgs[0]->header.stamp).nanoseconds());
+}
+
 void CalibrationComponent::DetectionHandler::callback(
   const DetectionArray::ConstSharedPtr & msg)
 {
+  messages_.push_back(msg);
+  component_->newDetectionArrived(this);
+}
+
+void CalibrationComponent::DetectionHandler::processOldestMessage()
+{
+  if (messages_.empty()) {
+    BOMB_OUT("empty message queue!");
+  }
+  const DetectionArray::ConstSharedPtr msg = messages_.front();
+  messages_.pop_front();
   const uint64_t t = rclcpp::Time(msg->header.stamp).nanoseconds();
   for (const auto & det : msg->detections) {
     if (!calib_->hasRigPose(t)) {
@@ -87,11 +106,49 @@ CalibrationComponent::CalibrationComponent(const rclcpp::NodeOptions & opt)
   subscribe();
 }
 
+void CalibrationComponent::updateHandlerQueue(DetectionHandler * handler)
+{
+  auto & q = detection_handler_queue_;
+  decltype(detection_handler_queue_)::iterator it;
+  for (it = q.begin(); it != q.end() && (it->second != handler); ++it);
+  if (it == q.end()) {
+    BOMB_OUT("bad detection handler");
+  }
+  q.erase(it);
+  q.insert(decltype(detection_handler_queue_)::value_type(
+    handler->getTime(), handler));
+}
+
+void CalibrationComponent::newDetectionArrived(DetectionHandler * handler)
+{
+  // update handler queue because the new message has already been added
+  // which may require reordering
+  updateHandlerQueue(handler);
+
+  while (!detection_handler_queue_.begin()->second->getMsgs().empty()) {
+    auto h = detection_handler_queue_.begin()->second;
+    h->processOldestMessage();
+    updateHandlerQueue(h);
+  }
+}
+
+void CalibrationComponent::printHandlerQueue(const std::string & tag) const
+{
+  for (const auto & kv : detection_handler_queue_) {
+    std::cout << tag << " " << kv.second->getCamera()->getName() << " "
+              << kv.first << " " << " " << kv.second->getTime() << " "
+              << kv.second->getMsgs().size() << std::endl;
+  }
+}
+
 void CalibrationComponent::subscribe()
 {
   for (const auto & cam : calib_->getCameraList()) {
     detection_handlers_.push_back(
       std::make_unique<DetectionHandler>(this, cam, calib_));
+    auto h = detection_handlers_.back().get();
+    detection_handler_queue_.insert(
+      decltype(detection_handler_queue_)::value_type(h->getTime(), h));
   }
   for (const auto & imu : calib_->getIMUList()) {
     imu_handlers_.push_back(std::make_unique<IMUHandler>(this, imu, calib_));

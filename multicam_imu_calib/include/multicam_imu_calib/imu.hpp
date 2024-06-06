@@ -47,16 +47,30 @@ public:
   public:
     explicit Accumulator(const std::string & name) : name_(name) {}
     void add(const gtsam::Vector3 & a, const gtsam::Vector3 & b);
-    void computeTransform();
+    const auto & getTransform() const { return (tf_); }
+    bool computeTransform();
 
   private:
     gtsam::Matrix3 sum_sq_{gtsam::Matrix3::Zero()};
     gtsam::Vector3 sum_a_{gtsam::Vector3::Zero()};
     gtsam::Vector3 sum_b_{gtsam::Vector3::Zero()};
+    gtsam::Pose3 tf_;
     size_t cnt_{0};
     std::string name_;
   };
 
+  struct SavedPreint
+  {
+    SavedPreint(
+      const gtsam::PreintegratedCombinedMeasurements & p, uint64_t t1,
+      uint64_t t2)
+    : t_1(t1), t_2(t2), preint(p){};
+    uint64_t t_1{0};
+    uint64_t t_2{0};
+    gtsam::PreintegratedCombinedMeasurements preint;
+  };
+  friend std::ostream & operator<<(
+    std::ostream & os, const IMU::SavedPreint & p);
   explicit IMU(const std::string & name, size_t idx);
   ~IMU();
   // ------------ getters
@@ -69,17 +83,20 @@ public:
   const auto & getTopic() const { return (topic_); }
   const auto & getData() const { return (data_); }
   bool isPreintegrating() const { return (is_preintegrating_); }
+  bool hasValidPose() const { return (has_valid_pose_); }
+  bool hasPosePrior() const { return (has_pose_prior_); }
   const auto & getCurrentData() const { return (current_data_); }
   const auto & getCurrentState() const { return (current_state_); }
   const auto & getValueKeys() const { return (value_keys_); }
   const auto & getFactorKeys() const { return (factor_keys_); }
   const auto & getAttitudes() const { return (attitudes_); }
   const auto & getAccum() const { return (accum_); }
-
+  const auto & getSavedPreint() const { return (saved_preint_); }
   gtsam::imuBias::ConstantBias getBiasPrior() const;
   gtsam::SharedNoiseModel getBiasPriorNoise() const;
 
   // ------------ setters
+  void setPose(const gtsam::Pose3 & pose);
   void setPoseWithNoise(
     const gtsam::Pose3 & pose, const SharedNoiseModel & noise);
   void setPoseKey(value_key_t k) { pose_key_ = k; }
@@ -96,6 +113,7 @@ public:
   void setCurrentData(const IMUData & d) { current_data_ = d; }
   void setCurrentTime(uint64_t t) { current_data_.t = t; }
   void setBiasPriorKey(factor_key_t k) { bias_prior_key_ = k; }
+  void setCurrentState(const gtsam::NavState & s) { current_state_ = s; }
 
   // ------------ others
   void parametersComplete();
@@ -106,14 +124,17 @@ public:
   void addValueKeys(const StampedIMUValueKeys & k);
   void addPreintegratedFactorKey(uint64_t t, factor_key_t k);
   void addPoseFactorKey(uint64_t t, factor_key_t k);
+  void updatePoseEstimate(uint64_t t, const gtsam::Pose3 & rigPose);
+  void updateNavState(uint64_t t, const gtsam::Pose3 & rigPose);
+  void savePreint(uint64_t t);
 
   void integrateMeasurement(
     uint64_t t, const gtsam::Vector3 & acc, const gtsam::Vector3 & omega,
     int64_t dt);
   void popData() { data_.pop_front(); }
   void initializeWorldPose(uint64_t t, const gtsam::Pose3 & rigPose);
-  void updateWorldPose(uint64_t t, const gtsam::Pose3 & rigPose);
-  void resetPreintegration();
+  // void updateWorldPose(uint64_t t, const gtsam::Pose3 & rigPose);
+  void resetPreintegration(uint64_t t);
   void saveAttitude(uint64_t t);
   bool testAttitudes(const std::vector<StampedAttitude> & sa) const;
   gtsam::imuBias::ConstantBias getPreliminaryBiasEstimate() const;
@@ -150,6 +171,11 @@ private:
   std::deque<std::pair<uint64_t, gtsam::Pose3>> rig_poses_;
   Accumulator accum_omega_;
   Accumulator accum_acc_;
+  bool has_pose_prior_{false};
+  bool has_valid_pose_{false};
+  uint64_t accum_start_time_{0};
+  std::vector<SavedPreint> saved_preint_;
 };
+std::ostream & operator<<(std::ostream & os, const IMU::SavedPreint & p);
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__IMU_HPP_

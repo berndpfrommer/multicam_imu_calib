@@ -93,6 +93,7 @@ private:
   bool applyIMUData(uint64_t t);
   std::vector<StampedAttitude> getRigAttitudes(
     const std::vector<uint64_t> & times) const;
+  void initializeIMUGraph(uint64_t t, const IMU::SharedPtr &imu);
 
   std::tuple<std::vector<double>, std::vector<int>, std::vector<double>>
   sanitizeCoefficients(

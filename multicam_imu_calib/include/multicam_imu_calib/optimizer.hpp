@@ -49,8 +49,9 @@ public:
   std::tuple<double, double> optimize();
   void setPixelNoise(double noise);
   void addCameraPose(const Camera::SharedPtr & cam, const gtsam::Pose3 & T_r_c);
-  void addIMUPose(
-    const IMU::SharedPtr & imu, const gtsam::Pose3 & T_r_i,
+  void addIMUPose(const IMU::SharedPtr & imu, const gtsam::Pose3 & T_r_i);
+  void addIMUPoseFactors(
+    const IMU::SharedPtr & imu,
     const std::unordered_map<uint64_t, value_key_t> & rig_keys);
 
   template <class T>

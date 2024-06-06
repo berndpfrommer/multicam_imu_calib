@@ -31,24 +31,24 @@ imus:
       y: 0.0
       z: 0.0
       sigma: 0.1 # gives strength of accelerometer bias prior in m/s^2
-    pose:
-      position:
-        x: 0.0
-        y: 0.0
-        z: 0.0
-      position_sigma:
-        x: 1.0
-        y: 1.0
-        z: 1.0
-      orientation:
-        x: 0.0
-        y: 0.0
-        z: 0.0
-        w: 1.0
-      orientation_sigma:
-        x: 6.28
-        y: 6.28
-        z: 6.28
+#     pose:
+#      position:
+#        x: 0.0
+#        y: 0.0
+#        z: 0.0
+#      position_sigma:
+#        x: 1.0
+#        y: 1.0
+#        z: 1.0
+#      orientation:
+#        x: 0.0
+#        y: 0.0
+#        z: 0.0
+#        w: 1.0
+#      orientation_sigma:
+#        x: 6.28
+#        y: 6.28
+#        z: 6.28
 
 cameras:
   - name: camera_0
