@@ -19,13 +19,14 @@
 #include <tf2_ros/transform_broadcaster.h>
 
 #include <deque>
+#include <geometry_msgs/msg/transform_stamped.hpp>
 #include <multicam_imu_calib/calibration.hpp>
 #include <multicam_imu_calib/camera.hpp>
 #include <multicam_imu_calib_msgs/msg/detection_array.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
-#include <geometry_msgs/msg/transform_stamped.hpp>
+#include <std_srvs/srv/trigger.hpp>
 
 namespace multicam_imu_calib
 {
@@ -36,6 +37,7 @@ public:
   using Imu = sensor_msgs::msg::Imu;
   using Odometry = nav_msgs::msg::Odometry;
   using TFMsg = geometry_msgs::msg::TransformStamped;
+  using Trigger = std_srvs::srv::Trigger;
   explicit CalibrationComponent(const rclcpp::NodeOptions & options);
   CalibrationComponent(const CalibrationComponent &) = delete;
   CalibrationComponent & operator=(const CalibrationComponent &) = delete;
@@ -98,6 +100,9 @@ private:
   void newDetectionArrived(DetectionHandler * handler);
   void updateHandlerQueue(DetectionHandler * handler);
   void printHandlerQueue(const std::string & tag) const;
+  void calibrate(
+    const Trigger::Request::SharedPtr req, Trigger::Response::SharedPtr res);
+
   // ---------------- variables
   std::shared_ptr<Calibration> calib_;
   std::multimap<rcl_time_point_value_t, DetectionHandler *>
@@ -107,8 +112,8 @@ private:
   std::shared_ptr<rclcpp::Publisher<Odometry>> odom_pub_;
   std::string world_frame_id_;
   std::string rig_frame_id_;
-  
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+  rclcpp::Service<Trigger>::SharedPtr srvs_calib_;
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__CALIBRATION_COMPONENT_HPP_

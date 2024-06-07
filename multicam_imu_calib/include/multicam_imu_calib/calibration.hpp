@@ -58,10 +58,17 @@ public:
   void addIntrinsics(
     const Camera::SharedPtr & cam, const Intrinsics & intr,
     const std::vector<double> & dist);
-  void addCameraPose(const Camera::SharedPtr & cam, const gtsam::Pose3 & T_r_c);
-  void addCameraPosePrior(
-    const Camera::SharedPtr & cam, const gtsam::Pose3 & T_r_c,
+
+  void addPose(const Camera::SharedPtr & dev, const gtsam::Pose3 & T_r_d);
+  void addPose(const IMU::SharedPtr & dev, const gtsam::Pose3 & T_r_d);
+
+  void addPosePrior(
+    const Camera::SharedPtr & dev, const gtsam::Pose3 & T_r_d,
     const SharedNoiseModel & noise);
+  void addPosePrior(
+    const IMU::SharedPtr & dev, const gtsam::Pose3 & T_r_d,
+    const SharedNoiseModel & noise);
+
   void addRigPose(uint64_t t, const gtsam::Pose3 & pose);
   void addProjectionFactors(
     size_t cam_idx, uint64_t t, const std::vector<std::array<double, 3>> & wc,
@@ -80,6 +87,7 @@ public:
   DistortionCoefficients getOptimizedDistortionCoefficients(
     const Camera::SharedPtr & cam) const;
   void initializeIMUPoses();
+  void initializeIMUWorldPoses();
   void printErrors(bool optimized);
   gtsam::Pose3 getRigPose(uint64_t t, bool optimized) const;
   gtsam::Pose3 getIMUPose(size_t imu_idx, bool opt) const;
@@ -93,7 +101,7 @@ private:
   bool applyIMUData(uint64_t t);
   std::vector<StampedAttitude> getRigAttitudes(
     const std::vector<uint64_t> & times) const;
-  void initializeIMUGraph(uint64_t t, const IMU::SharedPtr &imu);
+  void initializeIMUGraph(uint64_t t, const IMU::SharedPtr & imu);
 
   std::tuple<std::vector<double>, std::vector<int>, std::vector<double>>
   sanitizeCoefficients(

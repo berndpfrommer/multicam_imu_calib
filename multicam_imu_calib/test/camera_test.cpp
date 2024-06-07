@@ -257,7 +257,7 @@ void test_single_cam(
   calib.readConfigFile(fname);
   const auto cam = calib.getCameraList()[0];  // first camera
 
-  calib.addCameraPose(cam, cam->getPose());  // perfect init
+  calib.addPose(cam, cam->getPose());  // perfect init
   const auto intr_start = disturbIntrinsics(cam->getIntrinsics(), 0.2);
   // start with zero distortion coefficients
   DistortionCoefficients dist_start(
@@ -297,8 +297,8 @@ void test_stereo_cam(const std::string & fname)
   const auto num_cams = calib.getCameras().size();
   for (size_t cam_id = 0; cam_id < num_cams; cam_id++) {
     const auto cam = calib.getCameraList()[cam_id];
-    calib.addCameraPose(cam, disturbPose(cam->getPose(), 0.01, 0.03));
-    calib.addCameraPosePrior(cam, cam->getPose(), cam->getPoseNoise());
+    calib.addPose(cam, disturbPose(cam->getPose(), 0.01, 0.03));
+    calib.addPosePrior(cam, cam->getPose(), cam->getPoseNoise());
     intr_start.push_back(disturbIntrinsics(cam->getIntrinsics(), 0.1));
     dist_start.emplace_back(cam->getDistortionCoefficients().size(), 0.0);
     calib.addIntrinsics(cam, intr_start.back(), dist_start.back());

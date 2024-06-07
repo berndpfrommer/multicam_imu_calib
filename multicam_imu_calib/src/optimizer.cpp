@@ -47,29 +47,6 @@ Optimizer::Optimizer()
   isam2_ = std::make_shared<gtsam::ISAM2>(p);
 }
 
-void Optimizer::addCameraPose(
-  const Camera::SharedPtr & cam, const gtsam::Pose3 & T_r_c)
-{
-  const auto pose_key = getNextKey();
-  cam->setPoseKey(pose_key);
-  values_.insert(pose_key, T_r_c);
-#ifdef DEBUG_SINGULARITIES
-  key_to_name_.insert({pose_key, "extr pose " + cam->getName()});
-#endif
-}
-
-void Optimizer::addIMUPose(
-  const IMU::SharedPtr & imu, const gtsam::Pose3 & T_r_i)
-{
-  // add the extrinsic calibration pose T_r_i
-  const auto imu_calib_key = getNextKey();
-  imu->setPoseKey(imu_calib_key);
-  values_.insert(imu_calib_key, T_r_i);
-#ifdef DEBUG_SINGULARITIES
-  key_to_name_.insert({imu_calib_key, "extr pose " + imu->getName()});
-#endif
-}
-
 void Optimizer::addIMUPoseFactors(
   const IMU::SharedPtr & imu,
   const std::unordered_map<uint64_t, value_key_t> & rig_keys)
@@ -425,9 +402,22 @@ gtsam::CombinedImuFactor::shared_ptr Optimizer::getIMUFactor(
   // return (my_cast(graph_[k]));
 }
 
+void Optimizer::checkForUnknownValues() const
+{
+  for (const auto & f : graph_) {
+    for (auto k : f->keys()) {
+      if (values_.find(k) == values_.end()) {
+        std::cout << "not found value with key: " << k
+                  << " for factor:" << std::endl;
+        f->print();
+      }
+    }
+  }
+}
+
 void Optimizer::checkForUnconstrainedVariables() const
 {
-  std::unordered_map<value_key_t, size_t> ref_cnt;
+  std::unordered_map<value_key_t, size_t> ref_cnt;  // ref cnt for all variables
   for (const auto & f : graph_) {
     for (auto k : f->keys()) {
       if (ref_cnt.find(k) == ref_cnt.end()) {
@@ -436,7 +426,7 @@ void Optimizer::checkForUnconstrainedVariables() const
       ref_cnt[k]++;
     }
   }
-  std::map<size_t, std::vector<value_key_t>> cnt_to_keys;
+  std::map<size_t, std::vector<value_key_t>> cnt_to_keys;  // inverse of ref_cnt
   for (const auto & kv : ref_cnt) {
     if (cnt_to_keys.find(kv.second) == cnt_to_keys.end()) {
       cnt_to_keys.insert({kv.second, std::vector<value_key_t>()});

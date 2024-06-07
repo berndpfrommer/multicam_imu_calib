@@ -29,6 +29,7 @@ def launch_setup(context, *args, **kwargs):
         name='calibration_container',
         namespace=LaunchConfig('ns'),
         package='rclcpp_components',
+        # prefix=['xterm -e gdb -ex run --args'],
         executable='component_container',
         composable_node_descriptions=[
             ComposableNode(

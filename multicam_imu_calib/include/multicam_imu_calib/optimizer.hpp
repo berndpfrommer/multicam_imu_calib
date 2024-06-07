@@ -48,12 +48,16 @@ public:
   void addIMU(const IMU::SharedPtr & imu);
   std::tuple<double, double> optimize();
   void setPixelNoise(double noise);
-  void addCameraPose(const Camera::SharedPtr & cam, const gtsam::Pose3 & T_r_c);
-  void addIMUPose(const IMU::SharedPtr & imu, const gtsam::Pose3 & T_r_i);
-  void addIMUPoseFactors(
-    const IMU::SharedPtr & imu,
-    const std::unordered_map<uint64_t, value_key_t> & rig_keys);
-
+  template <typename T>
+  void addPose(const typename T::SharedPtr & dev, const gtsam::Pose3 & T_r_d)
+  {
+    const auto pose_key = getNextKey();
+    dev->setPoseKey(pose_key);
+    values_.insert(pose_key, T_r_d);
+#ifdef DEBUG_SINGULARITIES
+    key_to_name_.insert({pose_key, "extr pose " + dev->getName()});
+#endif
+  }
   template <class T>
   factor_key_t addPrior(
     value_key_t value_key, const T & prior_value,
@@ -62,6 +66,10 @@ public:
     graph_.add(gtsam::PriorFactor(value_key, prior_value, noise));
     return (getLastFactorKey());
   }
+
+  void addIMUPoseFactors(
+    const IMU::SharedPtr & imu,
+    const std::unordered_map<uint64_t, value_key_t> & rig_keys);
 
   factor_key_t addCameraIntrinsics(
     const Camera::SharedPtr & cam, const Intrinsics & intr,
@@ -118,6 +126,7 @@ public:
   getCombinedIMUFactorError(factor_key_t k, bool optimized) const;
   void printErrors(const gtsam::Values & vals) const;
   void checkForUnconstrainedVariables() const;
+  void checkForUnknownValues() const;
 
 private:
   value_key_t getNextKey() { return (key_++); }

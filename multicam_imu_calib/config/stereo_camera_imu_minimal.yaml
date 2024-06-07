@@ -31,25 +31,6 @@ imus:
       y: 0.0
       z: 0.0
       sigma: 0.1 # gives strength of accelerometer bias prior in m/s^2
-#     pose:
-#      position:
-#        x: 0.0
-#        y: 0.0
-#        z: 0.0
-#      position_sigma:
-#        x: 1.0
-#        y: 1.0
-#        z: 1.0
-#      orientation:
-#        x: 0.0
-#        y: 0.0
-#        z: 0.0
-#        w: 1.0
-#      orientation_sigma:
-#        x: 6.28
-#        y: 6.28
-#        z: 6.28
-
 cameras:
   - name: camera_0
     image_topic: /cam_sync/cam_0/image_raw
@@ -78,24 +59,6 @@ cameras:
         - 0.000027
         - 0.000058
         - 0.000014
-    pose:
-      position:
-        x: -1.8763e-15
-        y: -1.0508e-17
-        z: 4.9952e-17
-      position_sigma:
-        x: 1e-06
-        y: 1e-06
-        z: 1e-06
-      orientation:
-        x: 7.8517384e-17
-        y: -2.8488314e-16
-        z: -2.6478535e-17
-        w: 1
-      orientation_sigma:
-        x: 1e-06
-        y: 1e-06
-        z: 1e-06
   - name: camera_1
     image_topic: /cam_sync/cam_1/image_raw
     detections_topic: /cam_sync/cam_1/image_raw/detections
@@ -123,21 +86,3 @@ cameras:
         - 0.000015
         - 0.000025
         - 0.000005
-    pose:
-      position:
-        x: 0.18767
-        y: 0.00086755
-        z: -0.0028985
-      position_sigma:
-        x: 2.59613e-05
-        y: 2.1584e-05
-        z: 6.82993e-05
-      orientation:
-        x: -0.0030962486
-        y: 0.011157443
-        z: 0.0010374553
-        w: 0.99993242
-      orientation_sigma:
-        x: 0.00014753637
-        y: 0.00021534493
-        z: 3.758381e-05

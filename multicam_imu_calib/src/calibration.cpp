@@ -423,19 +423,6 @@ void Calibration::addIntrinsics(
     cam, intr, cam->getDistortionModel(), dist));
 }
 
-void Calibration::addCameraPose(
-  const Camera::SharedPtr & cam, const gtsam::Pose3 & T_r_c)
-{
-  optimizer_->addCameraPose(cam, T_r_c);
-}
-
-void Calibration::addCameraPosePrior(
-  const Camera::SharedPtr & cam, const gtsam::Pose3 & T_r_c,
-  const SharedNoiseModel & noise)
-{
-  cam->setPosePriorKey(optimizer_->addPrior(cam->getPoseKey(), T_r_c, noise));
-}
-
 gtsam::Pose3 Calibration::getRigPose(uint64_t t, bool optimized) const
 {
   auto it = time_to_rig_pose_.find(t);
@@ -690,17 +677,63 @@ std::vector<StampedAttitude> Calibration::getRigAttitudes(
   return (att);
 }
 
+void Calibration::addPose(
+  const Camera::SharedPtr & dev, const gtsam::Pose3 & T_r_d)
+{
+  optimizer_->addPose<Camera>(dev, T_r_d);
+}
+
+void Calibration::addPose(
+  const IMU::SharedPtr & dev, const gtsam::Pose3 & T_r_d)
+{
+  optimizer_->addPose<IMU>(dev, T_r_d);
+}
+
+void Calibration::addPosePrior(
+  const Camera::SharedPtr & dev, const gtsam::Pose3 & T_r_d,
+  const SharedNoiseModel & noise)
+{
+  dev->setPosePriorKey(optimizer_->addPrior(dev->getPoseKey(), T_r_d, noise));
+}
+
+void Calibration::addPosePrior(
+  const IMU::SharedPtr & dev, const gtsam::Pose3 & T_r_d,
+  const SharedNoiseModel & noise)
+{
+  dev->setPosePriorKey(optimizer_->addPrior(dev->getPoseKey(), T_r_d, noise));
+}
+
 void Calibration::initializeCameraPosesAndIntrinsics()
 {
+  // initialize camera poses if given
   for (const auto & cam : camera_list_) {
-    addCameraPose(cam, cam->getPose());
-    // TODO(Bernd): make up priors when none are specified in yaml file
-    addCameraPosePrior(cam, cam->getPose(), cam->getPoseNoise());
+    if (cam->hasValidPose()) {
+      addPose(cam, cam->getPose());
+      if (cam->hasPosePrior()) {
+        LOG_INFO(cam->getName() << " initialized with prior!");
+        addPosePrior(cam, cam->getPose(), cam->getPoseNoise());
+      }
+    }
+    // TODO(Bernd): make up priors and initial values when none are specified in yaml file
     addIntrinsics(cam, cam->getIntrinsics(), cam->getDistortionCoefficients());
   }
 }
 
 void Calibration::initializeIMUPoses()
+{
+  // initialize imu poses if given
+  for (const auto & imu : imu_list_) {
+    if (imu->hasValidPose()) {
+      addPose(imu, imu->getPose());
+      if (imu->hasPosePrior()) {
+        LOG_INFO(imu->getName() << " initialized with prior!");
+        addPosePrior(imu, imu->getPose(), imu->getPoseNoise());
+      }
+    }
+  }
+}
+
+void Calibration::initializeIMUWorldPoses()
 {
   for (const auto & imu : imu_list_) {
     auto att_i = imu->getAttitudes();
@@ -711,7 +744,7 @@ void Calibration::initializeIMUPoses()
 
     const auto att_r = getRigAttitudes(times);
     const auto T_r_i_est = utilities::averageRotationDifference(att_r, att_i);
-    optimizer_->addIMUPose(
+    optimizer_->addPose<IMU>(
       imu, gtsam::Pose3(T_r_i_est, gtsam::Point3(0, 0, 0)));
     optimizer_->addIMUPoseFactors(imu, time_to_rig_pose_);
   }
@@ -750,6 +783,7 @@ std::tuple<double, double> Calibration::runOptimizer()
 
 void Calibration::sanityChecks() const
 {
+  optimizer_->checkForUnknownValues();
   optimizer_->checkForUnconstrainedVariables();
 }
 

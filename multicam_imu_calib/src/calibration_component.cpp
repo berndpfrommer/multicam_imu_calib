@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <algorithm>
 #include <multicam_imu_calib/calibration.hpp>
 #include <multicam_imu_calib/calibration_component.hpp>
 #include <multicam_imu_calib/init_pose.hpp>
@@ -37,9 +38,12 @@ CalibrationComponent::DetectionHandler::DetectionHandler(
 rcl_time_point_value_t CalibrationComponent::DetectionHandler::getTime() const
 {
   const auto & msgs = messages_;
+  // add +1 for any camera that does not have a valid pose, such
+  // that detections from cameras with a valid pose get processed earlier.
   return (
     msgs.empty() ? std::numeric_limits<rcl_time_point_value_t>::min()
-                 : rclcpp::Time(msgs[0]->header.stamp).nanoseconds());
+                 : rclcpp::Time(msgs[0]->header.stamp).nanoseconds() +
+                     static_cast<int64_t>(!camera_->hasValidPose()));
 }
 
 void CalibrationComponent::DetectionHandler::callback(
@@ -78,6 +82,8 @@ void CalibrationComponent::DetectionHandler::processOldestMessage()
         if (T_c_w) {
           const auto T_w_r = calib_->getRigPose(t, false);
           camera_->setPose(((*T_c_w) * T_w_r).inverse());
+          LOG_INFO("initialized pose of camera " << camera_->getName());
+          calib_->addPose(camera_, camera_->getPose());
         }
       }
     }
@@ -114,25 +120,47 @@ CalibrationComponent::CalibrationComponent(const rclcpp::NodeOptions & opt)
 : Node("calibration", opt),
   tf_broadcaster_(std::make_unique<tf2_ros::TransformBroadcaster>(*this))
 {
-  calib_ = std::make_shared<Calibration>();
-  calib_->readConfigFile(safe_declare<std::string>("config_file", ""));
   odom_pub_ = create_publisher<Odometry>("rig_odom", 100);
   world_frame_id_ = safe_declare<std::string>("world_frame_id", "map");
   rig_frame_id_ = safe_declare<std::string>("rig_frame_id", "rig");
+
+  calib_ = std::make_shared<Calibration>();
+  calib_->readConfigFile(safe_declare<std::string>("config_file", ""));
+  calib_->initializeCameraPosesAndIntrinsics();
+  calib_->initializeIMUPoses();
+
+  srvs_calib_ = this->create_service<std_srvs::srv::Trigger>(
+    "calibrate", std::bind(
+                   &CalibrationComponent::calibrate, this,
+                   std::placeholders::_1, std::placeholders::_2));
+
   subscribe();
+}
+
+void CalibrationComponent::calibrate(
+  const Trigger::Request::SharedPtr req, Trigger::Response::SharedPtr res)
+{
+  (void)req;
+  LOG_INFO("starting calibration...");
+  // calib_->sanityChecks();
+  calib_->runOptimizer();
+  LOG_INFO("calibration complete!");
+  res->success = true;
+  res->message = "calib complete";
 }
 
 void CalibrationComponent::updateHandlerQueue(DetectionHandler * handler)
 {
   auto & q = detection_handler_queue_;
-  decltype(detection_handler_queue_)::iterator it;
-  for (it = q.begin(); it != q.end() && (it->second != handler); ++it);
+  using KV = decltype(detection_handler_queue_)::value_type;
+  auto it = std::find_if(q.begin(), q.end(), [handler](const KV & kv) {
+    return (kv.second == handler);
+  });
   if (it == q.end()) {
     BOMB_OUT("bad detection handler");
   }
   q.erase(it);
-  q.insert(decltype(detection_handler_queue_)::value_type(
-    handler->getTime(), handler));
+  q.insert(KV(handler->getTime(), handler));
 }
 
 void CalibrationComponent::newDetectionArrived(DetectionHandler * handler)
@@ -140,19 +168,21 @@ void CalibrationComponent::newDetectionArrived(DetectionHandler * handler)
   // update handler queue because the new message has already been added
   // which may require reordering
   updateHandlerQueue(handler);
-
+  // printHandlerQueue("queue before processing");
   while (!detection_handler_queue_.begin()->second->getMsgs().empty()) {
     auto h = detection_handler_queue_.begin()->second;
     h->processOldestMessage();
     updateHandlerQueue(h);
   }
+  // printHandlerQueue("queue after processing");
 }
 
 void CalibrationComponent::printHandlerQueue(const std::string & tag) const
 {
+  std::cout << tag << ":" << std::endl;
   for (const auto & kv : detection_handler_queue_) {
-    std::cout << tag << " " << kv.second->getCamera()->getName() << " "
-              << kv.first << " " << " " << kv.second->getTime() << " "
+    std::cout << kv.second->getCamera()->getName() << " " << kv.first << " "
+              << " " << kv.second->getTime() << " "
               << kv.second->getMsgs().size() << std::endl;
   }
 }

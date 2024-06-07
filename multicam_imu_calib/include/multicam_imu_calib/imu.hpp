@@ -64,7 +64,9 @@ public:
     SavedPreint(
       const gtsam::PreintegratedCombinedMeasurements & p, uint64_t t1,
       uint64_t t2)
-    : t_1(t1), t_2(t2), preint(p){};
+    : t_1(t1), t_2(t2), preint(p)
+    {
+    }
     uint64_t t_1{0};
     uint64_t t_2{0};
     gtsam::PreintegratedCombinedMeasurements preint;

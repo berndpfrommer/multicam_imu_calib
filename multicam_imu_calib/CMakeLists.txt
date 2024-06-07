@@ -40,7 +40,8 @@ set(ament_dependencies
   "rclcpp_components"
   "rosbag2_cpp"
   "tf2_ros"
-  "sensor_msgs")
+  "sensor_msgs"
+  "std_srvs")
 
 foreach(pkg ${ament_dependencies})
   find_package(${pkg} REQUIRED)
