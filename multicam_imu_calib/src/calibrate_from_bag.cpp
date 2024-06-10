@@ -1,4 +1,4 @@
-// -*-c++-*--------------------------------------------------------------------
+// -*-c++-*---------------------------------------------------------------------------------------
 // Copyright 2024 Bernd Pfrommer <bernd.pfrommer@gmail.com>
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,265 +13,113 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <unistd.h>
-
-#include <chrono>
 #include <filesystem>
-#include <fstream>
-#include <multicam_imu_calib/calibration.hpp>
-#include <multicam_imu_calib/front_end.hpp>
-#include <multicam_imu_calib/imu_data.hpp>
-#include <multicam_imu_calib/init_pose.hpp>
+#include <multicam_imu_calib/calibration_component.hpp>
+#include <multicam_imu_calib/enhanced_player.hpp>
+#include <multicam_imu_calib/front_end_component.hpp>
 #include <multicam_imu_calib/logging.hpp>
-#include <multicam_imu_calib_msgs/msg/detection_array.hpp>
-#include <rclcpp/rclcpp.hpp>
-#include <rclcpp/serialization.hpp>
-#include <rclcpp/serialized_message.hpp>
-#include <rosbag2_cpp/reader.hpp>
-#include <rosbag2_cpp/readers/sequential_reader.hpp>
-#include <sensor_msgs/msg/image.hpp>
-#include <sensor_msgs/msg/imu.hpp>
+#include <rosbag2_transport/recorder.hpp>
 
-void usage()
-{
-  std::cout << "usage:" << std::endl;
-  std::cout << "calibrate_from_bag -b input_bag -o output_dir -c config_file"
-            << std::endl;
-}
-
-namespace multicam_imu_calib
-{
-
-using multicam_imu_calib_msgs::msg::Detection;
-using multicam_imu_calib_msgs::msg::DetectionArray;
-using rclcpp::Time;
-using sensor_msgs::msg::Image;
-using sensor_msgs::msg::Imu;
+using Parameter = rclcpp::Parameter;
 
 static rclcpp::Logger get_logger()
 {
   return (rclcpp::get_logger("calibrate_from_bag"));
 }
 
-template <typename T>
-static typename T::SharedPtr deserialize(
-  const rosbag2_storage::SerializedBagMessageSharedPtr & msg)
-{
-  rclcpp::SerializedMessage serializedMsg(*msg->serialized_data);
-  typename T::SharedPtr m(new T());
-  rclcpp::Serialization<T> serialization;
-  serialization.deserialize_message(&serializedMsg, m.get());
-  return (m);
-}
-
-static std::set<std::string> findDetectionTopics(
-  const std::vector<rosbag2_storage::TopicMetadata> & topic_info)
-{
-  std::set<std::string> det_topics;
-  for (const auto & ti : topic_info) {
-    if (ti.type == "multicam_imu_calib_msgs/msg/DetectionArray") {
-      det_topics.insert(ti.name);
-    }
-  }
-  return (det_topics);
-}
-
-static size_t handleDetection(
-  Calibration * cal, size_t cam_idx, const Camera::SharedPtr & cam, uint64_t t,
-  const Detection & det)
-{
-  if (!cal->hasRigPose(t)) {
-    const auto T_c_w = init_pose::findCameraPose(cam, det);
-    if (T_c_w) {
-      // T_w_r = T_w_c * T_c_r
-      cal->addRigPose(t, (cam->getPose() * (*T_c_w)).inverse());
-    } else {
-      LOG_WARN(t << " cannot find rig pose for cam " << cam->getName());
-    }
-  }
-  if (cal->hasRigPose(t)) {
-    cal->addDetection(cam_idx, t, det);
-  }
-  return (det.object_points.size());
-}
-
-size_t handleImage(
-  Calibration * cal, const FrontEnd & front_end, const size_t cam_idx,
-  const Camera::SharedPtr & cam,
-  rosbag2_storage::SerializedBagMessageSharedPtr & msg)
-{
-  size_t num_points_detected{0};
-  Image::SharedPtr m = deserialize<Image>(msg);
-  const uint64_t t = Time(m->header.stamp).nanoseconds();
-  for (const auto & target : front_end.getTargets()) {
-    const auto det = front_end.detect(target, m);
-    if (!det.object_points.empty()) {
-      num_points_detected += handleDetection(cal, cam_idx, cam, t, det);
-    }
-  }
-  return (num_points_detected);
-}
-
-static size_t handleDetectionArray(
-  Calibration * cal, const size_t cam_idx,
-  const multicam_imu_calib::Camera::SharedPtr & cam,
-  rosbag2_storage::SerializedBagMessageSharedPtr & msg)
-{
-  DetectionArray::SharedPtr m = deserialize<DetectionArray>(msg);
-  const uint64_t t = Time(m->header.stamp).nanoseconds();
-  size_t num_points_detected = 0;
-  for (const auto & det : m->detections) {
-    num_points_detected += handleDetection(cal, cam_idx, cam, t, det);
-  }
-  return (num_points_detected);
-}
-
-static size_t handleIMU(
-  Calibration * cal, const size_t imu_idx,
-  const multicam_imu_calib::IMU::SharedPtr & imu,
-  const rosbag2_storage::SerializedBagMessageSharedPtr & msg)
-{
-  Imu::SharedPtr m = deserialize<Imu>(msg);
-  const uint64_t t = Time(m->header.stamp).nanoseconds();
-  const gtsam::Vector3 acc{
-    {m->linear_acceleration.x, m->linear_acceleration.y,
-     m->linear_acceleration.z}};
-  const gtsam::Vector3 omega{
-    {m->angular_velocity.x, m->angular_velocity.y, m->angular_velocity.z}};
-  cal->addIMUData(imu_idx, IMUData(t, omega, acc));
-
-  (void)imu;
-  return (1);
-}
-
 static void printTopics(
-  const std::string & name,
-  const std::unordered_map<std::string, size_t> & topics)
+  const std::string & label, const std::vector<std::string> & topics)
 {
-  for (const auto & kv : topics) {
-    LOG_INFO(name << " topic: " << kv.first);
+  for (const auto & t : topics) {
+    LOG_INFO(label << ": " << t);
   }
 }
 
-void calibrate_from_bag(
-  const std::string & inFile, const std::string & out_dir,
-  const std::string & config_file)
+static std::shared_ptr<multicam_imu_calib::EnhancedPlayer> makePlayerNode(
+  multicam_imu_calib::CalibrationComponent * calib)
 {
-  FrontEnd front_end;
-  Calibration cal;
-  cal.readConfigFile(config_file);
-  front_end.readConfigFile(config_file);
-
-  cal.initializeCameraPosesAndIntrinsics();
-  const auto cam_list = cal.getCameraList();
-  const auto imu_list = cal.getIMUList();
-
-  rosbag2_cpp::Reader reader;
-  reader.open(inFile);
-  auto detection_topics =
-    findDetectionTopics(reader.get_all_topics_and_types());
-
-  const auto topic_to_cam = cal.getTopicToCamera(detection_topics);
-  const auto topic_to_imu = cal.getTopicToIMU();
-
-  size_t num_points{0}, tot_cam_frames{0}, num_imu_frames{0};
-  std::vector<size_t> num_cam_frames(cam_list.size(), 0);
-
-  while (reader.has_next()) {
-    auto msg = reader.read_next();
-    auto it = topic_to_cam.find(msg->topic_name);
-    if (it != topic_to_cam.end()) {
-      if (detection_topics.find(msg->topic_name) == detection_topics.end()) {
-        num_points +=
-          handleImage(&cal, front_end, it->second, cam_list[it->second], msg);
-      } else {
-        num_points +=
-          handleDetectionArray(&cal, it->second, cam_list[it->second], msg);
-      }
-      tot_cam_frames++;
-      num_cam_frames[it->second]++;
-      if (tot_cam_frames % 100 == 0) {
-        LOG_INFO_FMT(
-          "cam frames: %5zu total cam pts: %8zu, total imu frames: %8zu",
-          tot_cam_frames, num_points, num_imu_frames);
-      }
-    }
-    it = topic_to_imu.find(msg->topic_name);
-    if (it != topic_to_imu.end()) {
-      num_imu_frames += handleIMU(&cal, it->second, imu_list[it->second], msg);
-    }
-    // if (num_frames >= 100) {
-    // break;
-    // }
+  const std::string in_uri =
+    calib->declare_parameter<std::string>("in_bag", "");
+  if (in_uri.empty()) {
+    BOMB_OUT("must provide valid in_bag parameter!");
   }
-  for (size_t i = 0; i < cam_list.size(); i++) {
-    if (num_cam_frames[i] == 0) {
-      LOG_WARN(cam_list[i]->getName() << " found no frames!");
-    } else {
-      LOG_INFO(
-        cam_list[i]->getName() << " found frames: " << num_cam_frames[i]);
-    }
+  LOG_INFO("using input bag: " << in_uri);
+  if (!std::filesystem::exists(in_uri)) {
+    BOMB_OUT("cannot find input bag: " << in_uri);
   }
-  if (tot_cam_frames == 0) {
-    printTopics("camera", topic_to_cam);
-    BOMB_OUT("no camera frames found, are your topics correct?");
-  }
-  LOG_INFO(
-    "ratio of IMU to camera frames: " << num_imu_frames /
-                                           static_cast<double>(tot_cam_frames));
 
-  cal.initializeIMUPoses();
-  // cal.sanityChecks();
-  cal.runOptimizer();
-  //  cal.printErrors(true);
-  cal.writeResults(out_dir);
-  cal.runDiagnostics(out_dir);
+  rclcpp::NodeOptions player_options;
+
+  player_options.parameter_overrides(
+    {Parameter("storage.uri", in_uri),  // Parameter("play.topics", in_topics),
+     Parameter("play.clock_publish_on_topic_publish", true),
+     Parameter("play.start_paused", true), Parameter("play.rate", 1000.0),
+     Parameter("play.disable_keyboard_controls", true)});
+  auto player_node = std::make_shared<multicam_imu_calib::EnhancedPlayer>(
+    "rosbag_player", player_options);
+  player_node->get_logger().set_level(rclcpp::Logger::Level::Warn);
+  const auto detection_topics = calib->getDetectionsTopics();
+  const auto image_topics = calib->getImageTopics();
+  if (!player_node->hasEitherTopics(image_topics, detection_topics)) {
+    BOMB_OUT("missing topics!");
+  }
+
+  return (player_node);
 }
-
-}  // namespace multicam_imu_calib
 
 int main(int argc, char ** argv)
 {
-  int opt;
+  rclcpp::init(argc, argv);
 
-  std::string in_file;
-  std::string out_dir;
-  std::string config_file;
-  while ((opt = getopt(argc, argv, "b:o:c:h")) != -1) {
-    switch (opt) {
-      case 'b':
-        in_file = optarg;
-        break;
-      case 'o':
-        out_dir = optarg;
-        break;
-      case 'c':
-        config_file = optarg;
-        break;
-      case 'h':
-        usage();
-        return (-1);
-        break;
+  rclcpp::executors::SingleThreadedExecutor exec;
 
-      default:
-        std::cout << "unknown option: " << opt << std::endl;
-        usage();
-        return (-1);
-        break;
-    }
+  rclcpp::NodeOptions node_options;
+  node_options.use_intra_process_comms(true);
+
+  auto calib_node =
+    std::make_shared<multicam_imu_calib::CalibrationComponent>(node_options);
+  exec.add_node(calib_node);
+
+  const auto recorded_topics = calib_node->getPublishedTopics();
+  printTopics("recorded topic", recorded_topics);
+
+  auto player_node = makePlayerNode(calib_node.get());
+  exec.add_node(player_node);
+
+  rclcpp::NodeOptions frontend_options;
+  frontend_options.use_intra_process_comms(true);
+  auto frontend_node =
+    std::make_shared<multicam_imu_calib::FrontEndComponent>(frontend_options);
+  // front end node should only subscribe to image topics
+  // if there is no detection topic in the bag
+  frontend_node->setExcludeDetectionTopics(player_node->getTopics());
+  exec.add_node(frontend_node);
+  const std::string out_uri =
+    calib_node->declare_parameter<std::string>("out_bag", "");
+
+  std::shared_ptr<rosbag2_transport::Recorder> recorder_node;
+  if (!out_uri.empty()) {
+    LOG_INFO("writing calibration output bag to: " << out_uri);
+    rclcpp::NodeOptions recorder_options;
+    recorder_options.parameter_overrides(
+      {Parameter("storage.uri", out_uri),
+       Parameter("record.disable_keyboard_controls", true),
+       Parameter("record.topics", recorded_topics)});
+
+    recorder_node = std::make_shared<rosbag2_transport::Recorder>(
+      "rosbag_recorder", recorder_options);
+    exec.add_node(recorder_node);
+  } else {
+    LOG_INFO("no out_bag parameter set, publishing as messages!");
   }
-  if (in_file.empty() || out_dir.empty() || config_file.empty()) {
-    std::cout << "missing input/output/config file name!" << std::endl;
-    usage();
-    return (-1);
-  }
 
-  const auto start = std::chrono::high_resolution_clock::now();
-  multicam_imu_calib::calibrate_from_bag(in_file, out_dir, config_file);
-  const auto stop = std::chrono::high_resolution_clock::now();
-  auto total_duration =
-    std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
-  std::cout << "total time for calibration: " << total_duration.count() * 1e-6
-            << std::endl;
-  return (0);
+  while (player_node->play_next() && rclcpp::ok()) {
+    exec.spin_some();
+  }
+  auto req = std::make_shared<std_srvs::srv::Trigger::Request>();
+  auto resp = std::make_shared<std_srvs::srv::Trigger::Response>();
+  calib_node->calibrate(req, resp);
+
+  rclcpp::shutdown();
+  return 0;
 }

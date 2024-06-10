@@ -34,6 +34,7 @@ imus:
 cameras:
   - name: camera_0
     image_topic: /cam_sync/cam_0/image_raw
+    image_transport: raw
     detections_topic: /cam_sync/cam_0/image_raw/detections
     pixel_noise: 1.0
     intrinsics:
@@ -61,6 +62,7 @@ cameras:
         - 0.000014
   - name: camera_1
     image_topic: /cam_sync/cam_1/image_raw
+    image_transport: raw
     detections_topic: /cam_sync/cam_1/image_raw/detections
     pixel_noise: 1.0
     intrinsics:

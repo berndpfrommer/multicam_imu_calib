@@ -61,6 +61,7 @@ public:
   const auto getPosePriorKey() const { return (pose_prior_key_); }
   std::vector<double> getCoefficientMask() const;
   const auto & getImageTopic() const { return (image_topic_); }
+  const auto & getImageTransport() const { return (image_transport_); }
   const std::string getDetectionsTopic() const;
   const auto & getFactorKeys() const { return (factor_keys_); }
   const auto & getReOrderConfToOpt() const { return (order_conf_to_opt_); }
@@ -89,6 +90,7 @@ public:
     coefficientSigma_ = cs;
   }
   void setImageTopic(const std::string & topic) { image_topic_ = topic; }
+  void setImageTransport(const std::string & t) { image_transport_ = t; }
   void setDetectionsTopic(const std::string & topic)
   {
     detections_topic_ = topic;
@@ -126,6 +128,7 @@ private:
   std::vector<int> mask_;
   std::vector<double> coefficientSigma_;  // coefficient noise
   std::string image_topic_;
+  std::string image_transport_{"raw"};
   std::string detections_topic_;
   std::map<uint64_t, std::vector<factor_key_t>> factor_keys_;
   std::vector<int> order_opt_to_conf_;

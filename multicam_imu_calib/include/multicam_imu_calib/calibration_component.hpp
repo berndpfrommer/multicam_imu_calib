@@ -27,6 +27,8 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <std_srvs/srv/trigger.hpp>
+#include <string>
+#include <vector>
 
 namespace multicam_imu_calib
 {
@@ -42,6 +44,11 @@ public:
   CalibrationComponent(const CalibrationComponent &) = delete;
   CalibrationComponent & operator=(const CalibrationComponent &) = delete;
   void newRigPoseAdded(uint64_t t);
+  std::vector<std::string> getPublishedTopics() const;
+  std::vector<std::string> getDetectionsTopics() const;
+  std::vector<std::pair<std::string, std::string>> getImageTopics() const;
+  void calibrate(
+    const Trigger::Request::SharedPtr req, Trigger::Response::SharedPtr res);
 
 private:
   class DetectionHandler
@@ -100,8 +107,6 @@ private:
   void newDetectionArrived(DetectionHandler * handler);
   void updateHandlerQueue(DetectionHandler * handler);
   void printHandlerQueue(const std::string & tag) const;
-  void calibrate(
-    const Trigger::Request::SharedPtr req, Trigger::Response::SharedPtr res);
 
   // ---------------- variables
   std::shared_ptr<Calibration> calib_;

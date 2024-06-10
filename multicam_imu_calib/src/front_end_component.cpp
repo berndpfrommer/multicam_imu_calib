@@ -23,10 +23,10 @@ namespace multicam_imu_calib
 {
 
 FrontEndComponent::ImageHandler::ImageHandler(
-  rclcpp::Node * node, size_t idx, const std::string & img_topic,
+  rclcpp::Node * node, const std::string & img_topic,
   const std::string & transport, const std::string & det_topic,
   const std::shared_ptr<FrontEnd> & front_end)
-: front_end_(front_end), cam_idx_(idx)
+: front_end_(front_end)
 {
   image_sub_ = std::make_shared<image_transport::Subscriber>(
     image_transport::create_subscription(
@@ -58,7 +58,7 @@ void FrontEndComponent::ImageHandler::imageCallback(
 }
 
 FrontEndComponent::FrontEndComponent(const rclcpp::NodeOptions & opt)
-: Node("calibration", opt)
+: Node("front_end", opt)
 {
   front_end_ = std::make_shared<FrontEnd>();
   subscribe();
@@ -70,13 +70,15 @@ void FrontEndComponent::subscribe()
   front_end_->readConfigFile(config_file);
   Calibration calib;
   calib.readConfigFile(config_file);
-  const auto cameras = calib.getCameraList();
-  for (size_t i = 0; i < cameras.size(); i++) {
-    const auto & cam = cameras[i];
-    image_handlers_.push_back(std::make_shared<ImageHandler>(
-      this, i, cam->getImageTopic(),
-      safe_declare<std::string>("transport", "raw"), cam->getDetectionsTopic(),
-      front_end_));
+  for (const auto & cam : calib.getCameraList()) {
+    const auto dtopic = cam->getDetectionsTopic();
+    if (
+      exclude_detections_topics_.find(dtopic) ==
+      exclude_detections_topics_.end()) {
+      image_handlers_.push_back(std::make_shared<ImageHandler>(
+        this, cam->getImageTopic(), cam->getImageTransport(), dtopic,
+        front_end_));
+    }
   }
 }
 

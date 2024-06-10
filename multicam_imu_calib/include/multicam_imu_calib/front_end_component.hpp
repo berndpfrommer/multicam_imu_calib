@@ -20,6 +20,8 @@
 #include <multicam_imu_calib_msgs/msg/detection_array.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
+#include <set>
+#include <string>
 
 namespace multicam_imu_calib
 {
@@ -33,20 +35,23 @@ public:
   explicit FrontEndComponent(const rclcpp::NodeOptions & options);
   FrontEndComponent(const FrontEndComponent &) = delete;
   FrontEndComponent & operator=(const FrontEndComponent &) = delete;
+  void setExcludeDetectionTopics(const std::set<std::string> & topics)
+  {
+    exclude_detections_topics_ = topics;
+  }
 
 private:
   class ImageHandler
   {
   public:
     ImageHandler(
-      rclcpp::Node * node, size_t idx, const std::string & img_topic,
+      rclcpp::Node * node, const std::string & img_topic,
       const std::string & transport, const std::string & det_topic,
       const std::shared_ptr<FrontEnd> & front_end);
 
   private:
     void imageCallback(const Image::ConstSharedPtr & p);
     std::shared_ptr<FrontEnd> front_end_;
-    size_t cam_idx_{0};
     std::shared_ptr<image_transport::Subscriber> image_sub_;
     std::shared_ptr<rclcpp::Publisher<DetectionArray>> detection_pub_;
   };
@@ -64,6 +69,7 @@ private:
   // ---------------- variables
   std::shared_ptr<FrontEnd> front_end_;
   std::vector<std::shared_ptr<ImageHandler>> image_handlers_;
+  std::set<std::string> exclude_detections_topics_;
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__FRONT_END_COMPONENT_HPP_

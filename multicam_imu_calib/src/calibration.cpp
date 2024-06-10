@@ -245,6 +245,9 @@ void Calibration::parseCameras(const YAML::Node & cameras)
     parseIntrinsicsAndDistortionModel(cam, c);
     cam->setImageTopic(
       c["image_topic"] ? c["image_topic"].as<std::string>() : std::string(""));
+    cam->setImageTransport(
+      c["image_transport"] ? c["image_transport"].as<std::string>()
+                           : std::string("raw"));
     cam->setDetectionsTopic(
       c["detections_topic"] ? c["detections_topic"].as<std::string>()
                             : std::string(""));

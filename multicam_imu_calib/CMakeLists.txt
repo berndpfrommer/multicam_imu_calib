@@ -39,6 +39,7 @@ set(ament_dependencies
   "rclcpp"
   "rclcpp_components"
   "rosbag2_cpp"
+  "rosbag2_transport"
   "tf2_ros"
   "sensor_msgs"
   "std_srvs")
@@ -68,6 +69,7 @@ add_library(${PROJECT_NAME} SHARED
   src/gtsam_extensions/Cal3DS3.cpp
   src/gtsam_extensions/Cal3FS2.cpp
   src/init_pose.cpp
+  src/enhanced_player.cpp
 )
 
 ament_target_dependencies(${PROJECT_NAME} ${ament_dependencies})
@@ -84,7 +86,7 @@ target_include_directories(
 # --------- calibration component
 #
 add_library(${PROJECT_NAME}_component SHARED
-  src/calibration_component.cpp)
+src/calibration_component.cpp)
   target_link_libraries(${PROJECT_NAME}_component ${PROJECT_NAME})
 
 rclcpp_components_register_nodes(${PROJECT_NAME}_component "${PROJECT_NAME}::CalibrationComponent")
@@ -110,6 +112,8 @@ rclcpp_components_register_nodes(front_end_component "${PROJECT_NAME}::FrontEndC
 # -------- calibrate from bag
 #
 add_executable(calibrate_from_bag
+  src/calibration_component.cpp
+  src/front_end_component.cpp
   src/calibrate_from_bag.cpp)
 target_link_libraries(calibrate_from_bag ${PROJECT_NAME} opencv_calib3d)
 target_compile_features(calibrate_from_bag PRIVATE cxx_std_17)

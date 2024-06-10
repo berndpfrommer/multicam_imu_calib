@@ -269,5 +269,32 @@ void CalibrationComponent::newRigPoseAdded(uint64_t t)
   }
 }
 
+std::vector<std::string> CalibrationComponent::getPublishedTopics() const
+{
+  std::vector<std::string> topics;
+  topics.push_back("rig_odom");
+  topics.push_back("tf");
+  return (topics);
+}
+
+std::vector<std::string> CalibrationComponent::getDetectionsTopics() const
+{
+  std::vector<std::string> topics;
+  for (const auto & cam : calib_->getCameraList()) {
+    topics.push_back(cam->getDetectionsTopic());
+  }
+  return (topics);
+}
+
+std::vector<std::pair<std::string, std::string>>
+CalibrationComponent::getImageTopics() const
+{
+  std::vector<std::pair<std::string, std::string>> topics;
+  for (const auto & cam : calib_->getCameraList()) {
+    topics.emplace_back(cam->getImageTopic(), cam->getImageTransport());
+  }
+  return (topics);
+}
+
 }  // namespace multicam_imu_calib
 RCLCPP_COMPONENTS_REGISTER_NODE(multicam_imu_calib::CalibrationComponent)
