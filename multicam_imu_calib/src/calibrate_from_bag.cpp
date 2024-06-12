@@ -35,38 +35,6 @@ static void printTopics(
   }
 }
 
-static std::shared_ptr<multicam_imu_calib::EnhancedPlayer> makePlayerNode(
-  multicam_imu_calib::CalibrationComponent * calib)
-{
-  const std::string in_uri =
-    calib->declare_parameter<std::string>("in_bag", "");
-  if (in_uri.empty()) {
-    BOMB_OUT("must provide valid in_bag parameter!");
-  }
-  LOG_INFO("using input bag: " << in_uri);
-  if (!std::filesystem::exists(in_uri)) {
-    BOMB_OUT("cannot find input bag: " << in_uri);
-  }
-
-  rclcpp::NodeOptions player_options;
-
-  player_options.parameter_overrides(
-    {Parameter("storage.uri", in_uri),  // Parameter("play.topics", in_topics),
-     Parameter("play.clock_publish_on_topic_publish", true),
-     Parameter("play.start_paused", true), Parameter("play.rate", 1000.0),
-     Parameter("play.disable_keyboard_controls", true)});
-  auto player_node = std::make_shared<multicam_imu_calib::EnhancedPlayer>(
-    "rosbag_player", player_options);
-  player_node->get_logger().set_level(rclcpp::Logger::Level::Warn);
-  const auto detection_topics = calib->getDetectionsTopics();
-  const auto image_topics = calib->getImageTopics();
-  if (!player_node->hasEitherTopics(image_topics, detection_topics)) {
-    BOMB_OUT("missing topics!");
-  }
-
-  return (player_node);
-}
-
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
@@ -80,10 +48,23 @@ int main(int argc, char ** argv)
     std::make_shared<multicam_imu_calib::CalibrationComponent>(node_options);
   exec.add_node(calib_node);
 
-  const auto recorded_topics = calib_node->getPublishedTopics();
-  printTopics("recorded topic", recorded_topics);
+  std::vector<std::string> recorded_topics;
+  const bool save_detections =
+    calib_node->declare_parameter<bool>("save_detections", false);
+  if (!save_detections) {
+    recorded_topics = calib_node->getPublishedTopics();
+  } else {
+    LOG_INFO("saving detections!");
+    recorded_topics = calib_node->getIMUTopics();
+    const auto det_topics = calib_node->getDetectionsTopics();
+    recorded_topics.insert(
+      recorded_topics.end(), std::make_move_iterator(det_topics.begin()),
+      std::make_move_iterator(det_topics.end()));
+  }
+  printTopics("recorded topics", recorded_topics);
 
-  auto player_node = makePlayerNode(calib_node.get());
+  auto player_node =
+    multicam_imu_calib::EnhancedPlayer::makePlayerNode(calib_node.get());
   exec.add_node(player_node);
 
   rclcpp::NodeOptions frontend_options;
@@ -120,6 +101,6 @@ int main(int argc, char ** argv)
   auto resp = std::make_shared<std_srvs::srv::Trigger::Response>();
   calib_node->calibrate(req, resp);
 
-  rclcpp::shutdown();
+  rclcpp::shutdown(nullptr, "clean exit");
   return 0;
 }

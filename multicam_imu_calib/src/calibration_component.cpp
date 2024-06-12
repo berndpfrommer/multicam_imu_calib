@@ -286,6 +286,15 @@ std::vector<std::string> CalibrationComponent::getDetectionsTopics() const
   return (topics);
 }
 
+std::vector<std::string> CalibrationComponent::getIMUTopics() const
+{
+  std::vector<std::string> topics;
+  for (const auto & imu : calib_->getIMUList()) {
+    topics.push_back(imu->getTopic());
+  }
+  return (topics);
+}
+
 std::vector<std::pair<std::string, std::string>>
 CalibrationComponent::getImageTopics() const
 {

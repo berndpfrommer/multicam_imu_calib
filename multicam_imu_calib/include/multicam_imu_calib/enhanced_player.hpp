@@ -24,6 +24,7 @@
 
 namespace multicam_imu_calib
 {
+class CalibrationComponent;  // forward decl
 class EnhancedPlayer : public rosbag2_transport::Player
 {
 public:
@@ -36,6 +37,8 @@ public:
     const std::vector<std::pair<std::string, std::string>> & image_topics,
     const std::vector<std::string> & detection_topics);
   std::set<std::string> getTopics();
+  static std::shared_ptr<multicam_imu_calib::EnhancedPlayer> makePlayerNode(
+    CalibrationComponent * calib);
 };
 
 }  // namespace multicam_imu_calib

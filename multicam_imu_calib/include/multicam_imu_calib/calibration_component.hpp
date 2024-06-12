@@ -47,6 +47,7 @@ public:
   std::vector<std::string> getPublishedTopics() const;
   std::vector<std::string> getDetectionsTopics() const;
   std::vector<std::pair<std::string, std::string>> getImageTopics() const;
+  std::vector<std::string> getIMUTopics() const;
   void calibrate(
     const Trigger::Request::SharedPtr req, Trigger::Response::SharedPtr res);
 
