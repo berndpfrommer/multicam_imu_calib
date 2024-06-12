@@ -120,18 +120,6 @@ target_link_libraries(calibrate_from_bag ${PROJECT_NAME} opencv_calib3d)
 target_compile_features(calibrate_from_bag PRIVATE cxx_std_17)
 
 #
-# -------- detect from bag
-#
-add_executable(detect  src/detect.cpp)
-target_link_libraries(detect ${PROJECT_NAME} opencv_calib3d)
-target_compile_features(detect PRIVATE cxx_std_17)
-
-
-if(${rosbag2_storage_VERSION} VERSION_GREATER_EQUAL 0.26.3)
-  add_definitions(-DUSE_RECV_TIMESTAMP)
-endif()
-
-#
 # ------------ installation ----------------------
 #
 
@@ -141,7 +129,6 @@ endif()
 install(TARGETS
   ${PROJECT_NAME}_node
   calibrate_from_bag
-  detect
   DESTINATION lib/${PROJECT_NAME}/)
 
 # the shared libraries go into the global lib dir so they can
