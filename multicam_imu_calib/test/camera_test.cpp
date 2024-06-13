@@ -182,6 +182,7 @@ static PosesAndPoints generatePosesAndPoints(
     const auto T_w_r = disturbPose(T_w_r0, 0.2, 1.0, 0.5);
     // now get the camera pose from it
     bool rigPoseAdded{false};
+
     for (size_t cam_idx = 0; cam_idx < cams.size(); cam_idx++) {
       const auto & cam = cams[cam_idx];
       const auto T_w_c = T_w_r * cam->getPose();
@@ -194,10 +195,10 @@ static PosesAndPoints generatePosesAndPoints(
         cam_world_poses_unopt[cam_idx].push_back(T_w_r_guess * cam->getPose());
         if (!rigPoseAdded) {  // only add rig pose once for all cameras
           t++;
-          calib->addRigPose(t, T_w_r_guess);
+          (void)calib->addRigPose(t, T_w_r_guess);
           rigPoseAdded = true;
         }
-        calib->addProjectionFactors(cam_idx, t, wc, ip);
+        calib->addProjectionFactors(cam_idx, 0, t, wc, ip);
         cam_world_poses_true[cam_idx].push_back(T_w_c);
         img_pts[cam_idx].push_back(ip);
         time_slot[cam_idx].push_back(t - 1);
@@ -257,7 +258,8 @@ void test_single_cam(
   calib.readConfigFile(fname);
   const auto cam = calib.getCameraList()[0];  // first camera
 
-  calib.addPose(cam, cam->getPose());  // perfect init
+  cam->setPoseKey(
+    calib.addPose(cam->getName(), cam->getPose()));  // perfect init
   const auto intr_start = disturbIntrinsics(cam->getIntrinsics(), 0.2);
   // start with zero distortion coefficients
   DistortionCoefficients dist_start(
@@ -297,7 +299,8 @@ void test_stereo_cam(const std::string & fname)
   const auto num_cams = calib.getCameras().size();
   for (size_t cam_id = 0; cam_id < num_cams; cam_id++) {
     const auto cam = calib.getCameraList()[cam_id];
-    calib.addPose(cam, disturbPose(cam->getPose(), 0.01, 0.03));
+    cam->setPoseKey(
+      calib.addPose(cam->getName(), disturbPose(cam->getPose(), 0.01, 0.03)));
     calib.addPosePrior(cam, cam->getPose(), cam->getPoseNoise());
     intr_start.push_back(disturbIntrinsics(cam->getIntrinsics(), 0.1));
     dist_start.emplace_back(cam->getDistortionCoefficients().size(), 0.0);

@@ -65,7 +65,8 @@ TEST(multicam_imu_calib, imu_preintegration)
   const auto cam = calib.getCameraList()[0];  // first camera
 
   // initialize the camera perfectly
-  calib.addPose(cam, cam->getPose());  // perfect init
+  cam->setPoseKey(
+    calib.addPose(cam->getName(), cam->getPose()));  // perfect init
   calib.addIntrinsics(
     cam, cam->getIntrinsics(), cam->getDistortionCoefficients());
 
@@ -155,7 +156,8 @@ TEST(multicam_imu_calib, imu_extrinsic_single_cam)
   const auto cam = calib.getCameraList()[0];  // first camera
 
   // initialize the camera perfectly
-  calib.addPose(cam, cam->getPose());  // perfect init
+  cam->setPoseKey(
+    calib.addPose(cam->getName(), cam->getPose()));  // perfect init
   calib.addIntrinsics(
     cam, cam->getIntrinsics(), cam->getDistortionCoefficients());
 
@@ -256,7 +258,8 @@ static std::tuple<double, double, double, double> do_extrinsic_imu_calib(
   const auto cam = calib.getCameraList()[0];  // first camera
 
   // initialize the camera perfectly with respect to the rig
-  calib.addPose(cam, cam->getPose());  // perfect init
+  cam->setPoseKey(
+    calib.addPose(cam->getName(), cam->getPose()));  // perfect init
   calib.addPosePrior(cam, cam->getPose(), cam->getPoseNoise());
   calib.addIntrinsics(
     cam, cam->getIntrinsics(), cam->getDistortionCoefficients());

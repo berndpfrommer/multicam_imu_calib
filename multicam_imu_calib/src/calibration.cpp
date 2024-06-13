@@ -23,6 +23,7 @@
 #include <multicam_imu_calib/diagnostics.hpp>
 #include <multicam_imu_calib/logging.hpp>
 #include <multicam_imu_calib/optimizer.hpp>
+#include <multicam_imu_calib/target.hpp>
 #include <multicam_imu_calib/utilities.hpp>
 #include <sstream>
 
@@ -341,10 +342,16 @@ void Calibration::readConfigFile(const std::string & file)
   for (const auto & target : targets_) {
     // assume targets to align with world frame until
     // IMU data says otherwise
-    target->setPoseKey(optimizer_->addPose(
+    target->setPoseKey(addPose(
       "target " + target->getName() + " " + std::to_string(target->getId()),
       gtsam::Pose3()));
   }
+}
+
+value_key_t Calibration::addPose(
+  const std::string & label, const gtsam::Pose3 & pose)
+{
+  return (optimizer_->addPose(label, pose));
 }
 
 static YAML::Node makeIntrinsics(const gtsam::Vector4 & v)
@@ -436,27 +443,27 @@ void Calibration::addIntrinsics(
 
 gtsam::Pose3 Calibration::getRigPose(uint64_t t, bool optimized) const
 {
+  return (optimizer_->getPose(getRigPoseKey(t), optimized));
+}
+
+value_key_t Calibration::getRigPoseKey(uint64_t t) const
+{
   auto it = time_to_rig_pose_.find(t);
   if (it == time_to_rig_pose_.end()) {
     BOMB_OUT("no rig pose found for t = " << t);
   }
-  return (optimizer_->getPose(it->second, optimized));
+  return (it->second);
 }
 
-void Calibration::addRigPose(uint64_t t, const gtsam::Pose3 & pose)
+value_key_t Calibration::addRigPose(uint64_t t, const gtsam::Pose3 & pose)
 {
   if (t <= t_rig_) {
     BOMB_OUT("got rig pose with t= " << t << " already have: " << t_rig_);
   }
   t_rig_ = t;
-#define USE_CAMERA
-#ifdef USE_CAMERA
-  rig_pose_keys_.push_back(optimizer_->addRigPose(t, pose));
+  rig_pose_keys_.push_back(
+    optimizer_->addRigPose("rig_pose(" + std::to_string(t) + ")", pose));
   time_to_rig_pose_.insert({t, rig_pose_keys_.back()});
-#else
-  (void)pose;
-  time_to_rig_pose_.insert({t, 0});
-#endif
 
   if (!imu_list_.empty()) {
     unused_rig_pose_times_.push_back(t);
@@ -469,6 +476,7 @@ void Calibration::addRigPose(uint64_t t, const gtsam::Pose3 & pose)
       unused_rig_pose_times_.pop_front();
     }
   }
+  return (rig_pose_keys_.back());
 }
 
 bool Calibration::hasRigPose(uint64_t t) const
@@ -480,7 +488,7 @@ std::shared_ptr<Target> Calibration::findTarget(uint32_t id) const
 {
   auto it = std::find_if(
     targets_.begin(), targets_.end(),
-    [id](const auto & targ) { return (targ->id = id); });
+    [id](const auto & targ) { return (targ->getId() == id); });
   if (it == targets_.end()) {
     BOMB_OUT("cannot find target with id: " << id);
   }
@@ -499,8 +507,8 @@ void Calibration::addProjectionFactors(
   world_points_[cam_idx].push_back(wc);
   detection_times_[cam_idx].push_back(t);
   camera->addProjectionFactors(
-    t,
-    optimizer_->addProjectionFactors(camera, target->getPoseKey(), t, wc, ic));
+    t, optimizer_->addProjectionFactors(
+         camera, getRigPoseKey(t), target->getPoseKey(), t, wc, ic));
 }
 
 void Calibration::addDetection(
@@ -734,7 +742,7 @@ void Calibration::initializeCameraPosesAndIntrinsics()
   // initialize camera poses if given
   for (const auto & cam : camera_list_) {
     if (cam->hasValidPose()) {
-      addPose(cam, cam->getPose());
+      cam->setPoseKey(optimizer_->addPose(cam->getName(), cam->getPose()));
       if (cam->hasPosePrior()) {
         LOG_INFO(cam->getName() << " initialized with prior!");
         addPosePrior(cam, cam->getPose(), cam->getPoseNoise());
@@ -750,7 +758,7 @@ void Calibration::initializeIMUPoses()
   // initialize imu poses if given
   for (const auto & imu : imu_list_) {
     if (imu->hasValidPose()) {
-      addPose(imu, imu->getPose());
+      imu->setPoseKey(optimizer_->addPose(imu->getName(), imu->getPose()));
       if (imu->hasPosePrior()) {
         LOG_INFO(imu->getName() << " initialized with prior!");
         addPosePrior(imu, imu->getPose(), imu->getPoseNoise());
@@ -770,8 +778,8 @@ void Calibration::initializeIMUWorldPoses()
 
     const auto att_r = getRigAttitudes(times);
     const auto T_r_i_est = utilities::averageRotationDifference(att_r, att_i);
-    optimizer_->addPose<IMU>(
-      imu, gtsam::Pose3(T_r_i_est, gtsam::Point3(0, 0, 0)));
+    imu->setPoseKey(optimizer_->addPose(
+      imu->getName(), gtsam::Pose3(T_r_i_est, gtsam::Point3(0, 0, 0))));
     optimizer_->addIMUPoseFactors(imu, time_to_rig_pose_);
   }
 }

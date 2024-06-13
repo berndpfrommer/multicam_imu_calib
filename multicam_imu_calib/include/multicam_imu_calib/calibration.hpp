@@ -25,6 +25,7 @@
 #include <multicam_imu_calib/imu.hpp>
 #include <multicam_imu_calib/intrinsics.hpp>
 #include <multicam_imu_calib/stamped_attitude.hpp>
+#include <multicam_imu_calib/target.hpp>
 #include <multicam_imu_calib_msgs/msg/detection.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <set>
@@ -58,9 +59,7 @@ public:
   void addIntrinsics(
     const Camera::SharedPtr & cam, const Intrinsics & intr,
     const std::vector<double> & dist);
-
-  void addPose(const Camera::SharedPtr & dev, const gtsam::Pose3 & T_r_d);
-  void addPose(const IMU::SharedPtr & dev, const gtsam::Pose3 & T_r_d);
+  value_key_t addPose(const std::string &label, const gtsam::Pose3 &pose);
 
   void addPosePrior(
     const Camera::SharedPtr & dev, const gtsam::Pose3 & T_r_d,
@@ -69,7 +68,7 @@ public:
     const IMU::SharedPtr & dev, const gtsam::Pose3 & T_r_d,
     const SharedNoiseModel & noise);
 
-  void addRigPose(uint64_t t, uint32_t target_id, const gtsam::Pose3 & pose);
+  value_key_t addRigPose(uint64_t t, const gtsam::Pose3 & pose);
   void addProjectionFactors(
     size_t cam_idx, uint32_t target_id, uint64_t t,
     const std::vector<std::array<double, 3>> & wc,
@@ -91,6 +90,7 @@ public:
   void initializeIMUWorldPoses();
   void printErrors(bool optimized);
   gtsam::Pose3 getRigPose(uint64_t t, bool optimized) const;
+  value_key_t getRigPoseKey(uint64_t t) const;
   gtsam::Pose3 getIMUPose(size_t imu_idx, bool opt) const;
   gtsam::Pose3 getCameraPose(size_t cam_idx, bool opt) const;
 
@@ -103,7 +103,7 @@ private:
   std::vector<StampedAttitude> getRigAttitudes(
     const std::vector<uint64_t> & times) const;
   void initializeIMUGraph(uint64_t t, const IMU::SharedPtr & imu);
-  std::shared_ptr<Target> findTarget(uint32_t id) const;
+  Target::SharedPtr findTarget(uint32_t id) const;
 
   std::tuple<std::vector<double>, std::vector<int>, std::vector<double>>
   sanitizeCoefficients(

@@ -18,7 +18,9 @@
 
 namespace multicam_imu_calib
 {
-static rclcpp::Logger get_logger() { return (rclcpp::get_logger("front_end")); }
+
+// static rclcpp::Logger get_logger() { return (rclcpp::get_logger("front_end")); }
+
 FrontEnd::FrontEnd() {}
 
 FrontEnd::~FrontEnd() { targets_.clear(); }

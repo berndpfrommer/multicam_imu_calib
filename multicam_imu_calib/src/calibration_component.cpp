@@ -83,7 +83,8 @@ void CalibrationComponent::DetectionHandler::processOldestMessage()
           const auto T_w_r = calib_->getRigPose(t, false);
           camera_->setPose(((*T_c_w) * T_w_r).inverse());
           LOG_INFO("initialized pose of camera " << camera_->getName());
-          calib_->addPose(camera_, camera_->getPose());
+          camera_->setPoseKey(
+            calib_->addPose(camera_->getName(), camera_->getPose()));
         }
       }
     }
