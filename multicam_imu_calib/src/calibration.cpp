@@ -337,6 +337,14 @@ void Calibration::readConfigFile(const std::string & file)
   if (imus.IsSequence()) {
     parseIMUs(imus);
   }
+  targets_ = Target::readConfigFile(file);
+  for (const auto & target : targets_) {
+    // assume targets to align with world frame until
+    // IMU data says otherwise
+    target->setPoseKey(optimizer_->addPose(
+      "target " + target->getName() + " " + std::to_string(target->getId()),
+      gtsam::Pose3()));
+  }
 }
 
 static YAML::Node makeIntrinsics(const gtsam::Vector4 & v)
@@ -468,18 +476,31 @@ bool Calibration::hasRigPose(uint64_t t) const
   return (time_to_rig_pose_.find(t) != time_to_rig_pose_.end());
 }
 
+std::shared_ptr<Target> Calibration::findTarget(uint32_t id) const
+{
+  auto it = std::find_if(
+    targets_.begin(), targets_.end(),
+    [id](const auto & targ) { return (targ->id = id); });
+  if (it == targets_.end()) {
+    BOMB_OUT("cannot find target with id: " << id);
+  }
+  return (*it);
+}
+
 void Calibration::addProjectionFactors(
-  size_t cam_idx, uint64_t t, const std::vector<std::array<double, 3>> & wc,
+  size_t cam_idx, uint32_t target_id, uint64_t t,
+  const std::vector<std::array<double, 3>> & wc,
   const std::vector<std::array<double, 2>> & ic)
 {
   const auto camera = camera_list_[cam_idx];
+  const auto target = findTarget(target_id);
+
   image_points_[cam_idx].push_back(ic);
   world_points_[cam_idx].push_back(wc);
   detection_times_[cam_idx].push_back(t);
-#ifdef USE_CAMERA
   camera->addProjectionFactors(
-    t, optimizer_->addProjectionFactors(camera, t, wc, ic));
-#endif
+    t,
+    optimizer_->addProjectionFactors(camera, target->getPoseKey(), t, wc, ic));
 }
 
 void Calibration::addDetection(
@@ -493,8 +514,7 @@ void Calibration::addDetection(
   for (const auto & ip : det.image_points) {
     i_pts.push_back({ip.x, ip.y});
   }
-
-  addProjectionFactors(cam_idx, t, w_pts, i_pts);
+  addProjectionFactors(cam_idx, det.id, t, w_pts, i_pts);
 }
 
 void Calibration::addIMUData(size_t imu_idx, const IMUData & data)
@@ -693,18 +713,6 @@ std::vector<StampedAttitude> Calibration::getRigAttitudes(
     att.push_back(a);
   }
   return (att);
-}
-
-void Calibration::addPose(
-  const Camera::SharedPtr & dev, const gtsam::Pose3 & T_r_d)
-{
-  optimizer_->addPose<Camera>(dev, T_r_d);
-}
-
-void Calibration::addPose(
-  const IMU::SharedPtr & dev, const gtsam::Pose3 & T_r_d)
-{
-  optimizer_->addPose<IMU>(dev, T_r_d);
 }
 
 void Calibration::addPosePrior(

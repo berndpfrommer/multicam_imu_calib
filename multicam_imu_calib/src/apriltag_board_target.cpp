@@ -15,7 +15,7 @@
 
 #include <apriltag_msgs/msg/april_tag_detection_array.hpp>
 #include <multicam_imu_calib/apriltag_board_target.hpp>
-#include <multicam_imu_calib/front_end.hpp>
+#include <multicam_imu_calib/detector_loader.hpp>
 #include <multicam_imu_calib/logging.hpp>
 #include <multicam_imu_calib/utilities.hpp>
 
@@ -45,6 +45,7 @@ AprilTagBoardTarget::Detection AprilTagBoardTarget::detect(
   ApriltagArray tagArray;
   detector_->detect(cvImg->image, &tagArray);
   Detection det;
+  det.id = id_;
   if (!tagArray.detections.empty()) {
     for (const auto & tag : tagArray.detections) {
       const auto it = id_to_wp_.find(tag.id);
@@ -64,9 +65,8 @@ AprilTagBoardTarget::Detection AprilTagBoardTarget::detect(
 }
 
 AprilTagBoardTarget::SharedPtr AprilTagBoardTarget::make(
-  FrontEnd * fe, const std::string & type, const std::string & fam, double ts,
-  uint32_t rows, uint32_t cols, double dist_rows, double dist_cols,
-  uint32_t start_id)
+  const std::string & type, const std::string & fam, double ts, uint32_t rows,
+  uint32_t cols, double dist_rows, double dist_cols, uint32_t start_id)
 {
   SharedPtr board(new AprilTagBoardTarget());
   // make tag detector of right kind
@@ -81,7 +81,8 @@ AprilTagBoardTarget::SharedPtr AprilTagBoardTarget::make(
       board->addTag(id, wp);
     }
   }
-  board->detector_ = fe->getDetectorLoader().getInstance(type, fam);
+  board->detector_ =
+    DetectorLoader::getInstance()->getDetectorInstance(type, fam);
   return (board);
 }
 

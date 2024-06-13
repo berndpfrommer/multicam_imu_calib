@@ -48,15 +48,14 @@ public:
   void addIMU(const IMU::SharedPtr & imu);
   std::tuple<double, double> optimize();
   void setPixelNoise(double noise);
-  template <typename T>
-  void addPose(const typename T::SharedPtr & dev, const gtsam::Pose3 & T_r_d)
+  value_key_t addPose(const std::string & label, const gtsam::Pose3 & p)
   {
     const auto pose_key = getNextKey();
-    dev->setPoseKey(pose_key);
-    values_.insert(pose_key, T_r_d);
+    values_.insert(pose_key, p);
 #ifdef DEBUG_SINGULARITIES
-    value_to_name_.insert({pose_key, "extr pose " + dev->getName()});
+    value_to_name_.insert({pose_key, label + " (pose)"});
 #endif
+    return (pose_key);
   }
   template <class T>
   factor_key_t addPrior(
@@ -77,10 +76,10 @@ public:
     const DistortionModel & distortion_model,
     const std::vector<double> & distortion_coefficients);
   std::vector<factor_key_t> addProjectionFactors(
-    const Camera::SharedPtr & camera, uint64_t t,
+    const Camera::SharedPtr & camera, value_key_t T_o_r_key, uint64_t t,
     const std::vector<std::array<double, 3>> & wc,
     const std::vector<std::array<double, 2>> & ic);
-  value_key_t addRigPose(uint64_t t, const gtsam::Pose3 & pose);
+  value_key_t addRigPose(const std::string & label, const gtsam::Pose3 & pose);
   StampedIMUValueKeys addIMUState(
     uint64_t t, const IMU::SharedPtr & imu, const gtsam::NavState & nav,
     const gtsam::imuBias::ConstantBias & bias_estim);
@@ -142,7 +141,6 @@ private:
   gtsam::Values optimized_values_;
   std::shared_ptr<gtsam::ISAM2> isam2_;
   value_key_t key_{0};  // starts at zero, gets incremented
-  std::unordered_map<uint64_t, value_key_t> time_to_rig_pose_key_;
   gtsam::SharedNoiseModel pixel_noise_;
   std::unordered_map<factor_key_t, std::string> factor_to_name_;
 #ifdef DEBUG_SINGULARITIES

@@ -28,8 +28,10 @@ class DetectorLoader
 public:
   DetectorLoader();
   ~DetectorLoader();
-  std::shared_ptr<apriltag_detector::Detector> getInstance(
+  std::shared_ptr<apriltag_detector::Detector> getDetectorInstance(
     const std::string & type, const std::string & fam);
+
+  static std::shared_ptr<DetectorLoader> getInstance();
 
 private:
   std::unordered_map<

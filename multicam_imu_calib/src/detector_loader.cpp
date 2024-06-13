@@ -41,7 +41,18 @@ DetectorLoader::~DetectorLoader()
   }
 }
 
-std::shared_ptr<apriltag_detector::Detector> DetectorLoader::getInstance(
+static std::shared_ptr<DetectorLoader> detector_loader;
+
+std::shared_ptr<DetectorLoader> DetectorLoader::getInstance()
+{
+  if (!detector_loader) {
+    detector_loader.reset(new DetectorLoader());
+  }
+  return (detector_loader);
+}
+
+std::shared_ptr<apriltag_detector::Detector>
+DetectorLoader::getDetectorInstance(
   const std::string & type, const std::string & fam)
 {
   auto it = detector_map_.find(type);

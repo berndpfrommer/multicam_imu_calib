@@ -69,9 +69,10 @@ public:
     const IMU::SharedPtr & dev, const gtsam::Pose3 & T_r_d,
     const SharedNoiseModel & noise);
 
-  void addRigPose(uint64_t t, const gtsam::Pose3 & pose);
+  void addRigPose(uint64_t t, uint32_t target_id, const gtsam::Pose3 & pose);
   void addProjectionFactors(
-    size_t cam_idx, uint64_t t, const std::vector<std::array<double, 3>> & wc,
+    size_t cam_idx, uint32_t target_id, uint64_t t,
+    const std::vector<std::array<double, 3>> & wc,
     const std::vector<std::array<double, 2>> & ic);
   void addDetection(size_t cam_idx, uint64_t t, const Detection & detection);
   void addIMUData(size_t imu_idx, const IMUData & data);
@@ -102,6 +103,7 @@ private:
   std::vector<StampedAttitude> getRigAttitudes(
     const std::vector<uint64_t> & times) const;
   void initializeIMUGraph(uint64_t t, const IMU::SharedPtr & imu);
+  std::shared_ptr<Target> findTarget(uint32_t id) const;
 
   std::tuple<std::vector<double>, std::vector<int>, std::vector<double>>
   sanitizeCoefficients(
@@ -127,6 +129,7 @@ private:
   std::vector<std::vector<std::vector<std::array<double, 3>>>> world_points_;
   std::deque<uint64_t> unused_rig_pose_times_;
   bool add_initial_imu_pose_prior_{false};
+  std::vector<Target::SharedPtr> targets_;
   YAML::Node config_;
 };
 }  // namespace multicam_imu_calib

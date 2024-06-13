@@ -25,19 +25,7 @@ FrontEnd::~FrontEnd() { targets_.clear(); }
 
 void FrontEnd::readConfigFile(const std::string & file)
 {
-  YAML::Node yamlFile = YAML::LoadFile(file);
-  if (yamlFile.IsNull()) {
-    BOMB_OUT("cannot open config file: " << file);
-  }
-  YAML::Node targets = yamlFile["targets"];
-  if (!targets.IsSequence()) {
-    BOMB_OUT("config file has no list of targets!");
-  }
-  for (const YAML::Node & target : targets) {
-    Target::SharedPtr targ = Target::make(this, target);
-    LOG_INFO("using target: " << targ->getName());
-    targets_.push_back(targ);
-  }
+  targets_ = Target::readConfigFile(file);
 }
 
 FrontEnd::Detection FrontEnd::detect(

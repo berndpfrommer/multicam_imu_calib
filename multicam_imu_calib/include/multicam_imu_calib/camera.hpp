@@ -130,7 +130,7 @@ private:
   std::string image_topic_;
   std::string image_transport_{"raw"};
   std::string detections_topic_;
-  std::map<uint64_t, std::vector<factor_key_t>> factor_keys_;
+  std::multimap<uint64_t, std::vector<factor_key_t>> factor_keys_;
   std::vector<int> order_opt_to_conf_;
   std::vector<int> order_conf_to_opt_;
   bool has_pose_prior_{false};

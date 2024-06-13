@@ -39,12 +39,10 @@ public:
   Detection detect(
     const Target::SharedPtr & target, const Image::ConstSharedPtr & img) const;
   const auto & getTargets() const { return (targets_); }
-  auto & getDetectorLoader() { return (detector_loader_); }
 
 private:
   // ------------- variables -------------
   std::vector<Target::SharedPtr> targets_;
-  DetectorLoader detector_loader_;
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__FRONT_END_HPP_

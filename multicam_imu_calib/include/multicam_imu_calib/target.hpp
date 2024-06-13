@@ -16,12 +16,15 @@
 #ifndef MULTICAM_IMU_CALIB__TARGET_HPP_
 #define MULTICAM_IMU_CALIB__TARGET_HPP_
 
+#include <gtsam/geometry/Pose3.h>
 #include <yaml-cpp/yaml.h>
 
 #include <memory>
+#include <multicam_imu_calib/value_key.hpp>
 #include <multicam_imu_calib_msgs/msg/detection.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <string>
+#include <unordered_map>
 
 namespace multicam_imu_calib
 {
@@ -34,15 +37,32 @@ public:
   using Image = sensor_msgs::msg::Image;
   using Detection = multicam_imu_calib_msgs::msg::Detection;
   enum Type { INVALID, APRILTAG_BOARD };
-  void setName(const std::string & s) { name_ = s; }
+
   virtual Detection detect(const Image::ConstSharedPtr & img) = 0;
+  // getters
   Type getType() const { return (type_); }
-  static SharedPtr make(FrontEnd * fe, const YAML::Node & node);
-  const auto & getName() { return (name_); }
+  const auto & getName() const { return (name_); }
+  const auto & getPose() const { return (pose_); }
+  auto getId() const { return (id_); }
+  auto hasValidPose() const { return (has_valid_pose_); }
+  auto getPoseKey() const { return (pose_key_); }
+  // setters
+  void setName(const std::string & s) { name_ = s; }
+  void setPose(const gtsam::Pose3 & p);
+  void setPoseKey(value_key_t k) { pose_key_ = k; }
+  void setId(uint32_t idx) { id_ = idx; }
+
+  static std::vector<SharedPtr> readConfigFile(const std::string & f);
+  static SharedPtr make(const YAML::Node & node);
 
 protected:
   Type type_{INVALID};
   std::string name_;
+  uint32_t id_{0};
+  gtsam::Pose3 pose_;
+  bool has_valid_pose_{false};
+  value_key_t pose_key_{0};
 };
+
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__TARGET_HPP_
