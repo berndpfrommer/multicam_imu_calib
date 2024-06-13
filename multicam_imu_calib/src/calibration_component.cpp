@@ -142,9 +142,12 @@ void CalibrationComponent::calibrate(
 {
   (void)req;
   LOG_INFO("starting calibration...");
-  // calib_->sanityChecks();
+  calib_->sanityChecks();
   calib_->runOptimizer();
   LOG_INFO("calibration complete!");
+  calib_->writeResults(
+    safe_declare<std::string>("calib_output_path", "results"));
+  LOG_INFO("results written!");
   res->success = true;
   res->message = "calib complete";
 }

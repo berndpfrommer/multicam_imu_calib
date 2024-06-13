@@ -55,7 +55,7 @@ public:
     dev->setPoseKey(pose_key);
     values_.insert(pose_key, T_r_d);
 #ifdef DEBUG_SINGULARITIES
-    key_to_name_.insert({pose_key, "extr pose " + dev->getName()});
+    value_to_name_.insert({pose_key, "extr pose " + dev->getName()});
 #endif
   }
   template <class T>
@@ -64,6 +64,7 @@ public:
     const SharedNoiseModel & noise)
   {
     graph_.add(gtsam::PriorFactor(value_key, prior_value, noise));
+    factor_to_name_.insert({getLastFactorKey(), "some_prior"});
     return (getLastFactorKey());
   }
 
@@ -124,7 +125,7 @@ public:
     factor_key_t k, bool optimized) const;
   std::tuple<gtsam::Vector3, gtsam::Vector3, gtsam::Vector3>
   getCombinedIMUFactorError(factor_key_t k, bool optimized) const;
-  void printErrors(const gtsam::Values & vals) const;
+  void printErrors(bool optimized) const;
   void checkForUnconstrainedVariables() const;
   void checkForUnknownValues() const;
 
@@ -143,8 +144,9 @@ private:
   value_key_t key_{0};  // starts at zero, gets incremented
   std::unordered_map<uint64_t, value_key_t> time_to_rig_pose_key_;
   gtsam::SharedNoiseModel pixel_noise_;
+  std::unordered_map<factor_key_t, std::string> factor_to_name_;
 #ifdef DEBUG_SINGULARITIES
-  std::map<value_key_t, std::string> key_to_name_;
+  std::unordered_map<value_key_t, std::string> value_to_name_;
 #endif
 };
 

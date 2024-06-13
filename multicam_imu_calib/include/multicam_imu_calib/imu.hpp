@@ -97,6 +97,7 @@ public:
   const auto & getSavedPreint() const { return (saved_preint_); }
   gtsam::imuBias::ConstantBias getBiasPrior() const;
   gtsam::SharedNoiseModel getBiasPriorNoise() const;
+  bool hasValidPreint() const;
 
   // ------------ setters
   void setPose(const gtsam::Pose3 & pose);

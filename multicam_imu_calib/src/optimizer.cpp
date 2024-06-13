@@ -67,6 +67,9 @@ void Optimizer::addIMUPoseFactors(
       gtsam::transformPoseFrom(gtsam::transformPoseTo(T_w_i, T_w_r), T_r_i);
     graph_.addExpressionFactor(
       T_identity, gtsam::Pose3(), utilities::makeNoise6(1e-6, 1e-6));
+    factor_to_name_.insert(
+      {getLastFactorKey(),
+       imu->getName() + ":pose_factor_t=" + std::to_string(imu_keys.t)});
     imu->addPoseFactorKey(imu_keys.t, getLastFactorKey());
 // #define IDENTITY_CHECK
 #ifdef IDENTITY_CHECK
@@ -99,7 +102,7 @@ factor_key_t Optimizer::addCameraIntrinsics(
         cam->makeRadTanModel(intr, distortion_coefficients);
       values_.insert(intr_key, intr_value);
 #ifdef DEBUG_SINGULARITIES
-      key_to_name_.insert({intr_key, "intrinsics " + cam->getName()});
+      value_to_name_.insert({intr_key, "intrinsics " + cam->getName()});
 #endif
       graph_.add(gtsam::PriorFactor<Cal3DS3>(
         intr_key, intr_value, cam->getIntrinsicsNoise()));
@@ -110,7 +113,7 @@ factor_key_t Optimizer::addCameraIntrinsics(
         cam->makeEquidistantModel(intr, distortion_coefficients);
       values_.insert(intr_key, intr_value);
 #ifdef DEBUG_SINGULARITIES
-      key_to_name_.insert({intr_key, "intrinsics " + cam->getName()});
+      value_to_name_.insert({intr_key, "intrinsics " + cam->getName()});
 #endif
       graph_.push_back(gtsam::PriorFactor<Cal3FS2>(
         intr_key, intr_value, cam->getIntrinsicsNoise()));
@@ -119,6 +122,8 @@ factor_key_t Optimizer::addCameraIntrinsics(
     default:
       BOMB_OUT("invalid distortion model!");
   }
+  factor_to_name_.insert(
+    {getLastFactorKey(), cam->getName() + ":intrinisic_prior"});
   return (getLastFactorKey());
 }
 
@@ -141,7 +146,7 @@ value_key_t Optimizer::addRigPose(uint64_t t, const gtsam::Pose3 & pose)
   time_to_rig_pose_key_.insert({t, pose_key});
   values_.insert(pose_key, pose);
 #ifdef DEBUG_SINGULARITIES
-  key_to_name_.insert({pose_key, "rig pose t=" + std::to_string(t)});
+  value_to_name_.insert({pose_key, "rig pose t=" + std::to_string(t)});
 #endif
   return (pose_key);
 }
@@ -156,9 +161,9 @@ StampedIMUValueKeys Optimizer::addIMUState(
   values_.insert(vk.bias_key, bias_estim);  // 0 bias init
 #ifdef DEBUG_SINGULARITIES
   const auto ts = " t= " + std::to_string(t);
-  key_to_name_.insert({vk.pose_key, "T_w_i " + imu->getName() + ts});
-  key_to_name_.insert({vk.velocity_key, "velocity " + imu->getName() + ts});
-  key_to_name_.insert({vk.bias_key, "bias " + imu->getName() + ts});
+  value_to_name_.insert({vk.pose_key, "T_w_i " + imu->getName() + ts});
+  value_to_name_.insert({vk.velocity_key, "velocity " + imu->getName() + ts});
+  value_to_name_.insert({vk.bias_key, "bias " + imu->getName() + ts});
 #endif
   return (vk);
 }
@@ -170,7 +175,7 @@ std::tuple<uint64_t, factor_key_t> Optimizer::addPreintegratedFactor(
   graph_.add(gtsam::CombinedImuFactor(
     prev_keys.pose_key, prev_keys.velocity_key, curr_keys.pose_key,
     curr_keys.velocity_key, prev_keys.bias_key, curr_keys.bias_key, accum));
-// #define DEBUG_IMUFACTOR
+#define DEBUG_IMUFACTOR
 #ifdef DEBUG_IMUFACTOR
   std::cout << "adding CombinedImuFactor:" << std::endl;
   std::cout << "accum: " << std::endl << accum << std::endl;
@@ -188,6 +193,9 @@ std::tuple<uint64_t, factor_key_t> Optimizer::addPreintegratedFactor(
     getCombinedIMUFactorError(getLastFactorKey(), false);
   std::cout << "rot err: " << rot_err.transpose() << std::endl;
 #endif
+  factor_to_name_.insert(
+    {getLastFactorKey(), "imu:preintegr_fac_t=" + std::to_string(curr_keys.t)});
+
   return {curr_keys.t, getLastFactorKey()};
 }
 
@@ -247,6 +255,10 @@ std::vector<factor_key_t> Optimizer::addProjectionFactors(
       default:
         BOMB_OUT("invalid distortion model!");
     }
+    factor_to_name_.insert(
+      {getLastFactorKey(), cam->getName() + ":proj_fac_t=" + std::to_string(t) +
+                             ",pt:" + std::to_string(i)});
+
     factors.push_back(getLastFactorKey());
   }
   return (factors);
@@ -279,7 +291,7 @@ std::tuple<double, double> Optimizer::optimize()
       "final error: " << lmo.error() << " after iter: " << lmo.iterations());
 #endif
 #ifdef DEBUG_OPT
-    printErrors(values_);
+    printErrors(false);
     LOG_INFO("optimized values: ");
     for (const auto & v : optimized_values_) {
       v.value.print();
@@ -383,11 +395,16 @@ Optimizer::getIMUExtrinsicsError(factor_key_t k, bool optimized) const
   return {e_tot, v.block<3, 1>(0, 0), v.block<3, 1>(3, 0)};
 }
 
-void Optimizer::printErrors(const gtsam::Values & vals) const
+void Optimizer::printErrors(bool optimized) const
 {
+  const auto & vals = optimized ? optimized_values_ : values_;
   for (size_t i = 0; i < graph_.size(); i++) {
-    std::cout << "factor " << i << " has error: " << graph_.at(i)->error(vals)
-              << std::endl;
+    const auto it = factor_to_name_.find(i);
+    if (it == factor_to_name_.end()) {
+      BOMB_OUT("no clear text name for factor " << i);
+    }
+    std::cout << "factor " << it->second << "(" << i
+              << ") has error: " << graph_.at(i)->error(vals) << std::endl;
   }
 }
 
@@ -442,8 +459,8 @@ void Optimizer::checkForUnconstrainedVariables() const
 #ifdef DEBUG_SINGULARITIES
     if (kv.first < 2) {
       for (const auto & k : kv.second) {
-        const auto it = key_to_name_.find(k);
-        if (it != key_to_name_.end()) {
+        const auto it = value_to_name_.find(k);
+        if (it != value_to_name_.end()) {
           LOG_INFO(k << " is " << it->second);
         } else {
           LOG_WARN(k << " has no clear text name");

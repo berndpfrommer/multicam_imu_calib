@@ -510,12 +510,14 @@ void Calibration::initializeIMUGraph(
   const auto & preint = imu->getSavedPreint();
   assert(!preint.empty());
   // t_1 is time when integration started, not ended
+  // ------------- add IMU state for very first rig state
+  // This will add a pose, a velocity, and a bias variable
   const auto t0 = preint[0].t_1;
   imu->setCurrentState(gtsam::NavState(
     getRigPose(t0, false) * imu->getPose(), gtsam::Vector3::Zero()));
-  imu->addValueKeys(optimizer_->addIMUState(
-    t0, imu, imu->getCurrentState(), imu->getPreliminaryBiasEstimate()));
-  const auto vk = imu->getValueKeys().back();
+  const auto vk = optimizer_->addIMUState(
+    t0, imu, imu->getCurrentState(), imu->getPreliminaryBiasEstimate());
+  imu->addValueKeys(vk);
   // add prior for start velocity to be zero
   (void)optimizer_->addPrior(
     vk.velocity_key, gtsam::Vector3(gtsam::Vector3::Zero()),
@@ -523,20 +525,31 @@ void Calibration::initializeIMUGraph(
   // and set some bias for the starting prior
   imu->setBiasPriorKey(optimizer_->addPrior(
     vk.bias_key, imu->getBiasPrior(), imu->getBiasPriorNoise()));
+  // for testing, add prior for the initial IMU pose as well
   if (add_initial_imu_pose_prior_) {
-    // pin down initial IMU pose for testing
     (void)optimizer_->addPrior(
       vk.pose_key, imu->getCurrentState().pose(),
       utilities::makeNoise6(1e-3 /*angle*/, 1e-3));
   }
+  gtsam::NavState prev_state = imu->getCurrentState();  // XXX remove later
+  std::cout << "initial state: " << std::endl << prev_state << std::endl;
+  std::cout << "prelim bias estimate: " << std::endl
+            << imu->getPreliminaryBiasEstimate() << std::endl;
   for (size_t i = 0; i < preint.size(); i++) {
     const auto & p = preint[i];
+    std::cout << i << " preint: " << p << std::endl;
+    std::cout << "accum: " << std::endl << p.preint << std::endl;
     auto prev_keys = imu->getValueKeys().back();
     imu->setCurrentState(gtsam::NavState(
       getRigPose(p.t_2, false) * imu->getPose(), gtsam::Vector3::Zero()));
-    imu->addValueKeys(optimizer_->addIMUState(
-      p.t_2, imu, imu->getCurrentState(), imu->getPreliminaryBiasEstimate()));
-    const auto current_keys = imu->getValueKeys().back();
+    auto pn = p.preint.predict(prev_state, imu->getPreliminaryBiasEstimate());
+    std::cout << "predicted state: " << std::endl << pn << std::endl;
+    prev_state = imu->getCurrentState();  // XXX remove later
+    std::cout << "actually used state: " << std::endl
+              << prev_state << std::endl;
+    const auto current_keys = optimizer_->addIMUState(
+      p.t_2, imu, imu->getCurrentState(), imu->getPreliminaryBiasEstimate());
+    imu->addValueKeys(current_keys);
     // LOG_INFO("adding imu factor for t = " << current_keys.t << " vs " << p.t_2);
     const auto [t, fk] =
       optimizer_->addPreintegratedFactor(prev_keys, current_keys, p.preint);
@@ -560,7 +573,9 @@ bool Calibration::applyIMUData(uint64_t t)
       if (imu->isPreintegratedUpTo(t)) {
         if (!imu->hasValidPose()) {
           imu->updatePoseEstimate(t, getRigPose(t, false));
-          imu->savePreint(t);
+          if (imu->hasValidPreint()) {
+            imu->savePreint(t);
+          }
           if (imu->hasValidPose()) {
             initializeIMUGraph(t, imu);
           }
@@ -786,8 +801,9 @@ std::tuple<double, double> Calibration::runOptimizer()
 
 void Calibration::sanityChecks() const
 {
-  optimizer_->checkForUnknownValues();
-  optimizer_->checkForUnconstrainedVariables();
+  // optimizer_->checkForUnknownValues();
+  // optimizer_->checkForUnconstrainedVariables();
+  optimizer_->printErrors(false);
 }
 
 void Calibration::runDiagnostics(const std::string & out_dir)

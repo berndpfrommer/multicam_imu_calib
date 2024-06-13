@@ -229,6 +229,8 @@ void IMU::saveAttitude(uint64_t t)
   }
 }
 
+bool IMU::hasValidPreint() const { return (accum_->deltaTij() > 1e-9); }
+
 void IMU::savePreint(uint64_t t2)
 {
   saved_preint_.emplace_back(*accum_, accum_start_time_, t2);
