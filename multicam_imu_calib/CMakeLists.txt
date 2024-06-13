@@ -68,6 +68,7 @@ add_library(${PROJECT_NAME} SHARED
   src/detector_loader.cpp
   src/gtsam_extensions/Cal3DS3.cpp
   src/gtsam_extensions/Cal3FS2.cpp
+  src/imu_data.cpp
   src/init_pose.cpp
 )
 

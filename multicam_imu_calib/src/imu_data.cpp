@@ -13,27 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef MULTICAM_IMU_CALIB__IMU_DATA_HPP_
-#define MULTICAM_IMU_CALIB__IMU_DATA_HPP_
-
-#include <gtsam/base/Vector.h>
-
-#include <iostream>
+#include <multicam_imu_calib/imu_data.hpp>
 
 namespace multicam_imu_calib
 {
-struct IMUData
+
+std::ostream & operator<<(std::ostream & os, const IMUData & d)
 {
-  explicit IMUData(
-    uint64_t ta = 0, const gtsam::Vector3 & om = gtsam::Vector3::Zero(),
-    const gtsam::Vector3 & a = gtsam::Vector3::Zero())
-  : t(ta), omega(om), acceleration(a)
-  {
-  }
-  uint64_t t;
-  gtsam::Vector3 omega;
-  gtsam::Vector3 acceleration;
-};
-std::ostream & operator<<(std::ostream & os, const IMUData & d);
+  os << "t: " << d.t << ", acc: " << d.acceleration.transpose()
+     << ", om: " << d.omega.transpose();
+  return (os);
+}
 }  // namespace multicam_imu_calib
-#endif  // MULTICAM_IMU_CALIB__IMU_DATA_HPP_
