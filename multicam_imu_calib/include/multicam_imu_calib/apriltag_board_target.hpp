@@ -32,9 +32,9 @@ public:
   Detection detect(const Image::ConstSharedPtr & img) final;
 
   static SharedPtr make(
-    const std::string & type, const std::string & fam, double tag_size,
-    uint32_t rows, uint32_t cols, double dist_rows, double dist_cols,
-    uint32_t start_id);
+    const std::string & type, const std::string & fam, uint16_t border_width,
+    double tag_size, uint32_t rows, uint32_t cols, double dist_rows,
+    double dist_cols, uint32_t start_id);
 
 private:
   AprilTagBoardTarget() = default;

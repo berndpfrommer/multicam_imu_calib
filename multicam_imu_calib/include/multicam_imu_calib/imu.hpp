@@ -95,9 +95,12 @@ public:
   const auto & getAttitudes() const { return (attitudes_); }
   const auto & getAccum() const { return (accum_); }
   const auto & getSavedPreint() const { return (saved_preint_); }
+  const auto & getWorldOrientation() const { return (world_orientation_); }
   gtsam::imuBias::ConstantBias getBiasPrior() const;
   gtsam::SharedNoiseModel getBiasPriorNoise() const;
   bool hasValidPreint() const;
+  bool hasWorldOrientation() const { return (world_orientation_valid_); }
+  bool hasInitializedIMUGraph() const { return (has_initialized_imu_graph_); }
 
   // ------------ setters
   void setPose(const gtsam::Pose3 & pose);
@@ -119,6 +122,7 @@ public:
   void setBiasPriorKey(factor_key_t k) { bias_prior_key_ = k; }
   void setCurrentState(const gtsam::NavState & s) { current_state_ = s; }
   void setFrameId(const std::string & id) { frame_id_ = id; }
+  void setHasInitializedIMUGraph(bool f) { has_initialized_imu_graph_ = f; }
 
   // ------------ others
   void parametersComplete();
@@ -181,6 +185,9 @@ private:
   bool has_valid_pose_{false};
   uint64_t accum_start_time_{0};
   std::vector<SavedPreint> saved_preint_;
+  bool world_orientation_valid_{false};
+  gtsam::Rot3 world_orientation_;
+  bool has_initialized_imu_graph_{false};
 };
 std::ostream & operator<<(std::ostream & os, const IMU::SavedPreint & p);
 }  // namespace multicam_imu_calib

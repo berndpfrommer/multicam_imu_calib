@@ -32,6 +32,34 @@ namespace multicam_imu_calib
 {
 static rclcpp::Logger get_logger() { return (rclcpp::get_logger("imu")); }
 
+// Finds the IMU world pose T_w_i that aligns the gravity
+// vector with the measured one.
+static gtsam::Rot3 findInitialWorldOrientation(const gtsam::Vector3 & acc_imu)
+{
+  if (acc_imu.norm() < 1e-4) {
+    BOMB_OUT("acceleration must be non-zero on init!");
+  }
+  const auto g_i = acc_imu.normalized();
+  // first rotate the measured acceleration vector such that it
+  // is parallel to the z-axis. The axis to rotate along is thus
+  // the cross product of the measured acc vector, and the z axis,
+  // and the angle is given by the projection of acc vector onto z axis.
+  const gtsam::Vector3 axis = g_i.cross(gtsam::Vector3(0, 0, 1.0)).normalized();
+  const double alpha = std::acos(g_i.dot(gtsam::Vector3(0, 0, 1.0)));
+  const auto R_1 = Eigen::AngleAxisd(alpha, axis).toRotationMatrix();
+  // next, rotate the coordinate system along the z-axis until
+  // the original world x coordinate has zero y component. This
+  // means the IMU frame's x-axis will point in the direction of world axis x,
+  // and maybe in direction z, but have no component along y. That's
+  // the best we can do, given that we had to align the gravity vector along z
+  const double beta = atan2(
+    R_1(1, 0), R_1(0, 0));  // angle of the rotated x-axis to the new x-axis
+  const auto R_2 = Eigen::AngleAxisd(-beta, gtsam::Vector3(0, 0, 1.0));
+  // chain the two rotations together. This gives R_w_i
+  const gtsam::Rot3 rot(R_2.toRotationMatrix() * R_1);
+  return (rot);
+}
+
 IMU::IMU(const std::string & name, size_t idx)
 : name_(name), index_(idx), accum_omega_("omega"), accum_acc_("acc")
 {
@@ -277,27 +305,7 @@ bool IMU::testAttitudes(const std::vector<StampedAttitude> & sa) const
 
 void IMU::initializeWorldPose(uint64_t t, const gtsam::Pose3 & rigPose)
 {
-  if (current_data_.acceleration.norm() < 1e-4) {
-    BOMB_OUT("acceleration must be non-zero on init!");
-  }
-  const gtsam::Vector3 g_i = current_data_.acceleration.normalized();
-  // first rotate the measured acceleration vector such that it
-  // is parallel to the z-axis. The axis to rotate along is thus
-  // the cross product of the measured acc vector, and the z axis,
-  // and the angle is given by the projection of acc vector onto z axis.
-  const gtsam::Vector3 axis = g_i.cross(gtsam::Vector3(0, 0, 1.0)).normalized();
-  const double alpha = std::acos(g_i.dot(gtsam::Vector3(0, 0, 1.0)));
-  const auto R_1 = Eigen::AngleAxisd(alpha, axis).toRotationMatrix();
-  // next, rotate the coordinate system along the z-axis until
-  // the original world x coordinate has zero y component. This
-  // means the IMU frame's x-axis will point in the direction of world axis x,
-  // and maybe in direction z, but have no component along y. That's
-  // the best we can do, given that we had to align the gravity vector along z
-  const double beta = atan2(
-    R_1(1, 0), R_1(0, 0));  // angle of the rotated x-axis to the new x-axis
-  const auto R_2 = Eigen::AngleAxisd(-beta, gtsam::Vector3(0, 0, 1.0));
-  // chain the two rotations together
-  const gtsam::Rot3 rot(R_2.toRotationMatrix() * R_1);
+  const auto rot = findInitialWorldOrientation(current_data_.acceleration);
   initial_pose_ = gtsam::Pose3(rot, rigPose.translation());
   current_state_ = gtsam::NavState(initial_pose_, gtsam::Vector3(0, 0, 0));
 // #define DEBUG_INIT
@@ -352,6 +360,12 @@ void IMU::addData(const IMUData & d)
   avg_data_.t++;  // abuse time as counter
   avg_data_.acceleration += d.acceleration;
   avg_data_.omega += d.omega;
+  if (avg_data_.t > 50 && !world_orientation_valid_) {
+    const auto acc_i = avg_data_.acceleration.normalized();
+    world_orientation_ = findInitialWorldOrientation(acc_i);
+    world_orientation_valid_ = true;
+    LOG_INFO(getName() << " found initial world orientation.");
+  }
 }
 
 gtsam::imuBias::ConstantBias IMU::getPreliminaryBiasEstimate() const

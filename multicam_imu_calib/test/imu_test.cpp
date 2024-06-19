@@ -101,6 +101,8 @@ TEST(multicam_imu_calib, imu_preintegration)
   const gtsam::Pose3 T_r_i(
     gtsam::Rot3::AxisAngle(gtsam::Unit3(1, 0, 0), M_PI * 0.1),
     gtsam::Vector3(0, 0, 0));
+  const auto & targ = calib.getTargets()[0];
+  targ->setPoseKey(calib.addPose(targ->getName(), targ->getPose()));
 
   for (int i_axis = 0; i_axis < 3; i_axis++) {
     Eigen::Vector3d axis = Eigen::Vector3d::Zero();
@@ -121,7 +123,7 @@ TEST(multicam_imu_calib, imu_preintegration)
           cam->getDistortionCoefficients(), T_w_c, wc);
         if (calib.hasRigPose(t)) {  // should always be true
           auto det = makeDetection(wc, ip);
-          calib.addDetection(0, t, det);
+          calib.addDetection(cam, targ, t, det);
         }
         imu_attitudes.push_back(
           multicam_imu_calib::StampedAttitude(t, T_w_i.rotation()));
@@ -154,7 +156,7 @@ TEST(multicam_imu_calib, imu_extrinsic_single_cam)
   multicam_imu_calib::Calibration calib;
   calib.readConfigFile("single_cam_imu.yaml");
   const auto cam = calib.getCameraList()[0];  // first camera
-
+  const auto & targ = calib.getTargets()[0];
   // initialize the camera perfectly
   cam->setPoseKey(
     calib.addPose(cam->getName(), cam->getPose()));  // perfect init
@@ -189,6 +191,9 @@ TEST(multicam_imu_calib, imu_extrinsic_single_cam)
     gtsam::Rot3::AxisAngle(gtsam::Unit3(1, 0, 0), M_PI * 0.1),
     gtsam::Vector3(0, 0, 0));
 
+  targ->setPose(gtsam::Pose3());
+  targ->setPoseKey(calib.addPose(targ->getName(), targ->getPose()));
+
   for (int i_axis = 0; i_axis < 3; i_axis++) {
     Eigen::Vector3d axis = Eigen::Vector3d::Zero();
     axis(i_axis) = 1.0;
@@ -208,7 +213,7 @@ TEST(multicam_imu_calib, imu_extrinsic_single_cam)
           cam->getDistortionCoefficients(), T_w_c, wc);
         if (calib.hasRigPose(t)) {  // should always be true
           auto det = makeDetection(wc, ip);
-          calib.addDetection(0, t, det);
+          calib.addDetection(cam, targ, t, det);
         }
         imu_attitudes.push_back(
           multicam_imu_calib::StampedAttitude(t, T_w_i.rotation()));
@@ -263,6 +268,9 @@ static std::tuple<double, double, double, double> do_extrinsic_imu_calib(
   calib.addPosePrior(cam, cam->getPose(), cam->getPoseNoise());
   calib.addIntrinsics(
     cam, cam->getIntrinsics(), cam->getDistortionCoefficients());
+
+  const auto & targ = calib.getTargets()[0];
+  targ->setPoseKey(calib.addPose(targ->getName(), targ->getPose()));
 
   // world points form a square in the x/y plane
   std::vector<std::array<double, 3>> wc = {
@@ -320,7 +328,7 @@ static std::tuple<double, double, double, double> do_extrinsic_imu_calib(
           cam->getDistortionCoefficients(), T_w_r * T_r_c, wc);
         if (calib.hasRigPose(t)) {  // should always be true
           auto det = makeDetection(wc, ip);
-          calib.addDetection(0, t, det);
+          calib.addDetection(cam, targ, t, det);
         }
         for (size_t i_imu = 0; i_imu < imu_updates_per_frame;
              i_imu++, i_pose++) {

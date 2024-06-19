@@ -18,6 +18,7 @@
 #include <multicam_imu_calib/detector_loader.hpp>
 #include <multicam_imu_calib/logging.hpp>
 #include <multicam_imu_calib/utilities.hpp>
+#include <set>
 
 #ifdef USE_CV_BRIDGE_HPP
 #include <cv_bridge/cv_bridge.hpp>
@@ -38,6 +39,8 @@ AprilTagBoardTarget::~AprilTagBoardTarget()
   detector_.reset();  // remove reference explicitly for debugging
 }
 
+static std::set<uint32_t> known_tags;
+
 AprilTagBoardTarget::Detection AprilTagBoardTarget::detect(
   const Image::ConstSharedPtr & img)
 {
@@ -45,12 +48,14 @@ AprilTagBoardTarget::Detection AprilTagBoardTarget::detect(
   ApriltagArray tagArray;
   detector_->detect(cvImg->image, &tagArray);
   Detection det;
-  det.id = id_;
+  det.id = getName();  // target id
   if (!tagArray.detections.empty()) {
     for (const auto & tag : tagArray.detections) {
       const auto it = id_to_wp_.find(tag.id);
       if (it == id_to_wp_.end()) {
-        LOG_WARN("dropping unknown tag with id " << tag.id);
+        if (known_tags.find(tag.id) == known_tags.end()) {
+          LOG_WARN("dropping unknown tag with id " << tag.id);
+        }
         continue;
       }
       for (const auto & wp : it->second) {
@@ -65,8 +70,9 @@ AprilTagBoardTarget::Detection AprilTagBoardTarget::detect(
 }
 
 AprilTagBoardTarget::SharedPtr AprilTagBoardTarget::make(
-  const std::string & type, const std::string & fam, double ts, uint32_t rows,
-  uint32_t cols, double dist_rows, double dist_cols, uint32_t start_id)
+  const std::string & type, const std::string & fam, uint16_t border_width,
+  double ts, uint32_t rows, uint32_t cols, double dist_rows, double dist_cols,
+  uint32_t start_id)
 {
   SharedPtr board(new AprilTagBoardTarget());
   // make tag detector of right kind
@@ -79,10 +85,12 @@ AprilTagBoardTarget::SharedPtr AprilTagBoardTarget::make(
       const std::array<std::array<double, 2>, 4> wp{
         {{x - d, y - d}, {x + d, y - d}, {x + d, y + d}, {x - d, y + d}}};
       board->addTag(id, wp);
+      known_tags.insert(id);
     }
   }
   board->detector_ =
     DetectorLoader::getInstance()->getDetectorInstance(type, fam);
+  board->detector_->setBlackBorder(border_width);
   return (board);
 }
 

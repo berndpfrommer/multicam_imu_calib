@@ -342,9 +342,7 @@ void Calibration::readConfigFile(const std::string & file)
   for (const auto & target : targets_) {
     // assume targets to align with world frame until
     // IMU data says otherwise
-    target->setPoseKey(addPose(
-      "target " + target->getName() + " " + std::to_string(target->getId()),
-      gtsam::Pose3()));
+    target->setPoseKey(addPose("target_" + target->getName(), gtsam::Pose3()));
   }
 }
 
@@ -484,11 +482,11 @@ bool Calibration::hasRigPose(uint64_t t) const
   return (time_to_rig_pose_.find(t) != time_to_rig_pose_.end());
 }
 
-std::shared_ptr<Target> Calibration::findTarget(uint32_t id) const
+std::shared_ptr<Target> Calibration::findTarget(const std::string & id) const
 {
   auto it = std::find_if(
     targets_.begin(), targets_.end(),
-    [id](const auto & targ) { return (targ->getId() == id); });
+    [id](const auto & targ) { return (targ->getName() == id); });
   if (it == targets_.end()) {
     BOMB_OUT("cannot find target with id: " << id);
   }
@@ -496,43 +494,54 @@ std::shared_ptr<Target> Calibration::findTarget(uint32_t id) const
 }
 
 void Calibration::addProjectionFactors(
-  size_t cam_idx, uint32_t target_id, uint64_t t,
-  const std::vector<std::array<double, 3>> & wc,
+  const Camera::SharedPtr & cam, const Target::SharedPtr & targ, uint64_t t,
+  const std::vector<std::array<double, 3>> & tc,
   const std::vector<std::array<double, 2>> & ic)
 {
-  const auto camera = camera_list_[cam_idx];
-  const auto target = findTarget(target_id);
-
-  image_points_[cam_idx].push_back(ic);
-  world_points_[cam_idx].push_back(wc);
-  detection_times_[cam_idx].push_back(t);
-  camera->addProjectionFactors(
+  image_points_[cam->getIndex()].push_back(ic);
+  world_points_[cam->getIndex()].push_back(tc);
+  detection_times_[cam->getIndex()].push_back(t);
+  cam->addProjectionFactors(
     t, optimizer_->addProjectionFactors(
-         camera, getRigPoseKey(t), target->getPoseKey(), t, wc, ic));
+         cam, getRigPoseKey(t), targ->getPoseKey(), t, tc, ic));
 }
 
 void Calibration::addDetection(
-  size_t cam_idx, uint64_t t, const Detection & det)
+  const Camera::SharedPtr & cam, const Target::SharedPtr & targ, uint64_t t,
+  const Detection & det)
 {
-  std::vector<std::array<double, 3>> w_pts;
-  for (const auto & wp : det.object_points) {
-    w_pts.push_back({wp.x, wp.y, wp.z});
+  std::vector<std::array<double, 3>> t_pts;
+  for (const auto & op : det.object_points) {
+    t_pts.push_back({op.x, op.y, op.z});
   }
   std::vector<std::array<double, 2>> i_pts;
   for (const auto & ip : det.image_points) {
     i_pts.push_back({ip.x, ip.y});
   }
-  addProjectionFactors(cam_idx, det.id, t, w_pts, i_pts);
+  addProjectionFactors(cam, targ, t, t_pts, i_pts);
 }
 
 void Calibration::addIMUData(size_t imu_idx, const IMUData & data)
 {
-  imu_list_[imu_idx]->addData(data);
+  auto imu = imu_list_[imu_idx];
+  imu->addData(data);
+}
+
+Target::SharedPtr Calibration::getTarget(const std::string & id)
+{
+  for (auto targ : targets_) {
+    if (targ->getName() == id) {
+      return (targ);
+    }
+  }
+  BOMB_OUT("target " << id << "unknown!");
 }
 
 void Calibration::initializeIMUGraph(
-  uint64_t t_curr, const IMU::SharedPtr & imu)
+  const IMU::SharedPtr & imu, uint64_t t_curr)
 {
+  assert(has_valid_T_w_o_);
+  assert(imu->hasValidPose());
   LOG_INFO("initializing IMU graph!");
   (void)t_curr;
   const auto & preint = imu->getSavedPreint();
@@ -541,8 +550,9 @@ void Calibration::initializeIMUGraph(
   // ------------- add IMU state for very first rig state
   // This will add a pose, a velocity, and a bias variable
   const auto t0 = preint[0].t_1;
+  // T_w_imu = T_w_o * T_o_r * T_r_imu
   imu->setCurrentState(gtsam::NavState(
-    getRigPose(t0, false) * imu->getPose(), gtsam::Vector3::Zero()));
+    T_w_o_ * getRigPose(t0, false) * imu->getPose(), gtsam::Vector3::Zero()));
   const auto vk = optimizer_->addIMUState(
     t0, imu, imu->getCurrentState(), imu->getPreliminaryBiasEstimate());
   imu->addValueKeys(vk);
@@ -550,7 +560,7 @@ void Calibration::initializeIMUGraph(
   (void)optimizer_->addPrior(
     vk.velocity_key, gtsam::Vector3(gtsam::Vector3::Zero()),
     utilities::makeNoise3(1e-3));
-  // and set some bias for the starting prior
+  // and set some prior for the starting bias
   imu->setBiasPriorKey(optimizer_->addPrior(
     vk.bias_key, imu->getBiasPrior(), imu->getBiasPriorNoise()));
   // for testing, add prior for the initial IMU pose as well
@@ -569,7 +579,8 @@ void Calibration::initializeIMUGraph(
     std::cout << "accum: " << std::endl << p.preint << std::endl;
     auto prev_keys = imu->getValueKeys().back();
     imu->setCurrentState(gtsam::NavState(
-      getRigPose(p.t_2, false) * imu->getPose(), gtsam::Vector3::Zero()));
+      T_w_o_ * getRigPose(p.t_2, false) * imu->getPose(),
+      gtsam::Vector3::Zero()));
     auto pn = p.preint.predict(prev_state, imu->getPreliminaryBiasEstimate());
     std::cout << "predicted state: " << std::endl << pn << std::endl;
     prev_state = imu->getCurrentState();  // XXX remove later
@@ -601,15 +612,34 @@ bool Calibration::applyIMUData(uint64_t t)
       if (imu->isPreintegratedUpTo(t)) {
         if (!imu->hasValidPose()) {
           imu->updatePoseEstimate(t, getRigPose(t, false));
+        }
+        if (
+          !has_valid_T_w_o_ &&
+          (imu->hasWorldOrientation() && imu->hasValidPose())) {
+          const auto T_r_o = getRigPose(t, false).inverse();
+          const auto R_w_imu = imu->getWorldOrientation();
+          const auto T_imu_r = imu->getPose().inverse();
+          T_w_o_ = gtsam::Pose3(
+            R_w_imu * T_imu_r.rotation() * T_r_o.rotation(),
+            gtsam::Point3(0, 0, 0));
+          T_w_o_key_ = optimizer_->addPose("T_w_o", T_w_o_);
+          has_valid_T_w_o_ = true;
+          LOG_INFO("initialized world-to-object transform");
+          LOG_INFO(T_w_o_);
+        }
+        if (!imu->hasInitializedIMUGraph()) {
           if (imu->hasValidPreint()) {
             imu->savePreint(t);
           }
-          if (imu->hasValidPose()) {
-            initializeIMUGraph(t, imu);
-          }
         }
-        if (imu->hasValidPose()) {
-          imu->updateNavState(t, getRigPose(t, false));
+        if (
+          !imu->hasInitializedIMUGraph() && imu->hasValidPose() &&
+          has_valid_T_w_o_) {
+          initializeIMUGraph(imu, t);
+          imu->setHasInitializedIMUGraph(true);
+        }
+        if (imu->hasInitializedIMUGraph()) {
+          imu->updateNavState(t, getRigPose(t, false));  // predict
           const auto prev_keys = imu->getValueKeys().back();
           if (t > prev_keys.t) {
             imu->addValueKeys(optimizer_->addIMUState(

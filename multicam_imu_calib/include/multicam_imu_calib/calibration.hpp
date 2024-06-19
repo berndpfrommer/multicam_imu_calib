@@ -50,6 +50,7 @@ public:
   void sanityChecks() const;
   void runDiagnostics(const std::string & out_dir);
   void setAddInitialIMUPosePrior(bool f) { add_initial_imu_pose_prior_ = f; }
+  void setAnyTargetHasPose(bool f) { any_target_has_pose_ = f; }
 
   void writeResults(const std::string & outDir);
   const auto & getCameras() { return (cameras_); }
@@ -59,7 +60,7 @@ public:
   void addIntrinsics(
     const Camera::SharedPtr & cam, const Intrinsics & intr,
     const std::vector<double> & dist);
-  value_key_t addPose(const std::string &label, const gtsam::Pose3 &pose);
+  value_key_t addPose(const std::string & label, const gtsam::Pose3 & pose);
 
   void addPosePrior(
     const Camera::SharedPtr & dev, const gtsam::Pose3 & T_r_d,
@@ -70,10 +71,12 @@ public:
 
   value_key_t addRigPose(uint64_t t, const gtsam::Pose3 & pose);
   void addProjectionFactors(
-    size_t cam_idx, uint32_t target_id, uint64_t t,
+    const Camera::SharedPtr & cam, const Target::SharedPtr & targ, uint64_t t,
     const std::vector<std::array<double, 3>> & wc,
     const std::vector<std::array<double, 2>> & ic);
-  void addDetection(size_t cam_idx, uint64_t t, const Detection & detection);
+  void addDetection(
+    const Camera::SharedPtr & cam, const Target::SharedPtr & targ, uint64_t t,
+    const Detection & detection);
   void addIMUData(size_t imu_idx, const IMUData & data);
   void initializeCameraPosesAndIntrinsics();
   std::unordered_map<std::string, size_t> getTopicToCamera(
@@ -93,6 +96,11 @@ public:
   value_key_t getRigPoseKey(uint64_t t) const;
   gtsam::Pose3 getIMUPose(size_t imu_idx, bool opt) const;
   gtsam::Pose3 getCameraPose(size_t cam_idx, bool opt) const;
+  Target::SharedPtr getTarget(const std::string & id);
+  const auto & getTargets() const { return (targets_); }
+  bool getAnyTargetHasPose() const { return (any_target_has_pose_); }
+  bool hasValidT_w_o() const { return (has_valid_T_w_o_); }
+  const auto & getT_w_o() const { return (T_w_o_); }
 
 private:
   void parseIntrinsicsAndDistortionModel(
@@ -102,8 +110,8 @@ private:
   bool applyIMUData(uint64_t t);
   std::vector<StampedAttitude> getRigAttitudes(
     const std::vector<uint64_t> & times) const;
-  void initializeIMUGraph(uint64_t t, const IMU::SharedPtr & imu);
-  Target::SharedPtr findTarget(uint32_t id) const;
+  void initializeIMUGraph(const IMU::SharedPtr & imu, uint64_t t);
+  Target::SharedPtr findTarget(const std::string & id) const;
 
   std::tuple<std::vector<double>, std::vector<int>, std::vector<double>>
   sanitizeCoefficients(
@@ -131,6 +139,10 @@ private:
   bool add_initial_imu_pose_prior_{false};
   std::vector<Target::SharedPtr> targets_;
   YAML::Node config_;
+  bool any_target_has_pose_{false};
+  bool has_valid_T_w_o_{false};
+  gtsam::Pose3 T_w_o_;
+  value_key_t T_w_o_key_{-1};
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__CALIBRATION_HPP_

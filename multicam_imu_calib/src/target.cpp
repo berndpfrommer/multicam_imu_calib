@@ -16,12 +16,11 @@
 #include <multicam_imu_calib/apriltag_board_target.hpp>
 #include <multicam_imu_calib/logging.hpp>
 #include <multicam_imu_calib/target.hpp>
+#include <set>
 
 namespace multicam_imu_calib
 {
 static rclcpp::Logger get_logger() { return (rclcpp::get_logger("target")); }
-
-static uint32_t id = 0;
 
 Target::SharedPtr Target::make(const YAML::Node & yn)
 {
@@ -30,6 +29,7 @@ Target::SharedPtr Target::make(const YAML::Node & yn)
   if (tp == "apriltag_board") {
     p = AprilTagBoardTarget::make(
       yn["detector"].as<std::string>(), yn["family"].as<std::string>(),
+      yn["border_width"] ? yn["border_width"].as<uint16_t>() : 1,
       yn["tag_size"].as<double>(), yn["rows"].as<uint32_t>(),
       yn["columns"].as<uint32_t>(), yn["distance_rows"].as<double>(),
       yn["distance_columns"].as<double>(),
@@ -38,7 +38,6 @@ Target::SharedPtr Target::make(const YAML::Node & yn)
     BOMB_OUT("target type not implemented: " << tp);
   }
   p->setName(yn["name"].as<std::string>());
-  p->setId(id++);
   return (p);
 }
 
@@ -47,6 +46,7 @@ void Target::setPose(const gtsam::Pose3 & p)
   pose_ = p;
   has_valid_pose_ = true;
 }
+
 std::vector<Target::SharedPtr> Target::readConfigFile(const std::string & f)
 {
   std::vector<SharedPtr> targets;
@@ -58,12 +58,21 @@ std::vector<Target::SharedPtr> Target::readConfigFile(const std::string & f)
   if (!nodes.IsSequence()) {
     BOMB_OUT("config file has no list of targets!");
   }
+  std::set<std::string> names;
   for (const YAML::Node & target : nodes) {
+    if (!target["name"]) {
+      BOMB_OUT("every target must have a unique name!");
+    }
+    const auto name = target["name"].as<std::string>();
+    if (names.find(name) != names.end()) {
+      BOMB_OUT("duplicate target name: " << name);
+    }
     Target::SharedPtr targ = Target::make(target);
-    LOG_INFO("using target: " << targ->getName());
     targets.push_back(targ);
   }
   return (targets);
 }
+
+std::string Target::getFrameId() const { return (name_); }
 
 }  // namespace multicam_imu_calib

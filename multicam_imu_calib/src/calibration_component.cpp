@@ -54,6 +54,22 @@ void CalibrationComponent::DetectionHandler::callback(
   component_->newDetectionArrived(this);
 }
 
+static std::deque<size_t> targetsWithPosesFirst(
+  const Calibration::SharedPtr & calib,
+  const multicam_imu_calib_msgs::msg::DetectionArray & msg)
+{
+  std::deque<size_t> sorted;
+  for (size_t i = 0; i < msg.detections.size(); i++) {
+    auto target = calib->getTarget(msg.detections[i].id);
+    if (target->hasValidPose()) {
+      sorted.push_front(i);
+    } else {
+      sorted.push_back(i);
+    }
+  }
+  return (sorted);
+}
+
 void CalibrationComponent::DetectionHandler::processOldestMessage()
 {
   if (messages_.empty()) {
@@ -62,35 +78,77 @@ void CalibrationComponent::DetectionHandler::processOldestMessage()
   const DetectionArray::ConstSharedPtr msg = messages_.front();
   messages_.pop_front();
   const uint64_t t = rclcpp::Time(msg->header.stamp).nanoseconds();
-  for (const auto & det : msg->detections) {
+  const auto sorted_idx = targetsWithPosesFirst(calib_, *msg);
+  for (const auto & idx : sorted_idx) {
+    auto & det = msg->detections[idx];
+    const auto & target = calib_->getTarget(det.id);
+    /*
+    LOG_INFO(
+      "before: " << target->getName() << " rig: " << (int)calib_->hasRigPose(t)
+                 << " cam: " << (int)camera_->hasValidPose());
+                 */
     if (!calib_->hasRigPose(t)) {
       if (camera_->hasValidPose()) {
-        const auto T_c_w = init_pose::findCameraPose(camera_, det);
-        if (T_c_w) {
-          // T_w_r = T_w_c * T_c_r
-          calib_->addRigPose(t, (camera_->getPose() * (*T_c_w)).inverse());
-          component_->newRigPoseAdded(t);
+        const auto T_c_t = init_pose::findCameraPose(camera_, det);
+        if (T_c_t) {
+          if (!target->hasValidPose() && !calib_->getAnyTargetHasPose()) {
+            // first target object pose is initialized to identity!
+            LOG_INFO("initialized pose to id of " << target->getName());
+            target->setPose(gtsam::Pose3());
+            target->setPoseKey(
+              calib_->addPose(target->getName(), target->getPose()));
+            calib_->setAnyTargetHasPose(true);
+          }
+          if (target->hasValidPose()) {
+            // T_o_r = T_o_t * T_t_c * T_c_r = T_o_t * (T_r_c * T_c_t)^-1
+            calib_->addRigPose(
+              t, target->getPose() * (camera_->getPose() * (*T_c_t)).inverse());
+            component_->newRigPoseAdded(t);
+          }
         } else {
           LOG_WARN(
             t << " skipping frame with bad pose init for cam "
               << camera_->getName());
         }
       }
-    } else {  // rig has valid pose, check if camera pose can be initialized
+    } else {  // rig has valid pose
       if (!camera_->hasValidPose()) {
-        const auto T_c_w = init_pose::findCameraPose(camera_, det);
-        if (T_c_w) {
-          const auto T_w_r = calib_->getRigPose(t, false);
-          camera_->setPose(((*T_c_w) * T_w_r).inverse());
-          LOG_INFO("initialized pose of camera " << camera_->getName());
-          camera_->setPoseKey(
-            calib_->addPose(camera_->getName(), camera_->getPose()));
+        if (target->hasValidPose()) {
+          const auto T_c_t = init_pose::findCameraPose(camera_, det);
+          if (T_c_t) {
+            // rig and target pose known but not camera
+            const auto T_o_r = calib_->getRigPose(t, false);
+            const auto T_t_o = target->getPose().inverse();
+            camera_->setPose(((*T_c_t) * T_t_o * T_o_r).inverse());
+            LOG_INFO("initialized pose of " << camera_->getName());
+            camera_->setPoseKey(
+              calib_->addPose(camera_->getName(), camera_->getPose()));
+          }
+        }
+      } else {
+        if (!target->hasValidPose()) {
+          const auto T_c_t = init_pose::findCameraPose(camera_, det);
+          if (T_c_t) {
+            // camera and rig pose known, but not target.
+            // T_o_t = T_o_r * T_r_c * T_c_t
+            const auto T_o_t =
+              calib_->getRigPose(t, false) * camera_->getPose() * (*T_c_t);
+            target->setPose(T_o_t);
+            target->setPoseKey(
+              calib_->addPose(target->getName(), target->getPose()));
+            LOG_INFO("initialized pose of " << target->getName());
+          }
         }
       }
     }
     if (calib_->hasRigPose(t) && camera_->hasValidPose()) {
-      calib_->addDetection(camera_->getIndex(), t, det);
+      calib_->addDetection(camera_, target, t, det);
     }
+    /*
+    LOG_INFO(
+      "after: " << target->getName() << " rig: " << (int)calib_->hasRigPose(t)
+                << " cam: " << (int)camera_->hasValidPose());
+                */
   }
 }
 
@@ -123,6 +181,7 @@ CalibrationComponent::CalibrationComponent(const rclcpp::NodeOptions & opt)
 {
   odom_pub_ = create_publisher<Odometry>("rig_odom", 100);
   world_frame_id_ = safe_declare<std::string>("world_frame_id", "map");
+  object_frame_id_ = safe_declare<std::string>("object_frame_id", "object");
   rig_frame_id_ = safe_declare<std::string>("rig_frame_id", "rig");
 
   calib_ = std::make_shared<Calibration>();
@@ -247,14 +306,24 @@ static nav_msgs::msg::Odometry::UniquePtr makeOdom(
 void CalibrationComponent::newRigPoseAdded(uint64_t t)
 {
   std::vector<TFMsg> transforms;
+  if (calib_->hasValidT_w_o()) {
+    transforms.push_back(
+      *makeTransform(t, world_frame_id_, object_frame_id_, calib_->getT_w_o()));
+  }
   if (calib_->hasRigPose(t)) {
-    const auto T_w_r = calib_->getRigPose(t, false);  // unopt pose
+    const auto T_o_r = calib_->getRigPose(t, false);  // unopt pose
     if (odom_pub_->get_subscription_count() != 0) {
-      auto msg = makeOdom(t, world_frame_id_, rig_frame_id_, T_w_r);
+      auto msg = makeOdom(t, object_frame_id_, rig_frame_id_, T_o_r);
       odom_pub_->publish(std::move(msg));
     }
     transforms.push_back(
-      *makeTransform(t, world_frame_id_, rig_frame_id_, T_w_r));
+      *makeTransform(t, object_frame_id_, rig_frame_id_, T_o_r));
+  }
+  for (const auto & cam : calib_->getCameraList()) {
+    if (cam->hasValidPose()) {
+      transforms.push_back(
+        *makeTransform(t, rig_frame_id_, cam->getFrameId(), cam->getPose()));
+    }
   }
   for (const auto & imu : calib_->getIMUList()) {
     if (imu->hasValidPose()) {
@@ -262,10 +331,10 @@ void CalibrationComponent::newRigPoseAdded(uint64_t t)
         *makeTransform(t, rig_frame_id_, imu->getFrameId(), imu->getPose()));
     }
   }
-  for (const auto & cam : calib_->getCameraList()) {
-    if (cam->hasValidPose()) {
-      transforms.push_back(
-        *makeTransform(t, rig_frame_id_, cam->getFrameId(), cam->getPose()));
+  for (const auto & targ : calib_->getTargets()) {
+    if (targ->hasValidPose()) {
+      transforms.push_back(*makeTransform(
+        t, object_frame_id_, targ->getFrameId(), targ->getPose()));
     }
   }
   if (!transforms.empty()) {

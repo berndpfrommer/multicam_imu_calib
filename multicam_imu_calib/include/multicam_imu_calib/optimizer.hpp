@@ -76,9 +76,9 @@ public:
     const DistortionModel & distortion_model,
     const std::vector<double> & distortion_coefficients);
   std::vector<factor_key_t> addProjectionFactors(
-    const Camera::SharedPtr & camera, value_key_t T_w_r_key,
-    value_key_t T_o_r_key, uint64_t t,
-    const std::vector<std::array<double, 3>> & wc,
+    const Camera::SharedPtr & camera, value_key_t T_o_r_key,
+    value_key_t T_o_t_key, uint64_t t,
+    const std::vector<std::array<double, 3>> & tc,
     const std::vector<std::array<double, 2>> & ic);
   value_key_t addRigPose(const std::string & label, const gtsam::Pose3 & pose);
   StampedIMUValueKeys addIMUState(

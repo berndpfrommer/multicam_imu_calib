@@ -117,6 +117,7 @@ private:
   std::vector<IMUHandler::UniquePtr> imu_handlers_;
   std::shared_ptr<rclcpp::Publisher<Odometry>> odom_pub_;
   std::string world_frame_id_;
+  std::string object_frame_id_;
   std::string rig_frame_id_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   rclcpp::Service<Trigger>::SharedPtr srvs_calib_;

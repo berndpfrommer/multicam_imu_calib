@@ -43,14 +43,13 @@ public:
   Type getType() const { return (type_); }
   const auto & getName() const { return (name_); }
   const auto & getPose() const { return (pose_); }
-  auto getId() const { return (id_); }
   auto hasValidPose() const { return (has_valid_pose_); }
   auto getPoseKey() const { return (pose_key_); }
+  std::string getFrameId() const;
   // setters
   void setName(const std::string & s) { name_ = s; }
   void setPose(const gtsam::Pose3 & p);
   void setPoseKey(value_key_t k) { pose_key_ = k; }
-  void setId(uint32_t idx) { id_ = idx; }
 
   static std::vector<SharedPtr> readConfigFile(const std::string & f);
   static SharedPtr make(const YAML::Node & node);
@@ -58,7 +57,6 @@ public:
 protected:
   Type type_{INVALID};
   std::string name_;
-  uint32_t id_{0};
   gtsam::Pose3 pose_;
   bool has_valid_pose_{false};
   value_key_t pose_key_{0};

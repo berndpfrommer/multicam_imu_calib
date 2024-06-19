@@ -46,13 +46,13 @@ int main(int argc, char ** argv)
 
   auto calib_node =
     std::make_shared<multicam_imu_calib::CalibrationComponent>(node_options);
-  exec.add_node(calib_node);
 
   std::vector<std::string> recorded_topics;
   const bool save_detections =
     calib_node->declare_parameter<bool>("save_detections", false);
   if (!save_detections) {
     recorded_topics = calib_node->getPublishedTopics();
+    exec.add_node(calib_node);
   } else {
     LOG_INFO("saving detections!");
     recorded_topics = calib_node->getIMUTopics();
@@ -99,7 +99,9 @@ int main(int argc, char ** argv)
   }
   auto req = std::make_shared<std_srvs::srv::Trigger::Request>();
   auto resp = std::make_shared<std_srvs::srv::Trigger::Response>();
-  calib_node->calibrate(req, resp);
+  if (!save_detections) {
+    calib_node->calibrate(req, resp);
+  }
 
   rclcpp::shutdown(nullptr, "clean exit");
   return 0;

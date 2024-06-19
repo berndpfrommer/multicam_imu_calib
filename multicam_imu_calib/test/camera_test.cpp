@@ -20,6 +20,7 @@
 #include <multicam_imu_calib/calibration.hpp>
 #include <multicam_imu_calib/diagnostics.hpp>
 #include <multicam_imu_calib/intrinsics.hpp>
+#include <multicam_imu_calib/target.hpp>
 #include <multicam_imu_calib/utilities.hpp>
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core/core.hpp>
@@ -182,7 +183,8 @@ static PosesAndPoints generatePosesAndPoints(
     const auto T_w_r = disturbPose(T_w_r0, 0.2, 1.0, 0.5);
     // now get the camera pose from it
     bool rigPoseAdded{false};
-
+    const auto & targ = calib->getTargets()[0];
+    targ->setPoseKey(calib->addPose(targ->getName(), targ->getPose()));
     for (size_t cam_idx = 0; cam_idx < cams.size(); cam_idx++) {
       const auto & cam = cams[cam_idx];
       const auto T_w_c = T_w_r * cam->getPose();
@@ -198,7 +200,7 @@ static PosesAndPoints generatePosesAndPoints(
           (void)calib->addRigPose(t, T_w_r_guess);
           rigPoseAdded = true;
         }
-        calib->addProjectionFactors(cam_idx, 0, t, wc, ip);
+        calib->addProjectionFactors(cam, targ, t, wc, ip);
         cam_world_poses_true[cam_idx].push_back(T_w_c);
         img_pts[cam_idx].push_back(ip);
         time_slot[cam_idx].push_back(t - 1);

@@ -197,27 +197,27 @@ std::tuple<uint64_t, factor_key_t> Optimizer::addPreintegratedFactor(
 }
 
 std::vector<factor_key_t> Optimizer::addProjectionFactors(
-  const Camera::SharedPtr & cam, value_key_t T_w_r_key, value_key_t T_w_o_key,
-  uint64_t t, const std::vector<std::array<double, 3>> & oc,
+  const Camera::SharedPtr & cam, value_key_t T_o_r_key, value_key_t T_o_t_key,
+  uint64_t t, const std::vector<std::array<double, 3>> & tc,
   const std::vector<std::array<double, 2>> & ic)
 {
   std::vector<factor_key_t> factors;
-  if (oc.size() != ic.size()) {
+  if (tc.size() != ic.size()) {
     BOMB_OUT("different number of image and object corners!");
   }
   gtsam::Expression<gtsam::Pose3> T_r_c(cam->getPoseKey());
-  gtsam::Expression<gtsam::Pose3> T_w_r(T_w_r_key);
-  gtsam::Expression<gtsam::Pose3> T_w_o(T_w_o_key);
+  gtsam::Expression<gtsam::Pose3> T_o_r(T_o_r_key);
+  gtsam::Expression<gtsam::Pose3> T_o_t(T_o_t_key);
 
-  for (size_t i = 0; i < oc.size(); i++) {
+  for (size_t i = 0; i < tc.size(); i++) {
     const gtsam::Point2 img_point(ic[i][0], ic[i][1]);
-    gtsam::Point3 op(oc[i][0], oc[i][1], oc[i][2]);
-    gtsam::Expression<gtsam::Point3> X_o(op);
+    gtsam::Point3 tp(tc[i][0], tc[i][1], tc[i][2]);
+    gtsam::Expression<gtsam::Point3> X_t(tp);
     // transformFrom does X_A = T_AB * X_B
     // transformTo   does X_A = T_BA * X_B
     // So the below transforms from world to camera coordinates
     gtsam::Expression<gtsam::Point2> xp = gtsam::project(gtsam::transformTo(
-      T_r_c, gtsam::transformTo(T_w_r, gtsam::transformFrom(T_w_o, X_o))));
+      T_r_c, gtsam::transformTo(T_o_r, gtsam::transformFrom(T_o_t, X_t))));
     switch (cam->getDistortionModel()) {
       case RADTAN: {
         gtsam::Expression<Cal3DS3> cK(cam->getIntrinsicsKey());
