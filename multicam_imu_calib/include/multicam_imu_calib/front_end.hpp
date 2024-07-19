@@ -35,7 +35,8 @@ public:
   using Detection = multicam_imu_calib_msgs::msg::Detection;
   FrontEnd();
   ~FrontEnd();
-  void readConfigFile(const std::string & file);
+  void readConfigFile(
+    const std::string & file, const DetectorLoader::SharedPtr & dl);
   Detection detect(
     const Target::SharedPtr & target, const Image::ConstSharedPtr & img) const;
   const auto & getTargets() const { return (targets_); }

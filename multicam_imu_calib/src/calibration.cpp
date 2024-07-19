@@ -37,6 +37,7 @@ static rclcpp::Logger get_logger()
 }
 
 Calibration::Calibration() : optimizer_(std::make_shared<Optimizer>()) {}
+Calibration::~Calibration() { targets_.clear(); }
 
 static gtsam::Pose3 parsePose(const YAML::Node & yn)
 {
@@ -198,7 +199,7 @@ void Calibration::parseIntrinsicsAndDistortionModel(
 
   cam->setDistortionModel(dist["type"].as<std::string>());
   const std::vector<int> reorder = cam->getReOrderConfToOpt();
-  const size_t num_coeffs = reorder.size() - 4;
+  const size_t num_coeffs = reorder.size();
   const auto [vd, vd_given] =
     yamlToVector<double>(dist, "coefficients", num_coeffs, 0);
   const auto [cs, cs_given] =
@@ -211,9 +212,11 @@ void Calibration::parseIntrinsicsAndDistortionModel(
     cam_node["intrinsics_sigma"]
       ? intrinsicsFromYaml(cam_node["intrinsics_sigma"])
       : 2 * intr_vec;
-  gtsam::Vector all_sig(reorder.size());
-  for (size_t i = 0; i < std::min(reorder.size(), cs_a.size() + 4); i++) {
-    all_sig(i) = (i < 4) ? intr_sig(i) : cs_a[reorder[i] - 4];
+  // all_sig also cover intrinsics fx, fy, cx, cy
+  gtsam::Vector all_sig = gtsam::Vector::Zero(reorder.size() + 4);
+  all_sig.head(4) = intr_sig.head(4);
+  for (size_t i = 0; i < reorder.size() && i < cs_a.size(); i++) {
+    all_sig(reorder[i] + 4) = cs_a[i];
   }
 
   cam->setDistortionCoefficients(vd_a);
@@ -319,7 +322,8 @@ void Calibration::parseIMUs(const YAML::Node & imus)
   }
 }
 
-void Calibration::readConfigFile(const std::string & file)
+void Calibration::readConfigFile(
+  const std::string & file, const DetectorLoader::SharedPtr & dl)
 {
   if (file.empty()) {
     BOMB_OUT("config_file parameter is empty!");
@@ -338,18 +342,22 @@ void Calibration::readConfigFile(const std::string & file)
   if (imus.IsSequence()) {
     parseIMUs(imus);
   }
-  targets_ = Target::readConfigFile(file);
-  for (const auto & target : targets_) {
-    // assume targets to align with world frame until
-    // IMU data says otherwise
-    target->setPoseKey(addPose("target_" + target->getName(), gtsam::Pose3()));
-  }
+  targets_ = Target::readConfigFile(file, dl);
 }
 
 value_key_t Calibration::addPose(
   const std::string & label, const gtsam::Pose3 & pose)
 {
   return (optimizer_->addPose(label, pose));
+}
+
+std::tuple<value_key_t, factor_key_t> Calibration::addPoseWithPrior(
+  const std::string & label, const gtsam::Pose3 & pose,
+  const SharedNoiseModel & noise)
+{
+  const auto v_key = addPose(label, pose);
+  const auto f_key = optimizer_->addPrior(v_key, pose, noise);
+  return {v_key, f_key};
 }
 
 static YAML::Node makeIntrinsics(const gtsam::Vector4 & v)
@@ -362,12 +370,28 @@ static YAML::Node makeIntrinsics(const gtsam::Vector4 & v)
   return intr;
 }
 
-static YAML::Node vectorToYaml(
-  const gtsam::Vector & v, const std::vector<int> & reorder, int precision)
+static size_t findMaxNonzeroMaskIndex(const std::vector<int> & mask)
+{
+  size_t i = 0;
+  for (i = mask.size() - 1; i > 0; i--) {
+    if (mask[i] != 0) {
+      break;
+    }
+  }
+  return (i);
+}
+
+static YAML::Node coeffVectorToYaml(
+  const gtsam::Vector & v, const std::vector<int> & reorder, int precision,
+  const std::vector<int> & mask, double def)
 {
   YAML::Node dist;
-  for (int i = 4; i < v.rows(); i++) {
-    dist.push_back(fmt_fixed(v(reorder[i]), precision));
+  for (size_t i = 0; i <= findMaxNonzeroMaskIndex(mask); i++) {
+    if (mask[i]) {
+      dist.push_back(fmt_fixed(v(reorder[i]), precision));
+    } else {
+      dist.push_back(fmt_fixed(def, precision));
+    }
   }
   return (dist);
 }
@@ -384,8 +408,12 @@ static YAML::Node updateIntrinsicsAndDistortion(
   n.remove("distortion_model");
   n["intrinsics"] = makeIntrinsics(mean.block<4, 1>(0, 0));
   n["intrinsics_sigma"] = makeIntrinsics(cov.diagonal(0).block<4, 1>(0, 0));
-  dist["coefficients"] = vectorToYaml(mean, reorder, 4);
-  dist["coefficient_sigma"] = vectorToYaml(cov.diagonal(0), reorder, 6);
+  const auto mask = dist["coefficient_mask"].as<std::vector<int>>();
+  dist["coefficients"] =
+    coeffVectorToYaml(mean.tail(reorder.size()), reorder, 5, mask, 0.0);
+  dist["coefficient_sigma"] = coeffVectorToYaml(
+    cov.diagonal(0).tail(reorder.size()).array().sqrt().matrix(), reorder, 6,
+    mask, 1e-6);
   n["distortion_model"] = dist;
   return (n);  // updated node
 }
@@ -393,7 +421,7 @@ static YAML::Node updateIntrinsicsAndDistortion(
 void Calibration::writeResults(const std::string & out_dir)
 {
   (void)std::filesystem::create_directory(out_dir);
-  auto calib(config_);
+  auto calib(config_);  // make deep copy of config
   for (size_t cam_id = 0; cam_id < camera_list_.size(); cam_id++) {
     const auto & cam = camera_list_[cam_id];
     gtsam::Vector mean;
@@ -537,12 +565,17 @@ Target::SharedPtr Calibration::getTarget(const std::string & id)
   BOMB_OUT("target " << id << "unknown!");
 }
 
+// #define DEBUG_INIT_IMU_GRAPH
 void Calibration::initializeIMUGraph(
   const IMU::SharedPtr & imu, uint64_t t_curr)
 {
   assert(has_valid_T_w_o_);
   assert(imu->hasValidPose());
-  LOG_INFO("initializing IMU graph!");
+  LOG_INFO("initializing graph for " << imu->getName());
+  if (imu->getPoseKey() == -1) {
+    // this means no initial IMU pose was provided in the config
+    imu->setPoseKey(optimizer_->addPose(imu->getName(), imu->getPose()));
+  }
   (void)t_curr;
   const auto & preint = imu->getSavedPreint();
   assert(!preint.empty());
@@ -566,34 +599,49 @@ void Calibration::initializeIMUGraph(
   // for testing, add prior for the initial IMU pose as well
   if (add_initial_imu_pose_prior_) {
     (void)optimizer_->addPrior(
-      vk.pose_key, imu->getCurrentState().pose(),
+      vk.world_pose_key, imu->getCurrentState().pose(),
       utilities::makeNoise6(1e-3 /*angle*/, 1e-3));
   }
+#ifdef DEBUG_INIT_IMU_GRAPH
   gtsam::NavState prev_state = imu->getCurrentState();  // XXX remove later
   std::cout << "initial state: " << std::endl << prev_state << std::endl;
   std::cout << "prelim bias estimate: " << std::endl
             << imu->getPreliminaryBiasEstimate() << std::endl;
+#endif
   for (size_t i = 0; i < preint.size(); i++) {
     const auto & p = preint[i];
+#ifdef DEBUG_INIT_IMU_GRAPH
     std::cout << i << " preint: " << p << std::endl;
     std::cout << "accum: " << std::endl << p.preint << std::endl;
+#endif
     auto prev_keys = imu->getValueKeys().back();
     imu->setCurrentState(gtsam::NavState(
       T_w_o_ * getRigPose(p.t_2, false) * imu->getPose(),
       gtsam::Vector3::Zero()));
+#ifdef DEBUG_INIT_IMU_GRAPH
     auto pn = p.preint.predict(prev_state, imu->getPreliminaryBiasEstimate());
     std::cout << "predicted state: " << std::endl << pn << std::endl;
     prev_state = imu->getCurrentState();  // XXX remove later
     std::cout << "actually used state: " << std::endl
               << prev_state << std::endl;
+#endif
     const auto current_keys = optimizer_->addIMUState(
       p.t_2, imu, imu->getCurrentState(), imu->getPreliminaryBiasEstimate());
     imu->addValueKeys(current_keys);
-    // LOG_INFO("adding imu factor for t = " << current_keys.t << " vs " << p.t_2);
     const auto [t, fk] =
       optimizer_->addPreintegratedFactor(prev_keys, current_keys, p.preint);
     imu->addPreintegratedFactorKey(t, fk);
+    const std::string label =
+      imu->getName() + "_pose,t:" + std::to_string(p.t_2);
+    const auto pose_factor_key = optimizer_->addIMUPoseFactor(
+      label, T_w_o_key_, getRigPoseKey(p.t_2), current_keys.world_pose_key,
+      imu->getPoseKey());
+    imu->addPoseFactorKey(p.t_2, pose_factor_key);
   }
+#ifdef DEBUG_INIT_IMU_GRAPH
+  std::cout << "&&&&&&&&&& done with initialize imu graph &&&&&&&&&"
+            << std::endl;
+#endif
 }
 
 bool Calibration::applyIMUData(uint64_t t)
@@ -623,9 +671,13 @@ bool Calibration::applyIMUData(uint64_t t)
             R_w_imu * T_imu_r.rotation() * T_r_o.rotation(),
             gtsam::Point3(0, 0, 0));
           T_w_o_key_ = optimizer_->addPose("T_w_o", T_w_o_);
+          // prior keeps position of objects at origin and
+          // allows no yaw, but permits pitch and roll
+          T_w_o_prior_key_ = optimizer_->addPrior(
+            T_w_o_key_, T_w_o_,
+            utilities::makeNoise6(1e2, 1e2, 1e-6, 1e-6, 1e-6, 1e-6));
           has_valid_T_w_o_ = true;
           LOG_INFO("initialized world-to-object transform");
-          LOG_INFO(T_w_o_);
         }
         if (!imu->hasInitializedIMUGraph()) {
           if (imu->hasValidPreint()) {
@@ -639,7 +691,8 @@ bool Calibration::applyIMUData(uint64_t t)
           imu->setHasInitializedIMUGraph(true);
         }
         if (imu->hasInitializedIMUGraph()) {
-          imu->updateNavState(t, getRigPose(t, false));  // predict
+          const auto T_w_i = T_w_o_ * getRigPose(t, false) * imu->getPose();
+          imu->updateNavState(t, T_w_i);
           const auto prev_keys = imu->getValueKeys().back();
           if (t > prev_keys.t) {
             imu->addValueKeys(optimizer_->addIMUState(
@@ -649,6 +702,12 @@ bool Calibration::applyIMUData(uint64_t t)
             const auto [t, fk] = optimizer_->addPreintegratedFactor(
               prev_keys, current_keys, *(imu->getAccum()));
             imu->addPreintegratedFactorKey(t, fk);
+            const std::string label =
+              imu->getName() + "_pose,t:" + std::to_string(t);
+            const auto pose_factor_key = optimizer_->addIMUPoseFactor(
+              label, T_w_o_key_, getRigPoseKey(t), current_keys.world_pose_key,
+              imu->getPoseKey());
+            imu->addPoseFactorKey(t, pose_factor_key);
           }
         }
         imu->resetPreintegration(t);
@@ -701,33 +760,30 @@ Intrinsics Calibration::getOptimizedIntrinsics(
   return (intr);
 }
 
+template <class C>
+static DistortionCoefficients reorderCoefficients(
+  const Optimizer::SharedPtr & opt, const Camera::SharedPtr & cam)
+{
+  const auto & reorder = cam->getReOrderOptToConf();
+  DistortionCoefficients dist(reorder.size(), 0);
+  const auto calib = opt->getOptimizedIntrinsics<C>(cam->getIntrinsicsKey());
+  const auto v = calib.vector();
+  for (size_t i = 4; i < static_cast<size_t>(v.size()); i++) {
+    dist[reorder[i - 4]] = v(i);
+  }
+  return (dist);
+}
+
 DistortionCoefficients Calibration::getOptimizedDistortionCoefficients(
   const Camera::SharedPtr & cam) const
 {
   DistortionCoefficients dist;
   switch (cam->getDistortionModel()) {
-    case RADTAN: {
-      const auto calib =
-        optimizer_->getOptimizedIntrinsics<Cal3DS3>(cam->getIntrinsicsKey());
-      const auto v = calib.vector();
-      for (size_t i = 6; i < 8; i++) {
-        dist.push_back(v(i));  // first come k1, k2
-      }
-      for (size_t i = 4; i < 6; i++) {
-        dist.push_back(v(i));  // then p1, p2
-      }
-      for (size_t i = 8; i < static_cast<size_t>(v.size()); i++) {
-        dist.push_back(v(i));  // now k3...k6
-      }
+    case RADTAN:
+      dist = reorderCoefficients<Cal3DS3>(optimizer_, cam);
       break;
-    }
     case EQUIDISTANT: {
-      const auto calib =
-        optimizer_->getOptimizedIntrinsics<Cal3FS2>(cam->getIntrinsicsKey());
-      const auto v = calib.vector();
-      for (size_t i = 4; i < static_cast<size_t>(v.size()); i++) {
-        dist.push_back(v(i));
-      }
+      dist = reorderCoefficients<Cal3FS2>(optimizer_, cam);
       break;
     }
     default:
@@ -785,7 +841,9 @@ void Calibration::initializeCameraPosesAndIntrinsics()
 
 void Calibration::initializeIMUPoses()
 {
-  // initialize imu poses if given
+  // Init imu pose if given.
+  // This is the pose of the IMU with respect to the rig, T_r_i
+
   for (const auto & imu : imu_list_) {
     if (imu->hasValidPose()) {
       imu->setPoseKey(optimizer_->addPose(imu->getName(), imu->getPose()));
@@ -794,23 +852,6 @@ void Calibration::initializeIMUPoses()
         addPosePrior(imu, imu->getPose(), imu->getPoseNoise());
       }
     }
-  }
-}
-
-void Calibration::initializeIMUWorldPoses()
-{
-  for (const auto & imu : imu_list_) {
-    auto att_i = imu->getAttitudes();
-    std::vector<uint64_t> times;
-    std::transform(
-      att_i.begin(), att_i.end(), std::back_inserter(times),
-      std::mem_fn(&StampedAttitude::t));
-
-    const auto att_r = getRigAttitudes(times);
-    const auto T_r_i_est = utilities::averageRotationDifference(att_r, att_i);
-    imu->setPoseKey(optimizer_->addPose(
-      imu->getName(), gtsam::Pose3(T_r_i_est, gtsam::Point3(0, 0, 0))));
-    optimizer_->addIMUPoseFactors(imu, time_to_rig_pose_);
   }
 }
 
@@ -847,8 +888,8 @@ std::tuple<double, double> Calibration::runOptimizer()
 
 void Calibration::sanityChecks() const
 {
-  // optimizer_->checkForUnknownValues();
-  // optimizer_->checkForUnconstrainedVariables();
+  optimizer_->checkForUnknownValues();
+  optimizer_->checkForUnconstrainedVariables();
   optimizer_->printErrors(false);
 }
 

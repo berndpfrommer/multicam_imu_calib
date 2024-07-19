@@ -31,28 +31,21 @@ DetectorLoader::DetectorLoader()
 
 DetectorLoader::~DetectorLoader()
 {
-  detector_map_.clear();  // remove last reference to enable unloading
   for (auto & kv : detector_map_) {
+    for (auto & m : kv.second) {
+      m.second.reset();
+    }
     kv.second.clear();  // release all references to this class
   }
+
   for (const auto & kv : detector_map_) {
-    detector_loader_.unloadLibraryForClass(
-      "apriltag_detector_" + kv.first + "::Detector");
+    const std::string c_name = "apriltag_detector_" + kv.first + "::Detector";
+    LOG_INFO("unloading " << c_name);
+    detector_loader_.unloadLibraryForClass(c_name);
   }
 }
 
-static std::shared_ptr<DetectorLoader> detector_loader;
-
-std::shared_ptr<DetectorLoader> DetectorLoader::getInstance()
-{
-  if (!detector_loader) {
-    detector_loader.reset(new DetectorLoader());
-  }
-  return (detector_loader);
-}
-
-std::shared_ptr<apriltag_detector::Detector>
-DetectorLoader::getDetectorInstance(
+std::shared_ptr<apriltag_detector::Detector> DetectorLoader::makeDetector(
   const std::string & type, const std::string & fam)
 {
   auto it = detector_map_.find(type);

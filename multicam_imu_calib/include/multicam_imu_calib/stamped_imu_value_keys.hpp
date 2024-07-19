@@ -25,13 +25,13 @@ struct StampedIMUValueKeys
 {
   explicit StampedIMUValueKeys(
     uint64_t ta, value_key_t p, value_key_t v, value_key_t b)
-  : t(ta), pose_key(p), velocity_key(v), bias_key(b)
+  : t(ta), world_pose_key(p), velocity_key(v), bias_key(b)
   {
   }
   StampedIMUValueKeys() = default;
 
   uint64_t t{0};
-  value_key_t pose_key{-1};
+  value_key_t world_pose_key{-1};
   value_key_t velocity_key{-1};
   value_key_t bias_key{-1};
 };

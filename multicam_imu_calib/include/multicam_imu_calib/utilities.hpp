@@ -40,6 +40,8 @@ std::vector<std::array<double, 2>> makeProjectedPoints(
 gtsam::Rot3 averageRotationDifference(
   const std::vector<StampedAttitude> & sa1,
   const std::vector<StampedAttitude> & sa2);
+gtsam::SharedNoiseModel makeNoise6(
+  double a1, double a2, double a3, double p1, double p2, double p3);
 gtsam::SharedNoiseModel makeNoise6(double sig_a, double sig_b);
 gtsam::SharedNoiseModel makeNoise3(double sig_a);
 geometry_msgs::msg::Point makePoint(double x, double y, double z = 0);

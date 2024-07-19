@@ -22,13 +22,14 @@ namespace multicam_imu_calib
 {
 static rclcpp::Logger get_logger() { return (rclcpp::get_logger("target")); }
 
-Target::SharedPtr Target::make(const YAML::Node & yn)
+Target::SharedPtr Target::make(
+  const YAML::Node & yn, const DetectorLoader::SharedPtr & dl)
 {
   const auto tp = yn["type"].as<std::string>();
   Target::SharedPtr p;
   if (tp == "apriltag_board") {
     p = AprilTagBoardTarget::make(
-      yn["detector"].as<std::string>(), yn["family"].as<std::string>(),
+      dl, yn["detector"].as<std::string>(), yn["family"].as<std::string>(),
       yn["border_width"] ? yn["border_width"].as<uint16_t>() : 1,
       yn["tag_size"].as<double>(), yn["rows"].as<uint32_t>(),
       yn["columns"].as<uint32_t>(), yn["distance_rows"].as<double>(),
@@ -47,7 +48,8 @@ void Target::setPose(const gtsam::Pose3 & p)
   has_valid_pose_ = true;
 }
 
-std::vector<Target::SharedPtr> Target::readConfigFile(const std::string & f)
+std::vector<Target::SharedPtr> Target::readConfigFile(
+  const std::string & f, const DetectorLoader::SharedPtr & dl)
 {
   std::vector<SharedPtr> targets;
   YAML::Node yamlFile = YAML::LoadFile(f);
@@ -67,7 +69,7 @@ std::vector<Target::SharedPtr> Target::readConfigFile(const std::string & f)
     if (names.find(name) != names.end()) {
       BOMB_OUT("duplicate target name: " << name);
     }
-    Target::SharedPtr targ = Target::make(target);
+    Target::SharedPtr targ = Target::make(target, dl);
     targets.push_back(targ);
   }
   return (targets);

@@ -124,6 +124,14 @@ gtsam::SharedNoiseModel makeNoise6(double sig_a, double sig_b)
   return (gtsam::noiseModel::Diagonal::Sigmas(sig));
 }
 
+gtsam::SharedNoiseModel makeNoise6(
+  double a1, double a2, double a3, double p1, double p2, double p3)
+{
+  Eigen::Matrix<double, 6, 1> sig;
+  sig << a1, a2, a3, p1, p2, p3;
+  return (gtsam::noiseModel::Diagonal::Sigmas(sig));
+}
+
 gtsam::SharedNoiseModel makeNoise3(double s)
 {
   return (gtsam::noiseModel::Diagonal::Sigmas(

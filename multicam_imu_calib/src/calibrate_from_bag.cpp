@@ -18,6 +18,7 @@
 #include <multicam_imu_calib/enhanced_player.hpp>
 #include <multicam_imu_calib/front_end_component.hpp>
 #include <multicam_imu_calib/logging.hpp>
+#include <multicam_imu_calib/target.hpp>
 #include <rosbag2_transport/recorder.hpp>
 
 using Parameter = rclcpp::Parameter;
@@ -46,7 +47,6 @@ int main(int argc, char ** argv)
 
   auto calib_node =
     std::make_shared<multicam_imu_calib::CalibrationComponent>(node_options);
-
   std::vector<std::string> recorded_topics;
   const bool save_detections =
     calib_node->declare_parameter<bool>("save_detections", false);
@@ -69,8 +69,11 @@ int main(int argc, char ** argv)
 
   rclcpp::NodeOptions frontend_options;
   frontend_options.use_intra_process_comms(true);
+  frontend_options.append_parameter_override("subscribe", false);
   auto frontend_node =
     std::make_shared<multicam_imu_calib::FrontEndComponent>(frontend_options);
+  frontend_node->setDetectorLoader(calib_node->getDetectorLoader());
+  frontend_node->subscribe();
   // front end node should only subscribe to image topics
   // if there is no detection topic in the bag
   frontend_node->setExcludeDetectionTopics(player_node->getTopics());
@@ -102,7 +105,7 @@ int main(int argc, char ** argv)
   if (!save_detections) {
     calib_node->calibrate(req, resp);
   }
-
-  rclcpp::shutdown(nullptr, "clean exit");
+  frontend_node.reset();  // necessary to release the detector loader
+  calib_node.reset();     // necessary to release the detector loader
   return 0;
 }

@@ -257,7 +257,8 @@ void test_single_cam(
 {
   srand(1);
   multicam_imu_calib::Calibration calib;
-  calib.readConfigFile(fname);
+  auto dl = std::make_shared<multicam_imu_calib::DetectorLoader>();
+  calib.readConfigFile(fname, dl);
   const auto cam = calib.getCameraList()[0];  // first camera
 
   cam->setPoseKey(
@@ -292,7 +293,8 @@ void test_stereo_cam(const std::string & fname)
 {
   srand(1);
   multicam_imu_calib::Calibration calib;
-  calib.readConfigFile(fname);
+  auto dl = std::make_shared<multicam_imu_calib::DetectorLoader>();
+  calib.readConfigFile(fname, dl);
   // world points form a square in the x/y plane
   const std::vector<std::array<double, 3>> wc = {
     {1, 1, 0}, {-1, 1, 0}, {-1, -1, 0}, {1, -1, 0}};

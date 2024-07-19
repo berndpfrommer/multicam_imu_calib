@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <assert.h>
+
 #include <multicam_imu_calib/camera.hpp>
 #include <multicam_imu_calib/logging.hpp>
 
@@ -48,12 +50,15 @@ void Camera::setDistortionModel(const std::string & model)
   // The forward and backwards arrays happen to be identical
   if (model == "radtan" || model == "plumb_bob") {
     distortion_model_ = RADTAN;
-    order_opt_to_conf_ = {0, 1, 2, 3, 6, 7, 4, 5, 8, 9, 10, 11};
-    order_conf_to_opt_ = {0, 1, 2, 3, 6, 7, 4, 5, 8, 9, 10, 11};
+    // index    0   1   2   3   4   5   6   7
+    // opencv: k1, k2, p1, p2, k3, k4, k5, k6
+    // gtsam:  p1, p2, k1, k2, k3, k4, k5, k6
+    order_opt_to_conf_ = {2, 3, 0, 1, 4, 5, 6, 7};
+    order_conf_to_opt_ = {2, 3, 0, 1, 4, 5, 6, 7};
   } else if (model == "equidistant" || model == "fisheye") {
     distortion_model_ = EQUIDISTANT;
-    order_opt_to_conf_ = {0, 1, 2, 3, 4, 5, 6, 7};
-    order_conf_to_opt_ = {0, 1, 2, 3, 4, 5, 6, 7};
+    order_opt_to_conf_ = {0, 1, 2, 3};
+    order_conf_to_opt_ = {0, 1, 2, 3};
   } else {
     BOMB_OUT("bad distortion model: " << model);
   }
@@ -68,26 +73,26 @@ std::vector<double> Camera::getCoefficientMask() const
   for (size_t i = mask_.size(); i < distortion_coefficients_.size(); i++) {
     cm.push_back(1.0);  // enable coefficients that have no mask specified
   }
-  return (cm);
+  std::vector<double> cm_reordered(distortion_coefficients_.size(), 0);
+  for (size_t i = 0; i < cm.size(); i++) {
+    assert(i < order_conf_to_opt_.size());
+    const auto idx = order_conf_to_opt_[i];
+    assert(idx < static_cast<int>(cm_reordered.size()));
+    cm_reordered[idx] = cm[i];
+  }
+  return (cm_reordered);
 }
 
 const Cal3DS3 Camera::makeRadTanModel(
   const Intrinsics & intr,
   const DistortionCoefficients & distortion_coefficients) const
 {
-  // reorder coefficients:
-  // our dist coeffs (opencv): k1, k2, p1, p2, k[3..6]
-  // optimizer layout: fx, fy, u, v, p1, p2, k[1...6]
-  std::array<double, 8> dd = {0, 0, 0, 0, 0, 0, 0, 0};
-  const auto & dc = distortion_coefficients;
-  dd[0] = dc.size() > 2 ? dc[2] : 0;
-  dd[1] = dc.size() > 3 ? dc[3] : 0;
-  dd[2] = dc.size() > 0 ? dc[0] : 0;
-  dd[3] = dc.size() > 1 ? dc[1] : 0;
-  for (size_t i = 4; i < dc.size(); i++) {
-    dd[i] = dc[i];
+  std::array<double, 8> d_opt = {0, 0, 0, 0, 0, 0, 0, 0};
+  for (size_t i = 0; i < distortion_coefficients.size(); i++) {
+    d_opt[order_conf_to_opt_[i]] = distortion_coefficients[i];
   }
-  Cal3DS3 intr_value(intr[0], intr[1], intr[2], intr[3], dd[0], dd[1], &dd[2]);
+  Cal3DS3 intr_value(
+    intr[0], intr[1], intr[2], intr[3], d_opt[0], d_opt[1], &d_opt[2]);
   intr_value.setCoefficientMask(getCoefficientMask());
   return (intr_value);
 }

@@ -22,6 +22,7 @@
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <multicam_imu_calib/calibration.hpp>
 #include <multicam_imu_calib/camera.hpp>
+#include <multicam_imu_calib/detector_loader.hpp>
 #include <multicam_imu_calib_msgs/msg/detection_array.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -43,6 +44,7 @@ public:
   explicit CalibrationComponent(const rclcpp::NodeOptions & options);
   CalibrationComponent(const CalibrationComponent &) = delete;
   CalibrationComponent & operator=(const CalibrationComponent &) = delete;
+  ~CalibrationComponent();
   void newRigPoseAdded(uint64_t t);
   std::vector<std::string> getPublishedTopics() const;
   std::vector<std::string> getDetectionsTopics() const;
@@ -50,6 +52,7 @@ public:
   std::vector<std::string> getIMUTopics() const;
   void calibrate(
     const Trigger::Request::SharedPtr req, Trigger::Response::SharedPtr res);
+  const auto & getDetectorLoader() const { return (detector_loader_); }
 
 private:
   class DetectionHandler
@@ -121,6 +124,7 @@ private:
   std::string rig_frame_id_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   rclcpp::Service<Trigger>::SharedPtr srvs_calib_;
+  DetectorLoader::SharedPtr detector_loader_;
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__CALIBRATION_COMPONENT_HPP_

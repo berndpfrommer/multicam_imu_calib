@@ -18,6 +18,7 @@
 #include <multicam_imu_calib/calibration_component.hpp>
 #include <multicam_imu_calib/init_pose.hpp>
 #include <multicam_imu_calib/logging.hpp>
+#include <multicam_imu_calib/utilities.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
 
 namespace multicam_imu_calib
@@ -93,10 +94,15 @@ void CalibrationComponent::DetectionHandler::processOldestMessage()
         if (T_c_t) {
           if (!target->hasValidPose() && !calib_->getAnyTargetHasPose()) {
             // first target object pose is initialized to identity!
-            LOG_INFO("initialized pose to id of " << target->getName());
             target->setPose(gtsam::Pose3());
-            target->setPoseKey(
-              calib_->addPose(target->getName(), target->getPose()));
+            LOG_INFO(
+              "initialized pose of " << target->getName() << " to identity");
+            LOG_INFO(target->getPose());
+            const auto [pose_key, factor_key] = calib_->addPoseWithPrior(
+              target->getName(), target->getPose(),
+              utilities::makeNoise6(1e-6, 1e-6));
+            target->setPoseKey(pose_key);
+            target->setPriorFactorKey(factor_key);
             calib_->setAnyTargetHasPose(true);
           }
           if (target->hasValidPose()) {
@@ -137,6 +143,7 @@ void CalibrationComponent::DetectionHandler::processOldestMessage()
             target->setPoseKey(
               calib_->addPose(target->getName(), target->getPose()));
             LOG_INFO("initialized pose of " << target->getName());
+            LOG_INFO(target->getPose());
           }
         }
       }
@@ -183,9 +190,10 @@ CalibrationComponent::CalibrationComponent(const rclcpp::NodeOptions & opt)
   world_frame_id_ = safe_declare<std::string>("world_frame_id", "map");
   object_frame_id_ = safe_declare<std::string>("object_frame_id", "object");
   rig_frame_id_ = safe_declare<std::string>("rig_frame_id", "rig");
-
+  detector_loader_ = std::make_shared<multicam_imu_calib::DetectorLoader>();
   calib_ = std::make_shared<Calibration>();
-  calib_->readConfigFile(safe_declare<std::string>("config_file", ""));
+  calib_->readConfigFile(
+    safe_declare<std::string>("config_file", ""), detector_loader_);
   calib_->initializeCameraPosesAndIntrinsics();
   calib_->initializeIMUPoses();
 
@@ -197,6 +205,16 @@ CalibrationComponent::CalibrationComponent(const rclcpp::NodeOptions & opt)
   subscribe();
 }
 
+CalibrationComponent::~CalibrationComponent()
+{
+  std::cerr << "destroying calib component" << std::endl;
+  detection_handler_queue_.clear();
+  detection_handlers_.clear();
+  calib_.reset();
+  detector_loader_.reset();
+  std::cerr << "destroying calib component done " << std::endl;
+}
+
 void CalibrationComponent::calibrate(
   const Trigger::Request::SharedPtr req, Trigger::Response::SharedPtr res)
 {
@@ -205,9 +223,10 @@ void CalibrationComponent::calibrate(
   calib_->sanityChecks();
   calib_->runOptimizer();
   LOG_INFO("calibration complete!");
-  calib_->writeResults(
-    safe_declare<std::string>("calib_output_path", "results"));
-  LOG_INFO("results written!");
+  const auto out_path =
+    safe_declare<std::string>("calib_output_path", "results");
+  calib_->writeResults(out_path);
+  LOG_INFO("results written to " << out_path);
   res->success = true;
   res->message = "calib complete";
 }

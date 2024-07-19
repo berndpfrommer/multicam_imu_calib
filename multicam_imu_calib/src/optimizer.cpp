@@ -47,46 +47,35 @@ Optimizer::Optimizer()
   isam2_ = std::make_shared<gtsam::ISAM2>(p);
 }
 
-void Optimizer::addIMUPoseFactors(
-  const IMU::SharedPtr & imu,
-  const std::unordered_map<uint64_t, value_key_t> & rig_keys)
+factor_key_t Optimizer::addIMUPoseFactor(
+  const std::string & label, value_key_t object_pose_key,
+  value_key_t rig_pose_key, value_key_t imu_world_pose_key,
+  value_key_t imu_rig_calib_key)
 {
-  // add all the factors
-  for (const auto & imu_keys : imu->getValueKeys()) {
-    auto it = rig_keys.find(imu_keys.t);
-    if (it == rig_keys.end()) {
-      BOMB_OUT("no rig pose found for time: " << imu_keys.t);
-    }
-    auto rig_pose_key = (*it).second;
-    gtsam::Expression<gtsam::Pose3> T_w_r(rig_pose_key);
-    gtsam::Expression<gtsam::Pose3> T_w_i(imu_keys.pose_key);
-    gtsam::Expression<gtsam::Pose3> T_r_i(imu->getPoseKey());
-    // transformPoseTo applies inverse of first pose to second
-    // (T_w_i^-1 * T_w_r)^-1 * T_r_i === identity
-    gtsam::Expression<gtsam::Pose3> T_identity =
-      gtsam::transformPoseFrom(gtsam::transformPoseTo(T_w_i, T_w_r), T_r_i);
-    graph_.addExpressionFactor(
-      T_identity, gtsam::Pose3(), utilities::makeNoise6(1e-6, 1e-6));
-    factor_to_name_.insert(
-      {getLastFactorKey(),
-       imu->getName() + ":pose_factor_t=" + std::to_string(imu_keys.t)});
-    imu->addPoseFactorKey(imu_keys.t, getLastFactorKey());
-// #define IDENTITY_CHECK
+  gtsam::Expression<gtsam::Pose3> T_w_o(object_pose_key);
+  gtsam::Expression<gtsam::Pose3> T_o_r(rig_pose_key);
+  gtsam::Expression<gtsam::Pose3> T_w_i(imu_world_pose_key);
+  gtsam::Expression<gtsam::Pose3> T_r_i(imu_rig_calib_key);
+  // transformPoseTo applies inverse of first pose to second
+  // (T_i_w * (T_w_o * T_o_r)) * T_r_i === identity  (T_w_i^-1 * T_w_r)^-1 * T_r_i === identity
+  gtsam::Expression<gtsam::Pose3> T_identity = gtsam::transformPoseFrom(
+    gtsam::transformPoseTo(T_w_i, gtsam::transformPoseFrom(T_w_o, T_o_r)),
+    T_r_i);
+  graph_.addExpressionFactor(
+    T_identity, gtsam::Pose3(), utilities::makeNoise6(1e-6, 1e-6));
+  factor_to_name_.insert({getLastFactorKey(), label});
+#define IDENTITY_CHECK
 #ifdef IDENTITY_CHECK
-    const gtsam::Pose3 I =
-      (values_.at<gtsam::Pose3>(imu_keys.pose_key).inverse() *
-       values_.at<gtsam::Pose3>(rig_pose_key)) *
-      values_.at<gtsam::Pose3>(imu->getPoseKey());
-    std::cout << "T_w_i: " << std::endl
-              << values_.at<gtsam::Pose3>(imu_keys.pose_key) << std::endl;
-    std::cout << "T_w_r: " << std::endl
-              << values_.at<gtsam::Pose3>(rig_pose_key) << std::endl;
-    std::cout << "T_r_i: " << std::endl
-              << values_.at<gtsam::Pose3>(imu_calib_key) << std::endl;
-    std::cout << imu_keys.t << " id pose: " << std::endl;
-    std::cout << I << std::endl;
+  // T_w_i ^-1 * T_w_o * T_o_r * T_r_i
+  const gtsam::Pose3 I =
+    values_.at<gtsam::Pose3>(imu_world_pose_key).inverse() *
+    values_.at<gtsam::Pose3>(object_pose_key) *
+    values_.at<gtsam::Pose3>(rig_pose_key) *
+    values_.at<gtsam::Pose3>(imu_rig_calib_key);
+  std::cout << label << " id pose: " << std::endl;
+  std::cout << I << std::endl;
 #endif
-  }
+  return (getLastFactorKey());
 }
 
 factor_key_t Optimizer::addCameraIntrinsics(
@@ -153,42 +142,67 @@ StampedIMUValueKeys Optimizer::addIMUState(
   const gtsam::imuBias::ConstantBias & bias_estim)
 {
   StampedIMUValueKeys vk(t, getNextKey(), getNextKey(), getNextKey());
-  values_.insert(vk.pose_key, nav.pose());
+  values_.insert(vk.world_pose_key, nav.pose());
   values_.insert(vk.velocity_key, nav.v());
   values_.insert(vk.bias_key, bias_estim);  // 0 bias init
 #ifdef DEBUG_SINGULARITIES
   const auto ts = " t= " + std::to_string(t);
-  value_to_name_.insert({vk.pose_key, "T_w_i " + imu->getName() + ts});
+  value_to_name_.insert({vk.world_pose_key, "T_w_i " + imu->getName() + ts});
   value_to_name_.insert({vk.velocity_key, "velocity " + imu->getName() + ts});
   value_to_name_.insert({vk.bias_key, "bias " + imu->getName() + ts});
 #endif
   return (vk);
 }
 
+value_key_t Optimizer::addPose(
+  const std::string & label, const gtsam::Pose3 & p)
+{
+  const auto pose_key = getNextKey();
+  values_.insert(pose_key, p);
+  auto it_bool = value_to_name_.insert({pose_key, label + " (pose)"});
+  if (!it_bool.second) {
+    BOMB_OUT("duplicate pose inserted: " << label);
+  }
+  std::cout << "opt added pose: " << label << " key: " << pose_key << std::endl
+            << p << std::endl;
+  return (pose_key);
+}
+
 std::tuple<uint64_t, factor_key_t> Optimizer::addPreintegratedFactor(
   const StampedIMUValueKeys & prev_keys, const StampedIMUValueKeys & curr_keys,
   const gtsam::PreintegratedCombinedMeasurements & accum)
 {
-  graph_.add(gtsam::CombinedImuFactor(
-    prev_keys.pose_key, prev_keys.velocity_key, curr_keys.pose_key,
-    curr_keys.velocity_key, prev_keys.bias_key, curr_keys.bias_key, accum));
+// #define MOD_STATE
 #define DEBUG_IMUFACTOR
+  graph_.add(gtsam::CombinedImuFactor(
+    prev_keys.world_pose_key, prev_keys.velocity_key, curr_keys.world_pose_key,
+    curr_keys.velocity_key, prev_keys.bias_key, curr_keys.bias_key, accum));
 #ifdef DEBUG_IMUFACTOR
-  std::cout << "adding CombinedImuFactor:" << std::endl;
+  std::cout << "adding CombinedImuFactor(" << getLastFactorKey() << ")"
+            << std::endl;
   std::cout << "accum: " << std::endl << accum << std::endl;
   std::cout << "prev bias: " << std::endl
             << values_.at<gtsam::imuBias::ConstantBias>(prev_keys.bias_key)
             << std::endl;
   gtsam::NavState state(
-    values_.at<gtsam::Pose3>(prev_keys.pose_key),
+    values_.at<gtsam::Pose3>(prev_keys.world_pose_key),
     values_.at<gtsam::Vector3>(prev_keys.velocity_key));
   std::cout << "prev state: " << std::endl << state << std::endl;
   const auto nav2 = accum.predict(
     state, values_.at<gtsam::imuBias::ConstantBias>(prev_keys.bias_key));
   std::cout << "predicted state: " << std::endl << nav2 << std::endl;
+#ifdef MOD_STATE
+  values_.update(curr_keys.world_pose_key, nav2.pose());
+  values_.update(curr_keys.velocity_key, nav2.velocity());
+#endif
+
   const auto [rot_err, pos_err, v_err] =
     getCombinedIMUFactorError(getLastFactorKey(), false);
   std::cout << "rot err: " << rot_err.transpose() << std::endl;
+  std::cout << "pos err: " << pos_err.transpose() << std::endl;
+  std::cout << "v   err: " << v_err.transpose() << std::endl;
+  std::cout << "tot err: " << graph_.at(getLastFactorKey())->error(values_)
+            << std::endl;
 #endif
   factor_to_name_.insert(
     {getLastFactorKey(), "imu:preintegr_fac_t=" + std::to_string(curr_keys.t)});
@@ -256,7 +270,7 @@ std::vector<factor_key_t> Optimizer::addProjectionFactors(
   return (factors);
 }
 
-// #define DEBUG_OPT
+#define DEBUG_OPT
 
 std::tuple<double, double> Optimizer::optimize()
 {

@@ -210,11 +210,16 @@ bool IMU::Accumulator::computeTransform()
 
 static const gtsam::imuBias::ConstantBias zero_bias(gtsam::Vector6::Zero());
 
-void IMU::updateNavState(uint64_t t, const gtsam::Pose3 & T_w_r)
+void IMU::updateNavState(uint64_t t, const gtsam::Pose3 & T_w_i)
 {
+#ifdef USE_ACCUM
   (void)t;
-  (void)T_w_r;
+  (void)T_w_i;
   current_state_ = accum_->predict(current_state_, zero_bias);
+#else
+  current_state_ = gtsam::NavState(T_w_i, gtsam::Vector3::Zero());
+  (void)t;
+#endif
 }
 
 void IMU::updatePoseEstimate(uint64_t t, const gtsam::Pose3 & rigPose)

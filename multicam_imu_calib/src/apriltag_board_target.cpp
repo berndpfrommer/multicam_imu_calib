@@ -70,9 +70,9 @@ AprilTagBoardTarget::Detection AprilTagBoardTarget::detect(
 }
 
 AprilTagBoardTarget::SharedPtr AprilTagBoardTarget::make(
-  const std::string & type, const std::string & fam, uint16_t border_width,
-  double ts, uint32_t rows, uint32_t cols, double dist_rows, double dist_cols,
-  uint32_t start_id)
+  const DetectorLoader::SharedPtr & dl, const std::string & type,
+  const std::string & fam, uint16_t border_width, double ts, uint32_t rows,
+  uint32_t cols, double dist_rows, double dist_cols, uint32_t start_id)
 {
   SharedPtr board(new AprilTagBoardTarget());
   // make tag detector of right kind
@@ -88,8 +88,7 @@ AprilTagBoardTarget::SharedPtr AprilTagBoardTarget::make(
       known_tags.insert(id);
     }
   }
-  board->detector_ =
-    DetectorLoader::getInstance()->getDetectorInstance(type, fam);
+  board->detector_ = dl->makeDetector(type, fam);
   board->detector_->setBlackBorder(border_width);
   return (board);
 }

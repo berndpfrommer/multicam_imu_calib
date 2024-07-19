@@ -22,6 +22,7 @@
 #include <deque>
 #include <memory>
 #include <multicam_imu_calib/camera.hpp>
+#include <multicam_imu_calib/detector_loader.hpp>
 #include <multicam_imu_calib/imu.hpp>
 #include <multicam_imu_calib/intrinsics.hpp>
 #include <multicam_imu_calib/stamped_attitude.hpp>
@@ -45,7 +46,9 @@ public:
   using IMUList = std::vector<IMU::SharedPtr>;
   using Detection = multicam_imu_calib_msgs::msg::Detection;
   Calibration();
-  void readConfigFile(const std::string & file);
+  ~Calibration();
+  void readConfigFile(
+    const std::string & file, const DetectorLoader::SharedPtr & dl);
   std::tuple<double, double> runOptimizer();
   void sanityChecks() const;
   void runDiagnostics(const std::string & out_dir);
@@ -61,7 +64,9 @@ public:
     const Camera::SharedPtr & cam, const Intrinsics & intr,
     const std::vector<double> & dist);
   value_key_t addPose(const std::string & label, const gtsam::Pose3 & pose);
-
+  std::tuple<value_key_t, factor_key_t> addPoseWithPrior(
+    const std::string & label, const gtsam::Pose3 & pose,
+    const SharedNoiseModel & noise);
   void addPosePrior(
     const Camera::SharedPtr & dev, const gtsam::Pose3 & T_r_d,
     const SharedNoiseModel & noise);
@@ -90,7 +95,6 @@ public:
   DistortionCoefficients getOptimizedDistortionCoefficients(
     const Camera::SharedPtr & cam) const;
   void initializeIMUPoses();
-  void initializeIMUWorldPoses();
   void printErrors(bool optimized);
   gtsam::Pose3 getRigPose(uint64_t t, bool optimized) const;
   value_key_t getRigPoseKey(uint64_t t) const;
@@ -143,6 +147,7 @@ private:
   bool has_valid_T_w_o_{false};
   gtsam::Pose3 T_w_o_;
   value_key_t T_w_o_key_{-1};
+  factor_key_t T_w_o_prior_key_{-1};
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__CALIBRATION_HPP_

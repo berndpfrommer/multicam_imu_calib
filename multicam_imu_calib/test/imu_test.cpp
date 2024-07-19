@@ -60,7 +60,8 @@ TEST(multicam_imu_calib, imu_preintegration)
   // so the first IMU pose has to be set with a prior.
 
   multicam_imu_calib::Calibration calib;
-  calib.readConfigFile("single_cam_imu.yaml");
+  auto dl = std::make_shared<multicam_imu_calib::DetectorLoader>();
+  calib.readConfigFile("single_cam_imu.yaml", dl);
   calib.setAddInitialIMUPosePrior(true);      // only for debugging
   const auto cam = calib.getCameraList()[0];  // first camera
 
@@ -154,7 +155,8 @@ TEST(multicam_imu_calib, imu_extrinsic_single_cam)
   // Only test gyro, camera is not translated, just rotated
 
   multicam_imu_calib::Calibration calib;
-  calib.readConfigFile("single_cam_imu.yaml");
+  auto dl = std::make_shared<multicam_imu_calib::DetectorLoader>();
+  calib.readConfigFile("single_cam_imu.yaml", dl);
   const auto cam = calib.getCameraList()[0];  // first camera
   const auto & targ = calib.getTargets()[0];
   // initialize the camera perfectly
@@ -227,7 +229,7 @@ TEST(multicam_imu_calib, imu_extrinsic_single_cam)
   }
   // initialize all the IMU world poses based on the average rotation
   // between rig poses and IMU poses
-  calib.initializeIMUWorldPoses();
+  // calib.initializeIMUWorldPoses();   XXX this all needs to be fixed!
   // calib.printErrors(false);  // print unoptimized errors
   auto [init_err, final_err] = calib.runOptimizer();
   EXPECT_LT(std::abs(init_err), 4e-2);
@@ -259,7 +261,8 @@ static std::tuple<double, double, double, double> do_extrinsic_imu_calib(
   // Tests acceleration and gyro
 
   multicam_imu_calib::Calibration calib;
-  calib.readConfigFile(fname);
+  auto dl = std::make_shared<multicam_imu_calib::DetectorLoader>();
+  calib.readConfigFile(fname, dl);
   const auto cam = calib.getCameraList()[0];  // first camera
 
   // initialize the camera perfectly with respect to the rig

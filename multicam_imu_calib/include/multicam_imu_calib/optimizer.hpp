@@ -48,15 +48,8 @@ public:
   void addIMU(const IMU::SharedPtr & imu);
   std::tuple<double, double> optimize();
   void setPixelNoise(double noise);
-  value_key_t addPose(const std::string & label, const gtsam::Pose3 & p)
-  {
-    const auto pose_key = getNextKey();
-    values_.insert(pose_key, p);
-#ifdef DEBUG_SINGULARITIES
-    value_to_name_.insert({pose_key, label + " (pose)"});
-#endif
-    return (pose_key);
-  }
+  value_key_t addPose(const std::string & label, const gtsam::Pose3 & p);
+
   template <class T>
   factor_key_t addPrior(
     value_key_t value_key, const T & prior_value,
@@ -67,9 +60,10 @@ public:
     return (getLastFactorKey());
   }
 
-  void addIMUPoseFactors(
-    const IMU::SharedPtr & imu,
-    const std::unordered_map<uint64_t, value_key_t> & rig_keys);
+  factor_key_t addIMUPoseFactor(
+    const std::string & label, value_key_t object_pose_key,
+    value_key_t rig_pose_key, value_key_t imu_world_pose_key,
+    value_key_t imu_rig_calib_key);
 
   factor_key_t addCameraIntrinsics(
     const Camera::SharedPtr & cam, const Intrinsics & intr,
@@ -144,9 +138,7 @@ private:
   value_key_t key_{0};  // starts at zero, gets incremented
   gtsam::SharedNoiseModel pixel_noise_;
   std::unordered_map<factor_key_t, std::string> factor_to_name_;
-#ifdef DEBUG_SINGULARITIES
   std::unordered_map<value_key_t, std::string> value_to_name_;
-#endif
 };
 
 }  // namespace multicam_imu_calib

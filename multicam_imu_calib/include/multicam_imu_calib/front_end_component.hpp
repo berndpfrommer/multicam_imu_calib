@@ -39,6 +39,11 @@ public:
   {
     exclude_detections_topics_ = topics;
   }
+  void setDetectorLoader(const DetectorLoader::SharedPtr & dl)
+  {
+    detector_loader_ = dl;
+  }
+  void subscribe();
 
 private:
   class ImageHandler
@@ -65,11 +70,11 @@ private:
       return (this->get_parameter_or<T>(name, def));
     }
   }
-  void subscribe();
   // ---------------- variables
   std::shared_ptr<FrontEnd> front_end_;
   std::vector<std::shared_ptr<ImageHandler>> image_handlers_;
   std::set<std::string> exclude_detections_topics_;
+  DetectorLoader::SharedPtr detector_loader_;
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__FRONT_END_COMPONENT_HPP_

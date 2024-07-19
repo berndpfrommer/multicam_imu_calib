@@ -61,15 +61,21 @@ FrontEndComponent::FrontEndComponent(const rclcpp::NodeOptions & opt)
 : Node("front_end", opt)
 {
   front_end_ = std::make_shared<FrontEnd>();
-  subscribe();
+  if (safe_declare<bool>("subscribe", true)) {
+    subscribe();
+  }
 }
 
 void FrontEndComponent::subscribe()
 {
   const auto config_file = safe_declare<std::string>("config_file", "");
-  front_end_->readConfigFile(config_file);
+  if (!detector_loader_) {
+    LOG_INFO("creating detector loader");
+    detector_loader_ = std::make_shared<multicam_imu_calib::DetectorLoader>();
+  }
+  front_end_->readConfigFile(config_file, detector_loader_);
   Calibration calib;
-  calib.readConfigFile(config_file);
+  calib.readConfigFile(config_file, detector_loader_);
   for (const auto & cam : calib.getCameraList()) {
     const auto dtopic = cam->getDetectionsTopic();
     if (

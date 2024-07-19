@@ -134,7 +134,7 @@ public:
   void addPreintegratedFactorKey(uint64_t t, factor_key_t k);
   void addPoseFactorKey(uint64_t t, factor_key_t k);
   void updatePoseEstimate(uint64_t t, const gtsam::Pose3 & rigPose);
-  void updateNavState(uint64_t t, const gtsam::Pose3 & rigPose);
+  void updateNavState(uint64_t t, const gtsam::Pose3 & T_w_i);
   void savePreint(uint64_t t);
 
   void integrateMeasurement(

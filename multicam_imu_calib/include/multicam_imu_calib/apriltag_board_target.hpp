@@ -18,6 +18,7 @@
 
 #include <apriltag_detector/detector.hpp>
 #include <memory>
+#include <multicam_imu_calib/detector_loader.hpp>
 #include <multicam_imu_calib/target.hpp>
 #include <sensor_msgs/msg/image.hpp>
 
@@ -32,9 +33,10 @@ public:
   Detection detect(const Image::ConstSharedPtr & img) final;
 
   static SharedPtr make(
-    const std::string & type, const std::string & fam, uint16_t border_width,
-    double tag_size, uint32_t rows, uint32_t cols, double dist_rows,
-    double dist_cols, uint32_t start_id);
+    const DetectorLoader::SharedPtr & dl, const std::string & type,
+    const std::string & fam, uint16_t border_width, double tag_size,
+    uint32_t rows, uint32_t cols, double dist_rows, double dist_cols,
+    uint32_t start_id);
 
 private:
   AprilTagBoardTarget() = default;

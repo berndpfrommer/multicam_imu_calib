@@ -20,6 +20,8 @@
 #include <yaml-cpp/yaml.h>
 
 #include <memory>
+#include <multicam_imu_calib/detector_loader.hpp>
+#include <multicam_imu_calib/factor_key.hpp>
 #include <multicam_imu_calib/value_key.hpp>
 #include <multicam_imu_calib_msgs/msg/detection.hpp>
 #include <sensor_msgs/msg/image.hpp>
@@ -50,9 +52,12 @@ public:
   void setName(const std::string & s) { name_ = s; }
   void setPose(const gtsam::Pose3 & p);
   void setPoseKey(value_key_t k) { pose_key_ = k; }
+  void setPriorFactorKey(factor_key_t k) { prior_factor_key_ = k; }
 
-  static std::vector<SharedPtr> readConfigFile(const std::string & f);
-  static SharedPtr make(const YAML::Node & node);
+  static std::vector<SharedPtr> readConfigFile(
+    const std::string & f, const DetectorLoader::SharedPtr & dl);
+  static SharedPtr make(
+    const YAML::Node & node, const DetectorLoader::SharedPtr & dl);
 
 protected:
   Type type_{INVALID};
@@ -60,6 +65,7 @@ protected:
   gtsam::Pose3 pose_;
   bool has_valid_pose_{false};
   value_key_t pose_key_{0};
+  factor_key_t prior_factor_key_{-1};
 };
 
 }  // namespace multicam_imu_calib
