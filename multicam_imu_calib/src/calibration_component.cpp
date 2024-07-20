@@ -207,12 +207,11 @@ CalibrationComponent::CalibrationComponent(const rclcpp::NodeOptions & opt)
 
 CalibrationComponent::~CalibrationComponent()
 {
-  std::cerr << "destroying calib component" << std::endl;
-  detection_handler_queue_.clear();
-  detection_handlers_.clear();
+  detection_handler_queue_.clear();  // remove references to calib_
+  detection_handlers_.clear();       // remove references to calib_
+  imu_handlers_.clear();             // remove references to calib_
   calib_.reset();
   detector_loader_.reset();
-  std::cerr << "destroying calib component done " << std::endl;
 }
 
 void CalibrationComponent::calibrate(

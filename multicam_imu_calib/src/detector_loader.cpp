@@ -35,7 +35,7 @@ DetectorLoader::~DetectorLoader()
     for (auto & m : kv.second) {
       m.second.reset();
     }
-    kv.second.clear();  // release all references to this class
+    kv.second.clear();
   }
 
   for (const auto & kv : detector_map_) {
