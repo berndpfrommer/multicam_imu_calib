@@ -1,19 +1,4 @@
 <?xml version="1.0" ?>
-<!--
-// yaw:
-gz topic -t /z_joint_position -m gz.msgs.Double -p 'data: 7.0'
-gz topic -t /z_joint_position -m gz.msgs.Double -p 'data: 5.6'
-// roll:
-gz topic -t /x_joint_position -m gz.msgs.Double -p 'data: 5.6'
-gz topic -t /x_joint_position -m gz.msgs.Double -p 'data: 7.0'
-// pitch:
-gz topic -t /y_joint_position -m gz.msgs.Double -p 'data: 6.67'
-gz topic -t /y_joint_position -m gz.msgs.Double -p 'data: 5.9'
-// translation: 
-gz topic -t "/z_trans_position" -m gz.msgs.Double -p "data: 0.5"
-gz topic -t "/y_trans_position" -m gz.msgs.Double -p "data: 0.5"
-gz topic -t "/x_trans_position" -m gz.msgs.Double -p "data: 0.5"
--->
 
 <sdf version="1.10">
   <world name="cam_world">
@@ -22,21 +7,14 @@ gz topic -t "/x_trans_position" -m gz.msgs.Double -p "data: 0.5"
       <max_step_size>0.001</max_step_size>
       <real_time_factor>1.0</real_time_factor>
     </physics>
-    <plugin
-        filename="gz-sim-physics-system"
-        name="gz::sim::systems::Physics">
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics">
     </plugin>
-    <plugin
-        filename="gz-sim-scene-broadcaster-system"
-        name="gz::sim::systems::SceneBroadcaster">
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster">
     </plugin>
-    <plugin
-        filename="ignition-gazebo-sensors-system"
-        name="ignition::gazebo::systems::Sensors">
+    <plugin filename="ignition-gazebo-sensors-system" name="ignition::gazebo::systems::Sensors">
       <render_engine>ogre</render_engine>
     </plugin>
-    <plugin filename="gz-sim-imu-system"
-            name="gz::sim::systems::Imu">
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu">
     </plugin>
     <gui fullscreen="0">
       <plugin filename="MinimalScene" name="3D View">
@@ -72,14 +50,14 @@ gz topic -t "/x_trans_position" -m gz.msgs.Double -p "data: 0.5"
           <property type="double" key="height">72</property>
           <property type="double" key="width">121</property>
           <property type="double" key="z">1</property>
-          
+
           <property type="string" key="state">floating</property>
           <anchors target="3D View">
             <line own="left" target="left"/>
             <line own="bottom" target="bottom"/>
           </anchors>
         </gz-gui>
-        
+
         <play_pause>true</play_pause>
         <step>true</step>
         <start_paused>true</start_paused>
@@ -94,14 +72,13 @@ gz topic -t "/x_trans_position" -m gz.msgs.Double -p "data: 0.5"
           <property type="double" key="height">110</property>
           <property type="double" key="width">290</property>
           <property type="double" key="z">1</property>
-          
           <property type="string" key="state">floating</property>
           <anchors target="3D View">
             <line own="right" target="right"/>
             <line own="bottom" target="bottom"/>
           </anchors>
         </gz-gui>
-        
+
         <sim_time>true</sim_time>
         <real_time>true</real_time>
         <real_time_factor>true</real_time_factor>
@@ -165,8 +142,7 @@ gz topic -t "/x_trans_position" -m gz.msgs.Double -p "data: 0.5"
     </model>
     <model name='camera_model' canonical_link="base_link">
       <!--
-          <plugin filename="gz-sim-pose-publisher-system"
-          name="gz::sim::systems::PosePublisher">
+          <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
           <publish_model_pose>true</publish_model_pose>
           <publish_link_pose>false</publish_link_pose>
           <publish_sensor_pose>false</publish_sensor_pose>
@@ -176,25 +152,16 @@ gz topic -t "/x_trans_position" -m gz.msgs.Double -p "data: 0.5"
           <static_publisher>false</static_publisher>
           </plugin>
       -->
-      <plugin filename="gz-sim-odometry-publisher-system"
-               name="gz::sim::systems::OdometryPublisher">
+      <plugin filename="gz-sim-odometry-publisher-system" name="gz::sim::systems::OdometryPublisher">
         <odom_frame>odom_world</odom_frame>
         <robot_base_frame>base_link</robot_base_frame>
         <dimensions>3</dimensions>
       </plugin>
-      <!-- starting frame
-	   <pose relative_to='world'>0 0 1.0 0 0 0</pose>
-	     -->
-      <!--
-          <link name="fixed_link">
-          <pose relative_to='__model__'>0 0 0.0 0 0 0</pose>
-          </link>
-      -->
       <link name="start_link">
-	<pose>0 0 1.0 0 0 0</pose>
+        <pose>0 0 1.0 0 0 0</pose>
       </link>
       <link name="camera_link_x">
-	<pose relative_to="start_link">0 0 0 0 0 0</pose>
+        <pose relative_to="start_link">0 0 0 0 0 0</pose>
         <inertial>
           <mass>
             1e-9
@@ -207,7 +174,7 @@ gz topic -t "/x_trans_position" -m gz.msgs.Double -p "data: 0.5"
         </inertial>
       </link>
       <link name="camera_link_y">
-	<pose relative_to="camera_link_x">0 0 0 0 0 0</pose>
+        <pose relative_to="camera_link_x">0 0 0 0 0 0</pose>
         <inertial>
           <mass>
             1e-9
@@ -220,7 +187,7 @@ gz topic -t "/x_trans_position" -m gz.msgs.Double -p "data: 0.5"
         </inertial>
       </link>
       <link name="camera_link_z">
-	<pose relative_to="camera_link_y">0 0 0 0 0 0</pose>
+        <pose relative_to="camera_link_y">0 0 0 0 0 0</pose>
         <inertial>
           <mass>
             1e-9
@@ -233,7 +200,7 @@ gz topic -t "/x_trans_position" -m gz.msgs.Double -p "data: 0.5"
         </inertial>
       </link>
       <link name="camera_link_psi">
-	<pose relative_to="camera_link_z">0 0 0 0 0 0</pose>
+        <pose relative_to="camera_link_z">0 0 0 0 0 0</pose>
         <inertial>
           <mass>
             1e-9
@@ -246,7 +213,7 @@ gz topic -t "/x_trans_position" -m gz.msgs.Double -p "data: 0.5"
         </inertial>
       </link>
       <link name="camera_link_theta">
-	<pose relative_to="camera_link_psi">0 0 0 0 0 0</pose>
+        <pose relative_to="camera_link_psi">0 0 0 0 0 0</pose>
         <inertial>
           <mass>
             1e-9
@@ -384,10 +351,8 @@ gz topic -t "/x_trans_position" -m gz.msgs.Double -p "data: 0.5"
           </limit>
         </axis>
       </joint>
-      <!-- ------------ CONTROLLERS -------------- -->
-      <plugin
-          filename="gz-sim-joint-position-controller-system"
-          name="gz::sim::systems::JointPositionController">
+      <!-- ++++++++++++++ CONTROLLERS ++++++++++++++++ -->
+      <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
         <joint_name>x_trans_joint</joint_name>
         <topic>x_trans_position</topic>
         <p_gain>0.5</p_gain>
@@ -399,9 +364,7 @@ gz topic -t "/x_trans_position" -m gz.msgs.Double -p "data: 0.5"
         <cmd_min>-1.0</cmd_min>
       </plugin>
 
-      <plugin
-          filename="gz-sim-joint-position-controller-system"
-          name="gz::sim::systems::JointPositionController">
+      <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
         <joint_name>y_trans_joint</joint_name>
         <topic>y_trans_position</topic>
         <p_gain>0.5</p_gain>
@@ -412,10 +375,8 @@ gz topic -t "/x_trans_position" -m gz.msgs.Double -p "data: 0.5"
         <cmd_max>1.0</cmd_max>
         <cmd_min>-1.0</cmd_min>
       </plugin>
-      
-      <plugin
-          filename="gz-sim-joint-position-controller-system"
-          name="gz::sim::systems::JointPositionController">
+
+      <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
         <joint_name>z_trans_joint</joint_name>
         <topic>z_trans_position</topic>
         <p_gain>0.5</p_gain>
@@ -428,9 +389,7 @@ gz topic -t "/x_trans_position" -m gz.msgs.Double -p "data: 0.5"
         <cmd_offset>0.981</cmd_offset>
       </plugin>
       <!-- rotational controllers -->
-      <plugin
-          filename="gz-sim-joint-position-controller-system"
-          name="gz::sim::systems::JointPositionController">
+      <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
         <joint_name>x_joint</joint_name>
         <topic>x_rot_position</topic>
         <p_gain>1.0</p_gain>
@@ -441,9 +400,7 @@ gz topic -t "/x_trans_position" -m gz.msgs.Double -p "data: 0.5"
         <cmd_max>2</cmd_max>
         <cmd_min>-2</cmd_min>
       </plugin>
-      <plugin
-          filename="gz-sim-joint-position-controller-system"
-          name="gz::sim::systems::JointPositionController">
+      <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
         <joint_name>y_joint</joint_name>
         <topic>y_rot_position</topic>
         <p_gain>1.0</p_gain>
@@ -454,9 +411,7 @@ gz topic -t "/x_trans_position" -m gz.msgs.Double -p "data: 0.5"
         <cmd_max>2</cmd_max>
         <cmd_min>-2</cmd_min>
       </plugin>
-      <plugin
-          filename="gz-sim-joint-position-controller-system"
-          name="gz::sim::systems::JointPositionController">
+      <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
         <joint_name>z_joint</joint_name>
         <topic>z_rot_position</topic>
         <p_gain>1.0</p_gain>
@@ -467,17 +422,13 @@ gz topic -t "/x_trans_position" -m gz.msgs.Double -p "data: 0.5"
         <cmd_max>2</cmd_max>
         <cmd_min>-2</cmd_min>
       </plugin>
-      <!-- ------------ END OF CONTROLLERS -------------- -->
+      <!-- +++++++++++++++++ END OF CONTROLLERS ++++++++++++++++++++-->
       <!--
-          <plugin
-          filename="gz-sim-joint-state-publisher-system"
-          name="gz::sim::systems::JointStatePublisher">
+          <plugin filename="gz-sim-joint-state-publisher-system" name="gz::sim::systems::JointStatePublisher">
           <joint_name>z_trans_joint</joint_name>
           <topic>z_trans_state</topic>
           </plugin>
-          <plugin
-          filename="gz-sim-joint-state-publisher-system"
-          name="gz::sim::systems::JointStatePublisher">
+          <plugin filename="gz-sim-joint-state-publisher-system" name="gz::sim::systems::JointStatePublisher">
           <joint_name>z_joint</joint_name>
           <topic>z_joint_state</topic>
           </plugin>
