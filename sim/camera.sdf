@@ -123,35 +123,9 @@
             </plane>
           </geometry>
         </collision>
-        <!--
-            <visual name="visual">
-            <geometry>
-            <plane>
-            <normal>0 0 1</normal>
-            <size>100 100</size>
-            </plane>
-            </geometry>
-            <material>
-            <ambient>0.8 0.8 0.8 1</ambient>
-            <diffuse>0.8 0.8 0.8 1</diffuse>
-            <specular>0.8 0.8 0.8 1</specular>
-            </material>
-            </visual>
-        -->
       </link>
     </model>
     <model name='camera_model' canonical_link="base_link">
-      <!--
-          <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
-          <publish_model_pose>true</publish_model_pose>
-          <publish_link_pose>false</publish_link_pose>
-          <publish_sensor_pose>false</publish_sensor_pose>
-          <publish_collision_pose>false</publish_collision_pose>
-          <publish_visual_pose>false</publish_visual_pose>
-          <publish_nested_model_pose>false</publish_nested_model_pose>
-          <static_publisher>false</static_publisher>
-          </plugin>
-      -->
       <plugin filename="gz-sim-odometry-publisher-system" name="gz::sim::systems::OdometryPublisher">
         <odom_frame>odom_world</odom_frame>
         <robot_base_frame>base_link</robot_base_frame>
@@ -275,6 +249,7 @@
         </sensor>
 
         <sensor name="imu_sensor" type="imu">
+          <pose>0 0 0.0 0 0 0</pose>
           <always_on>1</always_on>
           <update_rate>100</update_rate>
           <visualize>true</visualize>
