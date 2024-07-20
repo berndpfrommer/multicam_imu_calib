@@ -359,18 +359,25 @@ void IMU::preintegrateUpTo(uint64_t t)
   }
 }
 
+bool IMU::tryComputeWorldOrientation()
+{
+  if (avg_data_.t > 50 && !world_orientation_valid_) {
+    const auto acc_i = avg_data_.acceleration.normalized();
+    world_orientation_ = findInitialWorldOrientation(acc_i);
+    world_orientation_valid_ = true;
+    LOG_INFO(getName() << " found initial world orientation:");
+    LOG_INFO(world_orientation_);
+    return (true);
+  }
+  return (false);
+}
+
 void IMU::addData(const IMUData & d)
 {
   data_.push_back(d);
   avg_data_.t++;  // abuse time as counter
   avg_data_.acceleration += d.acceleration;
   avg_data_.omega += d.omega;
-  if (avg_data_.t > 50 && !world_orientation_valid_) {
-    const auto acc_i = avg_data_.acceleration.normalized();
-    world_orientation_ = findInitialWorldOrientation(acc_i);
-    world_orientation_valid_ = true;
-    LOG_INFO(getName() << " found initial world orientation.");
-  }
 }
 
 gtsam::imuBias::ConstantBias IMU::getPreliminaryBiasEstimate() const

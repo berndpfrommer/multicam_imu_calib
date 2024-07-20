@@ -658,18 +658,22 @@ bool Calibration::applyIMUData(uint64_t t)
     if (imu->isPreintegrating()) {
       imu->preintegrateUpTo(t);
       if (imu->isPreintegratedUpTo(t)) {
+        if (!imu->hasWorldOrientation()) {
+          if (imu->tryComputeWorldOrientation()) {
+            imu->setRigToObjectRotation(getRigPose(t, false).rotation());
+          }
+        }
         if (!imu->hasValidPose()) {
           imu->updatePoseEstimate(t, getRigPose(t, false));
         }
         if (
           !has_valid_T_w_o_ &&
           (imu->hasWorldOrientation() && imu->hasValidPose())) {
-          const auto T_r_o = getRigPose(t, false).inverse();
+          const auto R_r_o = imu->getRigToObjectRotation().inverse();
           const auto R_w_imu = imu->getWorldOrientation();
           const auto T_imu_r = imu->getPose().inverse();
           T_w_o_ = gtsam::Pose3(
-            R_w_imu * T_imu_r.rotation() * T_r_o.rotation(),
-            gtsam::Point3(0, 0, 0));
+            R_w_imu * T_imu_r.rotation() * R_r_o, gtsam::Point3(0, 0, 0));
           T_w_o_key_ = optimizer_->addPose("T_w_o", T_w_o_);
           // prior keeps position of objects at origin and
           // allows no yaw, but permits pitch and roll

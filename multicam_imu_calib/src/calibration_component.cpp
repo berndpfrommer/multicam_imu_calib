@@ -363,8 +363,8 @@ void CalibrationComponent::newRigPoseAdded(uint64_t t)
 std::vector<std::string> CalibrationComponent::getPublishedTopics() const
 {
   std::vector<std::string> topics;
-  topics.push_back("rig_odom");
-  topics.push_back("tf");
+  topics.push_back("/rig_odom");
+  topics.push_back("/tf");
   return (topics);
 }
 

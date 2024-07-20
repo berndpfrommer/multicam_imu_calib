@@ -96,6 +96,7 @@ public:
   const auto & getAccum() const { return (accum_); }
   const auto & getSavedPreint() const { return (saved_preint_); }
   const auto & getWorldOrientation() const { return (world_orientation_); }
+  const auto & getRigToObjectRotation() const { return (R_o_r_); }
   gtsam::imuBias::ConstantBias getBiasPrior() const;
   gtsam::SharedNoiseModel getBiasPriorNoise() const;
   bool hasValidPreint() const;
@@ -123,6 +124,7 @@ public:
   void setCurrentState(const gtsam::NavState & s) { current_state_ = s; }
   void setFrameId(const std::string & id) { frame_id_ = id; }
   void setHasInitializedIMUGraph(bool f) { has_initialized_imu_graph_ = f; }
+  void setRigToObjectRotation(const gtsam::Rot3 & R) { R_o_r_ = R; }
 
   // ------------ others
   void parametersComplete();
@@ -142,6 +144,7 @@ public:
     int64_t dt);
   void popData() { data_.pop_front(); }
   void initializeWorldPose(uint64_t t, const gtsam::Pose3 & rigPose);
+  bool tryComputeWorldOrientation();
   // void updateWorldPose(uint64_t t, const gtsam::Pose3 & rigPose);
   void resetPreintegration(uint64_t t);
   void saveAttitude(uint64_t t);
@@ -187,6 +190,7 @@ private:
   std::vector<SavedPreint> saved_preint_;
   bool world_orientation_valid_{false};
   gtsam::Rot3 world_orientation_;
+  gtsam::Rot3 R_o_r_;  // at time of world_orientation_ initialization
   bool has_initialized_imu_graph_{false};
 };
 std::ostream & operator<<(std::ostream & os, const IMU::SavedPreint & p);
