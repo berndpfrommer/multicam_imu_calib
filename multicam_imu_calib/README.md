@@ -29,8 +29,9 @@ colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo  #
 ## How to use
 
 ### From a ros bag:
+
 ```bash
-ros2 run multicam_imu_calib calibrate_from_bag  -b "<path_to_bag_file>" -o "<output_directory>" -c "<calibration_config_file.yaml>"
+ros2 run multicam_imu_calib calibrate_from_bag --ros-args -p config_file:=./config/sim.yaml -p in_bag:=$path_to_input_bag -p out_bag:=$path_to_output_bag
 ```
 This will produce calibration output results in the output directory.
 
