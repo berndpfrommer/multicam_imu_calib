@@ -115,7 +115,9 @@ int main(int argc, char ** argv)
     rclcpp::spin_some(player_node);
     rclcpp::spin_some(calib_node);
     rclcpp::spin_some(frontend_node);
-    rclcpp::spin_some(recorder_node);
+    if (recorder_node) {
+      rclcpp::spin_some(recorder_node);
+    }
 #endif
   }
   auto req = std::make_shared<std_srvs::srv::Trigger::Request>();
