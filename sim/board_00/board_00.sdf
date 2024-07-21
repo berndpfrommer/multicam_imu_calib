@@ -1,0 +1,49 @@
+<?xml version="1.0" ?>
+ <sdf version="1.5">
+   <model name='board_00'>
+      <link name='tag_00'>
+        <pose relative_to='__model__'>-0.0625 -0.0625 0 0 0 0</pose>
+        <visual name='vis_tag_00'>
+          <geometry>
+            <mesh>
+              <scale>0.1 0.1 0.1</scale>
+              <uri>model://board_00/tag36_11_00000.dae</uri>
+            </mesh>
+          </geometry>
+        </visual>
+      </link>
+      <link name='tag_01'>
+        <pose relative_to='__model__'>0.0625 -0.0625 0 0 0 0</pose>
+        <visual name='vis_tag_01'>
+          <geometry>
+            <mesh>
+              <scale>0.1 0.1 0.1</scale>
+              <uri>model://board_00/tag36_11_00001.dae</uri>
+            </mesh>
+          </geometry>
+        </visual>
+      </link>
+      <link name='tag_02'>
+        <pose relative_to='__model__'>-0.0625 0.0625 0 0 0 0</pose>
+        <visual name='vis_tag_02'>
+          <geometry>
+            <mesh>
+              <scale>0.1 0.1 0.1</scale>
+              <uri>model://board_00/tag36_11_00002.dae</uri>
+            </mesh>
+          </geometry>
+        </visual>
+      </link>
+      <link name='tag_03'>
+        <pose relative_to='__model__'>0.0625 0.0625 0 0 0 0</pose>
+        <visual name='vis_tag_03'>
+          <geometry>
+            <mesh>
+              <scale>0.1 0.1 0.1</scale>
+              <uri>model://board_00/tag36_11_00003.dae</uri>
+            </mesh>
+          </geometry>
+        </visual>
+      </link>
+    </model>
+ </sdf>

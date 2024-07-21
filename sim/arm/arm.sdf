@@ -1,0 +1,236 @@
+<?xml version="1.0" ?>
+
+<sdf version="1.5">
+  <model name='arm' canonical_link="start_link">
+    <link name="start_link">
+      <inertial>
+        <mass>  1e-9 </mass>
+        <inertia>
+          <ixx>1e-9</ixx>
+          <iyy>1e-9</iyy>
+          <izz>1e-9</izz>
+        </inertia>
+      </inertial>
+    </link>
+    <link name="link_trans_x">
+      <pose relative_to="start_link">0 0 0 0 0 0</pose>
+      <inertial>
+        <mass> 1e-9 </mass>
+        <inertia>
+          <ixx>1e-9</ixx>
+          <iyy>1e-9</iyy>
+          <izz>1e-9</izz>
+        </inertia>
+      </inertial>
+    </link>
+    <link name="link_trans_y">
+      <pose relative_to="link_trans_x">0 0 0 0 0 0</pose>
+      <inertial>
+        <mass> 1e-9 </mass>
+        <inertia>
+          <ixx>1e-9</ixx>
+          <iyy>1e-9</iyy>
+          <izz>1e-9</izz>
+        </inertia>
+      </inertial>
+    </link>
+    <link name="link_trans_z">
+      <pose relative_to="link_trans_y">0 0 0 0 0 0</pose>
+      <inertial>
+        <mass> 1e-9 </mass>
+        <inertia>
+          <ixx>1e-9</ixx>
+          <iyy>1e-9</iyy>
+          <izz>1e-9</izz>
+        </inertia>
+      </inertial>
+    </link>
+    <link name="link_rot_z">
+      <pose relative_to="link_trans_z">0 0 0 0 0 0</pose>
+      <inertial>
+        <mass> 1e-9 </mass>
+        <inertia>
+          <ixx>1e-3</ixx>
+          <iyy>1e-3</iyy>
+          <izz>1e-3</izz>
+        </inertia>
+      </inertial>
+    </link>
+    <link name="link_rot_y">
+      <pose relative_to="link_rot_z">0 0 0 0 0 0</pose>
+      <inertial>
+        <mass> 1e-9 </mass>
+        <inertia>
+          <ixx>1e-3</ixx>
+          <iyy>1e-3</iyy>
+          <izz>1e-3</izz>
+        </inertia>
+      </inertial>
+    </link>
+    <link name="gripper_link">
+      <pose relative_to='link_rot_y'>0 0 0.0 0 0 0</pose>
+      <inertial>
+        <mass> 1e-9 </mass>
+        <inertia>
+          <ixx>1e-3</ixx>
+          <iyy>1e-3</iyy>
+          <izz>1e-3</izz>
+        </inertia>
+      </inertial>
+      <!--
+      <visual name="visual_gripper">
+        <geometry>
+          <box>
+            <size>0.2 0.2 0.2</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>0.0 1.0 0.0 1</ambient>
+          <diffuse>0.0 1.0 0.0 1</diffuse>
+          <specular>0.0 1.0 0.0 1</specular>
+        </material>
+      </visual>
+      -->
+    </link>
+    <joint name='joint_trans_x' type='prismatic'>
+      <parent>start_link</parent>
+      <child>link_trans_x</child>
+      <axis>
+        <xyz>1 0 0</xyz>
+        <limit>
+          <lower>-1.0e6</lower>
+          <upper>1.0e6</upper>
+        </limit>
+      </axis>
+    </joint>
+    <joint name='joint_trans_y' type='prismatic'>
+      <parent>link_trans_x</parent>
+      <child>link_trans_y</child>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit>
+          <lower>-1.0e6</lower>
+          <upper>1.0e6</upper>
+        </limit>
+      </axis>
+    </joint>
+    <joint name='joint_trans_z' type='prismatic'>
+      <parent>link_trans_y</parent>
+      <child>link_trans_z</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit>
+          <lower>-1.0e6</lower>
+          <upper>1.0e6</upper>
+        </limit>
+      </axis>
+    </joint>
+    <joint name='joint_rot_z' type='revolute'>
+      <parent>link_trans_z</parent>
+      <child>link_rot_z</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit>
+          <lower>-1.0e6</lower>
+          <upper>1.0e6</upper>
+        </limit>
+      </axis>
+    </joint>
+    <joint name='joint_rot_y' type='revolute'>
+      <parent>link_rot_z</parent>
+      <child>link_rot_y</child>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit>
+          <lower>-1.0e10</lower>
+          <upper>1.0e10</upper>
+        </limit>
+      </axis>
+    </joint>
+    <joint name='joint_rot_x' type='revolute'>
+      <parent>link_rot_y</parent>
+      <child>gripper_link</child>
+      <axis>
+        <xyz>1 0 0</xyz>
+        <limit>
+          <lower>-1.0e10</lower>
+          <upper>1.0e10</upper>
+        </limit>
+      </axis>
+    </joint>
+
+    <!-- ++++++++++++++ CONTROLLERS ++++++++++++++++ -->
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>joint_trans_x</joint_name>
+      <topic>x_trans_position</topic>
+      <p_gain>0.5</p_gain>
+      <i_gain>0.0</i_gain>
+      <d_gain>0.5</d_gain>
+      <i_max>1e-9</i_max>
+      <i_min>-1e-9</i_min>
+      <cmd_max>1.0</cmd_max>
+      <cmd_min>-1.0</cmd_min>
+    </plugin>
+
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>joint_trans_y</joint_name>
+      <topic>y_trans_position</topic>
+      <p_gain>0.5</p_gain>
+      <i_gain>0.0</i_gain>
+      <d_gain>0.5</d_gain>
+      <i_max>1e-9</i_max>
+      <i_min>-1e-9</i_min>
+      <cmd_max>1.0</cmd_max>
+      <cmd_min>-1.0</cmd_min>
+    </plugin>
+
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>joint_trans_z</joint_name>
+      <topic>z_trans_position</topic>
+      <p_gain>0.5</p_gain>
+      <i_gain>0.0</i_gain>
+      <d_gain>0.5</d_gain>
+      <i_max>1e-9</i_max>
+      <i_min>-1e-9</i_min>
+      <cmd_max>3.0</cmd_max>
+      <cmd_min>-3.0</cmd_min>
+      <cmd_offset>0.981</cmd_offset>
+    </plugin>
+    <!-- rotational controllers -->
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>joint_rot_x</joint_name>
+      <topic>x_rot_position</topic>
+      <p_gain>1.0</p_gain>
+      <i_gain>0.0</i_gain>
+      <d_gain>0.2</d_gain>
+      <i_max>1</i_max>
+      <i_min>-1</i_min>
+      <cmd_max>2</cmd_max>
+      <cmd_min>-2</cmd_min>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>joint_rot_y</joint_name>
+      <topic>y_rot_position</topic>
+      <p_gain>1.0</p_gain>
+      <i_gain>0.0</i_gain>
+      <d_gain>0.2</d_gain>
+      <i_max>1</i_max>
+      <i_min>-1</i_min>
+      <cmd_max>2</cmd_max>
+      <cmd_min>-2</cmd_min>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>joint_rot_z</joint_name>
+      <topic>z_rot_position</topic>
+      <p_gain>1.0</p_gain>
+      <i_gain>0.0</i_gain>
+      <d_gain>0.2</d_gain>
+      <i_max>1</i_max>
+      <i_min>-1</i_min>
+      <cmd_max>2</cmd_max>
+      <cmd_min>-2</cmd_min>
+    </plugin>
+    <!-- +++++++++++++++++ END OF CONTROLLERS ++++++++++++++++++++-->
+  </model>
+</sdf>
+

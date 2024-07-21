@@ -5,7 +5,7 @@
 
 1) Start simulator
 ```
-gz sim -r -s --headless-render ./camera.sdf
+gz sim -r -s --headless-render ./world.sdf
 ```
 
 2) Start GUI
