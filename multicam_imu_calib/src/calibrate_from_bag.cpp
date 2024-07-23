@@ -120,10 +120,11 @@ int main(int argc, char ** argv)
     }
 #endif
   }
-  auto req = std::make_shared<std_srvs::srv::Trigger::Request>();
-  auto resp = std::make_shared<std_srvs::srv::Trigger::Response>();
   if (!save_detections) {
+    auto req = std::make_shared<std_srvs::srv::Trigger::Request>();
+    auto resp = std::make_shared<std_srvs::srv::Trigger::Response>();
     calib_node->calibrate(req, resp);
+    calib_node->runDiagnostics();
   }
   player_node.reset();
   recorder_node.reset();

@@ -356,7 +356,7 @@ std::tuple<value_key_t, factor_key_t> Calibration::addPoseWithPrior(
   const SharedNoiseModel & noise)
 {
   const auto v_key = addPose(label, pose);
-  const auto f_key = optimizer_->addPrior(v_key, pose, noise);
+  const auto f_key = optimizer_->addPrior(label, v_key, pose, noise);
   return {v_key, f_key};
 }
 
@@ -591,15 +591,16 @@ void Calibration::initializeIMUGraph(
   imu->addValueKeys(vk);
   // add prior for start velocity to be zero
   (void)optimizer_->addPrior(
-    vk.velocity_key, gtsam::Vector3(gtsam::Vector3::Zero()),
+    "ini_vel_prior", vk.velocity_key, gtsam::Vector3(gtsam::Vector3::Zero()),
     utilities::makeNoise3(1e-3));
   // and set some prior for the starting bias
   imu->setBiasPriorKey(optimizer_->addPrior(
-    vk.bias_key, imu->getBiasPrior(), imu->getBiasPriorNoise()));
+    "ini_bias_prior", vk.bias_key, imu->getBiasPrior(),
+    imu->getBiasPriorNoise()));
   // for testing, add prior for the initial IMU pose as well
   if (add_initial_imu_pose_prior_) {
     (void)optimizer_->addPrior(
-      vk.world_pose_key, imu->getCurrentState().pose(),
+      "ini_imu_pose_prior", vk.world_pose_key, imu->getCurrentState().pose(),
       utilities::makeNoise6(1e-3 /*angle*/, 1e-3));
   }
 #ifdef DEBUG_INIT_IMU_GRAPH
@@ -678,7 +679,7 @@ bool Calibration::applyIMUData(uint64_t t)
           // prior keeps position of objects at origin and
           // allows no yaw, but permits pitch and roll
           T_w_o_prior_key_ = optimizer_->addPrior(
-            T_w_o_key_, T_w_o_,
+            "T_w_o_prior", T_w_o_key_, T_w_o_,
             utilities::makeNoise6(1e2, 1e2, 1e-6, 1e-6, 1e-6, 1e-6));
           has_valid_T_w_o_ = true;
           LOG_INFO("initialized world-to-object transform");
@@ -817,14 +818,16 @@ void Calibration::addPosePrior(
   const Camera::SharedPtr & dev, const gtsam::Pose3 & T_r_d,
   const SharedNoiseModel & noise)
 {
-  dev->setPosePriorKey(optimizer_->addPrior(dev->getPoseKey(), T_r_d, noise));
+  dev->setPosePriorKey(
+    optimizer_->addPrior("cam_pose", dev->getPoseKey(), T_r_d, noise));
 }
 
 void Calibration::addPosePrior(
   const IMU::SharedPtr & dev, const gtsam::Pose3 & T_r_d,
   const SharedNoiseModel & noise)
 {
-  dev->setPosePriorKey(optimizer_->addPrior(dev->getPoseKey(), T_r_d, noise));
+  dev->setPosePriorKey(
+    optimizer_->addPrior("imu_pose", dev->getPoseKey(), T_r_d, noise));
 }
 
 void Calibration::initializeCameraPosesAndIntrinsics()
@@ -887,13 +890,17 @@ std::unordered_map<std::string, size_t> Calibration::getTopicToIMU() const
 
 std::tuple<double, double> Calibration::runOptimizer()
 {
-  return (optimizer_->optimize());
+  const auto errs = optimizer_->optimize();
+  LOG_INFO("--------------- optimized errors");
+  optimizer_->printErrors(true);
+  return (errs);
 }
 
 void Calibration::sanityChecks() const
 {
   optimizer_->checkForUnknownValues();
   optimizer_->checkForUnconstrainedVariables();
+  LOG_INFO("--------------- unoptimized errors");
   optimizer_->printErrors(false);
 }
 
