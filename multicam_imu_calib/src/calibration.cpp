@@ -562,7 +562,7 @@ Target::SharedPtr Calibration::getTarget(const std::string & id)
       return (targ);
     }
   }
-  BOMB_OUT("target " << id << "unknown!");
+  return (nullptr);
 }
 
 // #define DEBUG_INIT_IMU_GRAPH

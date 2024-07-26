@@ -62,10 +62,12 @@ static std::deque<size_t> targetsWithPosesFirst(
   std::deque<size_t> sorted;
   for (size_t i = 0; i < msg.detections.size(); i++) {
     auto target = calib->getTarget(msg.detections[i].id);
-    if (target->hasValidPose()) {
-      sorted.push_front(i);
-    } else {
-      sorted.push_back(i);
+    if (target) {  // ignore unknown targets!
+      if (target->hasValidPose()) {
+        sorted.push_front(i);
+      } else {
+        sorted.push_back(i);
+      }
     }
   }
   return (sorted);
@@ -83,11 +85,10 @@ void CalibrationComponent::DetectionHandler::processOldestMessage()
   for (const auto & idx : sorted_idx) {
     auto & det = msg->detections[idx];
     const auto & target = calib_->getTarget(det.id);
-    /*
-    LOG_INFO(
-      "before: " << target->getName() << " rig: " << (int)calib_->hasRigPose(t)
-                 << " cam: " << (int)camera_->hasValidPose());
-                 */
+    if (!target) {
+      continue;
+    }
+    // XXX note: bad data 1718388188165321954-1718388188480328684 (inclusive)
     if (!calib_->hasRigPose(t)) {
       if (camera_->hasValidPose()) {
         const auto T_c_t = init_pose::findCameraPose(camera_, det);
