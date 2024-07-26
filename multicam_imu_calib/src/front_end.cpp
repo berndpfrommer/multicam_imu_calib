@@ -25,7 +25,8 @@ FrontEnd::FrontEnd() {}
 
 FrontEnd::~FrontEnd() { targets_.clear(); }
 
-void FrontEnd::readConfigFile(const std::string & file, const DetectorLoader::SharedPtr &dl)
+void FrontEnd::readConfigFile(
+  const std::string & file, const DetectorLoader::SharedPtr & dl)
 {
   targets_ = Target::readConfigFile(file, dl);
 }

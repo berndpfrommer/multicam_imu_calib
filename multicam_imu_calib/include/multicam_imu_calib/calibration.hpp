@@ -51,7 +51,8 @@ public:
     const std::string & file, const DetectorLoader::SharedPtr & dl);
   std::tuple<double, double> runOptimizer();
   void sanityChecks() const;
-  void runDiagnostics(const std::string & out_dir);
+  void runIMUDiagnostics(const std::string & out_dir);
+  void runCameraDiagnostics(const std::string & out_dir);
   void setAddInitialIMUPosePrior(bool f) { add_initial_imu_pose_prior_ = f; }
   void setAnyTargetHasPose(bool f) { any_target_has_pose_ = f; }
 

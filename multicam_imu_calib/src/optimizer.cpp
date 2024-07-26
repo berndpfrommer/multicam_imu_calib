@@ -270,6 +270,27 @@ std::vector<factor_key_t> Optimizer::addProjectionFactors(
   return (factors);
 }
 
+class Foo : public gtsam::ExpressionFactor<gtsam::Point2>
+{
+public:
+  const gtsam::Expression<gtsam::Point2> & getExpression() const
+  {
+    return (expression_);
+  }
+};
+
+std::tuple<gtsam::Point2, gtsam::Point2> Optimizer::getProjection(
+  const factor_key_t & k, bool opt) const
+{
+  std::tuple<gtsam::Point2, gtsam::Point2> errs;
+  const auto & f = reinterpret_cast<Foo &>(*graph_.at(k));
+  const gtsam::Point2 p_pred =
+    f.getExpression().value(opt ? optimized_values_ : values_);
+  std::get<0>(errs) = f.measured();
+  std::get<1>(errs) = p_pred;
+  return (errs);
+}
+
 #define DEBUG_OPT
 
 std::tuple<double, double> Optimizer::optimize()

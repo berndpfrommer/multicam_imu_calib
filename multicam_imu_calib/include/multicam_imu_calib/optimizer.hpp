@@ -52,11 +52,11 @@ public:
 
   template <class T>
   factor_key_t addPrior(
-    value_key_t value_key, const T & prior_value,
+    const std::string & label, value_key_t value_key, const T & prior_value,
     const SharedNoiseModel & noise)
   {
     graph_.add(gtsam::PriorFactor(value_key, prior_value, noise));
-    factor_to_name_.insert({getLastFactorKey(), "some_prior"});
+    factor_to_name_.insert({getLastFactorKey(), label});
     return (getLastFactorKey());
   }
 
@@ -119,6 +119,9 @@ public:
     factor_key_t k, bool optimized) const;
   std::tuple<gtsam::Vector3, gtsam::Vector3, gtsam::Vector3>
   getCombinedIMUFactorError(factor_key_t k, bool optimized) const;
+  std::tuple<gtsam::Point2, gtsam::Point2> getProjection(
+    const factor_key_t & factor, bool opt) const;
+
   void printErrors(bool optimized) const;
   void checkForUnconstrainedVariables() const;
   void checkForUnknownValues() const;

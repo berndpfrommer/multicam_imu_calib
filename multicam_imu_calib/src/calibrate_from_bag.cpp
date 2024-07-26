@@ -53,6 +53,9 @@ int main(int argc, char ** argv)
   std::vector<std::string> recorded_topics;
   const bool save_detections =
     calib_node->declare_parameter<bool>("save_detections", false);
+  const std::string out_uri =
+    calib_node->declare_parameter<std::string>("out_bag", "");
+
   if (!save_detections) {
     recorded_topics = calib_node->getPublishedTopics();
 #ifndef USE_RMW
@@ -60,6 +63,9 @@ int main(int argc, char ** argv)
 #endif
   } else {
     LOG_INFO("saving detections!");
+    if (out_uri.empty()) {
+      BOMB_OUT("save_detections given, but no out_bag specified!");
+    }
     recorded_topics = calib_node->getIMUTopics();
     const auto det_topics = calib_node->getDetectionsTopics();
     recorded_topics.insert(
@@ -87,8 +93,6 @@ int main(int argc, char ** argv)
 #ifndef USE_RMW
   exec.add_node(frontend_node);
 #endif
-  const std::string out_uri =
-    calib_node->declare_parameter<std::string>("out_bag", "");
 
   std::shared_ptr<rosbag2_transport::Recorder> recorder_node;
   if (!out_uri.empty()) {
@@ -113,7 +117,9 @@ int main(int argc, char ** argv)
     exec.spin_some();
 #else
     rclcpp::spin_some(player_node);
-    rclcpp::spin_some(calib_node);
+    if (!save_detections) {
+      rclcpp::spin_some(calib_node);
+    }
     rclcpp::spin_some(frontend_node);
     if (recorder_node) {
       rclcpp::spin_some(recorder_node);

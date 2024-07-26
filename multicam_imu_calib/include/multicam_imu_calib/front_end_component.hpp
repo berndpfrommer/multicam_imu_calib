@@ -56,9 +56,15 @@ private:
 
   private:
     void imageCallback(const Image::ConstSharedPtr & p);
+    std::string img_topic_;
+    size_t frames_processed_{0};
     std::shared_ptr<FrontEnd> front_end_;
     std::shared_ptr<image_transport::Subscriber> image_sub_;
     std::shared_ptr<rclcpp::Publisher<DetectionArray>> detection_pub_;
+    rclcpp::Logger get_logger() const
+    {
+      return (rclcpp::get_logger(img_topic_));
+    }
   };
 
   template <class T>

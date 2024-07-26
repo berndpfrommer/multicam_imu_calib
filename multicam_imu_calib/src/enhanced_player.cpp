@@ -120,7 +120,8 @@ std::shared_ptr<EnhancedPlayer> EnhancedPlayer::makePlayerNode(
   const auto image_topics = calib->getImageTopics();
   if (!player_node->hasEitherTopics(image_topics, detection_topics)) {
     RCLCPP_ERROR_STREAM(rclcpp::get_logger("player"), "missing topics!");
-    throw std::runtime_error("missing topics!"); }
+    throw std::runtime_error("missing topics!");
+  }
 
   return (player_node);
 }

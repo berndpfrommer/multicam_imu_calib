@@ -904,7 +904,7 @@ void Calibration::sanityChecks() const
   optimizer_->printErrors(false);
 }
 
-void Calibration::runDiagnostics(const std::string & out_dir)
+void Calibration::runCameraDiagnostics(const std::string & out_dir)
 {
   const std::string error_file = Path(out_dir) / Path("projections.txt");
   try {
@@ -914,34 +914,33 @@ void Calibration::runDiagnostics(const std::string & out_dir)
 
   for (size_t cam_idx = 0; cam_idx < camera_list_.size(); cam_idx++) {
     const auto cam = camera_list_[cam_idx];
-    std::vector<gtsam::Pose3> cam_world_poses_opt;
-    std::vector<std::vector<std::array<double, 2>>> image_pts;
-    std::vector<std::vector<std::array<double, 3>>> world_pts;
-    const auto T_r_c = getOptimizedCameraPose(cam);
-    size_t num_points{0};
-    std::vector<uint64_t> times;
-    for (size_t det = 0; det < detection_times_[cam_idx].size(); det++) {
-      const auto t = detection_times_[cam_idx][det];
-      const auto it = time_to_rig_pose_.find(t);
-      if (it != time_to_rig_pose_.end()) {
-        const auto rig_pose = optimizer_->getPose(it->second, true);
-        times.push_back(it->first);
-        cam_world_poses_opt.push_back(rig_pose * T_r_c);
-        image_pts.push_back(image_points_[cam_idx][det]);
-        world_pts.push_back(world_points_[cam_idx][det]);
-        num_points += image_points_[cam_idx][det].size();
+    const auto & factors = cam->getFactorKeys();
+    double sum_err(0);
+    double max_err(0);
+    size_t i(0);
+    size_t max_idx(0);
+    for (const auto & tk : factors) {
+      for (const auto & k : tk.second) {
+        const auto [ip, proj] = optimizer_->getProjection(k, true);
+        const auto res = ip - proj;
+        const double err = res(0) * res(0) + res(1) * res(1);
+        if (err > max_err) {
+          max_err = err;
+          max_idx = i;
+        }
+        sum_err += err;
+        i++;
       }
     }
-    const auto intr = getOptimizedIntrinsics(cam);
-    const auto dist = getOptimizedDistortionCoefficients(cam);
-    auto [sum_err, max_err, max_idx] = diagnostics::computeProjectionError(
-      cam_idx, times, world_pts, image_pts, cam_world_poses_opt, intr,
-      cam->getDistortionModel(), dist, error_file);
     LOG_INFO_FMT(
       "cam %5s avg pix err: %15.2f  max pix err: %15.2f at idx: %6zu",
-      cam->getName().c_str(), std::sqrt(sum_err / num_points),
+      cam->getName().c_str(), std::sqrt(sum_err / std::max(i, std::size_t{1})),
       std::sqrt(max_err), max_idx);
   }
+}
+
+void Calibration::runIMUDiagnostics(const std::string & out_dir)
+{
   const std::string imu_err_file = Path(out_dir) / Path("imu_errors.txt");
   try {
     std::filesystem::remove(imu_err_file);

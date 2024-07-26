@@ -26,7 +26,7 @@ FrontEndComponent::ImageHandler::ImageHandler(
   rclcpp::Node * node, const std::string & img_topic,
   const std::string & transport, const std::string & det_topic,
   const std::shared_ptr<FrontEnd> & front_end)
-: front_end_(front_end)
+: img_topic_(img_topic), front_end_(front_end)
 {
   image_sub_ = std::make_shared<image_transport::Subscriber>(
     image_transport::create_subscription(
@@ -54,6 +54,10 @@ void FrontEndComponent::ImageHandler::imageCallback(
   }
   if (!da->detections.empty()) {
     detection_pub_->publish(std::move(da));
+  }
+  frames_processed_++;
+  if (frames_processed_ % 100 == 0) {
+    LOG_INFO(img_topic_ << " processed frames: " << frames_processed_);
   }
 }
 

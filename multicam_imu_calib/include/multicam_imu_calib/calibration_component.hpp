@@ -53,6 +53,7 @@ public:
   void calibrate(
     const Trigger::Request::SharedPtr req, Trigger::Response::SharedPtr res);
   const auto & getDetectorLoader() const { return (detector_loader_); }
+  void runDiagnostics();
 
 private:
   class DetectionHandler

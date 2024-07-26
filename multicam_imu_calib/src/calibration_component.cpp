@@ -235,7 +235,8 @@ void CalibrationComponent::runDiagnostics()
   const auto out_path =
     safe_declare<std::string>("calib_output_path", "results");
   calib_->writeResults(out_path);
-  calib_->runDiagnostics(out_path);
+  calib_->runCameraDiagnostics(out_path);
+  calib_->runIMUDiagnostics(out_path);
 }
 
 void CalibrationComponent::updateHandlerQueue(DetectionHandler * handler)
