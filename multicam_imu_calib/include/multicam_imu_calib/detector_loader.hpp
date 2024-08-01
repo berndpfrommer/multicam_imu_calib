@@ -19,6 +19,7 @@
 #include <apriltag_detector/detector.hpp>
 #include <memory>
 #include <pluginlib/class_loader.hpp>
+#include <thread>
 #include <unordered_map>
 
 namespace multicam_imu_calib
@@ -30,14 +31,19 @@ public:
   ~DetectorLoader();
   using SharedPtr = std::shared_ptr<DetectorLoader>;
   std::shared_ptr<apriltag_detector::Detector> makeDetector(
-    const std::string & type, const std::string & fam);
+    const std::thread::id & thread_id, const std::string & type,
+    const std::string & fam);
 
 private:
   std::unordered_map<
-    std::string, std::unordered_map<
-                   std::string, std::shared_ptr<apriltag_detector::Detector>>>
+    std::thread::id,
+    std::unordered_map<
+      std::string,
+      std::unordered_map<
+        std::string, std::shared_ptr<apriltag_detector::Detector>>>>
     detector_map_;
   pluginlib::ClassLoader<apriltag_detector::Detector> detector_loader_;
+  std::mutex mutex_;
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__DETECTOR_LOADER_HPP_

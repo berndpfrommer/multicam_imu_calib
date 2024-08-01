@@ -14,13 +14,23 @@
   gz_topic_name: "/camera_info"
   gz_type_name: "gz.msgs.CameraInfo"
   direction: BIDIRECTIONAL
-- ros_topic_name: "/sim/tf2"
+# - ros_topic_name: "/tf2"
+#   ros_type_name: "tf2_msgs/msg/TFMessage"
+#   gz_topic_name: "/world/cam_world/dynamic_pose/info"
+#  gz_type_name: "gz.msgs.Pose_V"
+#  direction: BIDIRECTIONAL
+- ros_topic_name: "/tf"
   ros_type_name: "tf2_msgs/msg/TFMessage"
-  gz_topic_name: "/world/cam_world/dynamic_pose/info"
+  gz_topic_name: "/model/rig/pose"
   gz_type_name: "gz.msgs.Pose_V"
   direction: BIDIRECTIONAL
 - ros_topic_name: "/camera/odom"
   ros_type_name: "nav_msgs/msg/Odometry"
   gz_topic_name: "/model/camera_model/odometry"
   gz_type_name: "gz.msgs.Odometry"
+  direction: BIDIRECTIONAL
+- ros_topic_name: "/clock"
+  ros_type_name: "rosgraph_msgs/msg/Clock"
+  gz_topic_name: "/world/cam_world/clock"
+  gz_type_name: "gz.msgs.Clock"
   direction: BIDIRECTIONAL

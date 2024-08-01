@@ -21,7 +21,7 @@ ros2 run ros_gz_bridge parameter_bridge --ros-args -p config_file:=./bridge.yaml
 4) Start recording
 
 ```
-ros2 bag record /camera/image_raw /camera/camera_info /imu /camera/odom
+ros2 bag record --use-sim-time /camera/image_raw /camera/camera_info /imu /camera/odom /tf /clock
 ```
 
 5) Make moves for simulation
@@ -29,3 +29,7 @@ ros2 bag record /camera/image_raw /camera/camera_info /imu /camera/odom
 ```
 python3 ./control_sim.py
 ```
+
+## How to play back:
+
+DO NOT use play back with the ``--clock`` option as rosbag2 will then ignore the ``/clock`` messages in the bag.

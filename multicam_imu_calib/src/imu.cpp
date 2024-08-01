@@ -34,19 +34,31 @@ static rclcpp::Logger get_logger() { return (rclcpp::get_logger("imu")); }
 
 // Finds the IMU world pose T_w_i that aligns the gravity
 // vector with the measured one.
-static gtsam::Rot3 findInitialWorldOrientation(const gtsam::Vector3 & acc_imu)
+static gtsam::Rot3 findInitialWorldOrientation(
+  const gtsam::Vector3 & acc_imu, const gtsam::Vector3 & e_z)
 {
   if (acc_imu.norm() < 1e-4) {
     BOMB_OUT("acceleration must be non-zero on init!");
   }
-  const auto g_i = acc_imu.normalized();
+  std::cout << "e_z: " << e_z.transpose() << std::endl;
+  // flip sign because gravity actually is inverse to acceleration
+  const auto g_i = -acc_imu.normalized();
+  std::cout << "gravity normalized: " << g_i.transpose() << std::endl;
   // first rotate the measured acceleration vector such that it
-  // is parallel to the z-axis. The axis to rotate along is thus
-  // the cross product of the measured acc vector, and the z axis,
+  // is parallel to the z-axis of the navigation frame z-axis.
+  // The axis to rotate along is thus the cross product of
+  // the measured acc vector, and the z axis in the navigation frame,
   // and the angle is given by the projection of acc vector onto z axis.
-  const gtsam::Vector3 axis = g_i.cross(gtsam::Vector3(0, 0, 1.0)).normalized();
-  const double alpha = std::acos(g_i.dot(gtsam::Vector3(0, 0, 1.0)));
-  const auto R_1 = Eigen::AngleAxisd(alpha, axis).toRotationMatrix();
+  const gtsam::Vector3 axis = e_z.cross(g_i).normalized();
+  Eigen::AngleAxisd::Matrix3 R_1;
+  if (axis.norm() < 1e-6) {
+    R_1 = Eigen::AngleAxisd::Matrix3::Identity();
+  } else {
+    const double alpha = std::acos(g_i.dot(e_z));
+    std::cout << "axis: " << axis.transpose() << std::endl;
+    std::cout << "angle: " << alpha << std::endl;
+    R_1 = Eigen::AngleAxisd(alpha, axis).toRotationMatrix();
+  }
   // next, rotate the coordinate system along the z-axis until
   // the original world x coordinate has zero y component. This
   // means the IMU frame's x-axis will point in the direction of world axis x,
@@ -54,9 +66,10 @@ static gtsam::Rot3 findInitialWorldOrientation(const gtsam::Vector3 & acc_imu)
   // the best we can do, given that we had to align the gravity vector along z
   const double beta = atan2(
     R_1(1, 0), R_1(0, 0));  // angle of the rotated x-axis to the new x-axis
-  const auto R_2 = Eigen::AngleAxisd(-beta, gtsam::Vector3(0, 0, 1.0));
+  const auto R_2 = Eigen::AngleAxisd(-beta, e_z);
   // chain the two rotations together. This gives R_w_i
   const gtsam::Rot3 rot(R_2.toRotationMatrix() * R_1);
+  std::cout << "final rot: " << std::endl << rot << std::endl;
   return (rot);
 }
 
@@ -67,9 +80,12 @@ IMU::IMU(const std::string & name, size_t idx)
 
 IMU::~IMU() {}
 
-void IMU::setGravity(double g)
+void IMU::setGravity(double g, bool use_NED)
 {
-  params_ = gtsam::PreintegratedCombinedMeasurements::Params::MakeSharedU(g);
+  params_ =
+    use_NED ? gtsam::PreintegratedCombinedMeasurements::Params::MakeSharedD(g)
+            : gtsam::PreintegratedCombinedMeasurements::Params::MakeSharedU(g);
+  LOG_INFO("using " << (use_NED ? "NED" : "ENU") << " convention");
   params_->setUse2ndOrderCoriolis(false);
   params_->setOmegaCoriolis(gtsam::Vector3(0, 0, 0));
   // error due to integrating position from velocities
@@ -310,7 +326,8 @@ bool IMU::testAttitudes(const std::vector<StampedAttitude> & sa) const
 
 void IMU::initializeWorldPose(uint64_t t, const gtsam::Pose3 & rigPose)
 {
-  const auto rot = findInitialWorldOrientation(current_data_.acceleration);
+  const auto rot = findInitialWorldOrientation(
+    current_data_.acceleration, params_->getGravity().normalized());
   initial_pose_ = gtsam::Pose3(rot, rigPose.translation());
   current_state_ = gtsam::NavState(initial_pose_, gtsam::Vector3(0, 0, 0));
 // #define DEBUG_INIT
@@ -363,7 +380,8 @@ bool IMU::tryComputeWorldOrientation()
 {
   if (avg_data_.t > 50 && !world_orientation_valid_) {
     const auto acc_i = avg_data_.acceleration.normalized();
-    world_orientation_ = findInitialWorldOrientation(acc_i);
+    world_orientation_ =
+      findInitialWorldOrientation(acc_i, params_->getGravity().normalized());
     world_orientation_valid_ = true;
     LOG_INFO(getName() << " found initial world orientation:");
     LOG_INFO(world_orientation_);

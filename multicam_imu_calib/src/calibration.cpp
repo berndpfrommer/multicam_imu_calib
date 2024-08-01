@@ -285,7 +285,8 @@ void Calibration::parseIMUs(const YAML::Node & imus)
       continue;
     }
     auto imu = std::make_shared<IMU>(i["name"].as<std::string>(), idx++);
-    imu->setGravity(i["gravity"] ? i["gravity"].as<double>() : 9.81);
+    const bool use_NED = i["use_NED"] && i["use_NED"].as<bool>();
+    imu->setGravity(i["gravity"] ? i["gravity"].as<double>() : 9.81, use_NED);
     imu->setGyroNoiseDensity(
       i["gyroscope_noise_density"].as<double>());  // rad/sec *  1/sqrt(Hz)
     imu->setAccelNoiseDensity(
@@ -911,31 +912,34 @@ void Calibration::runCameraDiagnostics(const std::string & out_dir)
     std::filesystem::remove(error_file);
   } catch (const std::filesystem::filesystem_error &) {
   }
-
+  std::ofstream err_file(error_file);
   for (size_t cam_idx = 0; cam_idx < camera_list_.size(); cam_idx++) {
     const auto cam = camera_list_[cam_idx];
     const auto & factors = cam->getFactorKeys();
     double sum_err(0);
     double max_err(0);
     size_t i(0);
-    size_t max_idx(0);
+    uint64_t max_t(0);
     for (const auto & tk : factors) {
+      const auto t = tk.first;
       for (const auto & k : tk.second) {
         const auto [ip, proj] = optimizer_->getProjection(k, true);
         const auto res = ip - proj;
         const double err = res(0) * res(0) + res(1) * res(1);
+        err_file << t << " " << ip.transpose() << " " << proj.transpose() << " "
+                 << err << std::endl;
         if (err > max_err) {
           max_err = err;
-          max_idx = i;
+          max_t = t;
         }
         sum_err += err;
         i++;
       }
     }
     LOG_INFO_FMT(
-      "cam %5s avg pix err: %15.2f  max pix err: %15.2f at idx: %6zu",
+      "cam %5s avg pix err: %15.2f  max pix err: %15.2f at time: %6zu",
       cam->getName().c_str(), std::sqrt(sum_err / std::max(i, std::size_t{1})),
-      std::sqrt(max_err), max_idx);
+      std::sqrt(max_err), max_t);
   }
 }
 
@@ -954,7 +958,11 @@ void Calibration::runIMUDiagnostics(const std::string & out_dir)
         continue;
       }
       const auto f = optimizer_->getIMUFactor(kv.second.preintegrated);
-      imu_file << kv.first << " angle error:";
+      imu_file << kv.first << " err:";
+      for (const auto & opt : std::array<bool, 2>({false, true})) {
+        imu_file << " " << optimizer_->getError(kv.second.preintegrated, opt);
+      }
+      imu_file << " angle error:";
       for (const auto & opt : std::array<bool, 2>({false, true})) {
         const gtsam::Pose3 T_w_i_prev = optimizer_->getPose(f->key1(), opt);
         const gtsam::Pose3 T_w_i = optimizer_->getPose(f->key3(), opt);

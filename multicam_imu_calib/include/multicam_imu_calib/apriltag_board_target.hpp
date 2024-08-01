@@ -45,7 +45,10 @@ private:
     id_to_wp_.insert({id, wp});
   }
   std::unordered_map<uint32_t, std::array<std::array<double, 2>, 4>> id_to_wp_;
-  std::shared_ptr<apriltag_detector::Detector> detector_;
+  DetectorLoader::SharedPtr detector_loader_;
+  std::string type_;
+  std::string family_;
+  uint16_t border_width_{1};
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__APRILTAG_BOARD_TARGET_HPP_

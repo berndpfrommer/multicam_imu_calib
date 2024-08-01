@@ -31,33 +31,54 @@ DetectorLoader::DetectorLoader()
 
 DetectorLoader::~DetectorLoader()
 {
-  for (auto & kv : detector_map_) {
-    for (auto & m : kv.second) {
-      m.second.reset();
+  std::set<std::string> type_set;
+  for (auto & thr : detector_map_) {
+    for (auto & type : thr.second) {
+      type_set.insert(type.first);
+      for (auto & fam : type.second) {
+        fam.second.reset();  // clear the pointer
+      }
+      type.second.clear();
     }
-    kv.second.clear();
+    thr.second.clear();
   }
-
-  for (const auto & kv : detector_map_) {
-    const std::string c_name = "apriltag_detector_" + kv.first + "::Detector";
+  // now unload the library
+  for (const auto & type : type_set) {
+    const std::string c_name = "apriltag_detector_" + type + "::Detector";
     LOG_INFO("unloading " << c_name);
     detector_loader_.unloadLibraryForClass(c_name);
   }
 }
 
 std::shared_ptr<apriltag_detector::Detector> DetectorLoader::makeDetector(
-  const std::string & type, const std::string & fam)
+  const std::thread::id & thread_id, const std::string & type,
+  const std::string & fam)
 {
-  auto it = detector_map_.find(type);
+  std::unique_lock lock(mutex_);
+  auto it = detector_map_.find(thread_id);
   if (it == detector_map_.end()) {
-    it = detector_map_
-           .insert(
-             {type,
-              std::unordered_map<
-                std::string, std::shared_ptr<apriltag_detector::Detector>>()})
-           .first;
+    it =
+      detector_map_
+        .insert(
+          {thread_id,
+           std::unordered_map<
+             std::string,
+             std::unordered_map<
+               std::string, std::shared_ptr<apriltag_detector::Detector>>>()})
+        .first;
   }
-  auto & fam_map = it->second;
+  auto & type_map = it->second;
+  auto type_it = type_map.find(type);
+  if (type_it == type_map.end()) {
+    type_it =
+      type_map
+        .insert(
+          {type,
+           std::unordered_map<
+             std::string, std::shared_ptr<apriltag_detector::Detector>>()})
+        .first;
+  }
+  auto & fam_map = type_it->second;
   std::shared_ptr<apriltag_detector::Detector> det;
   auto fit = fam_map.find(fam);
   if (fit == fam_map.end()) {

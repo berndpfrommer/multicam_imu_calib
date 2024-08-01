@@ -88,7 +88,6 @@ void CalibrationComponent::DetectionHandler::processOldestMessage()
     if (!target) {
       continue;
     }
-    // XXX note: bad data 1718388188165321954-1718388188480328684 (inclusive)
     if (!calib_->hasRigPose(t)) {
       if (camera_->hasValidPose()) {
         const auto T_c_t = init_pose::findCameraPose(camera_, det);

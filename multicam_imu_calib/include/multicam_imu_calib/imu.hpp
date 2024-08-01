@@ -110,7 +110,7 @@ public:
   void setPoseKey(value_key_t k) { pose_key_ = k; }
   void setPosePriorKey(factor_key_t k) { pose_prior_key_ = k; }
   void setTopic(const std::string & topic) { topic_ = topic; }
-  void setGravity(double g);
+  void setGravity(double g, bool use_NED);
   void setGyroNoiseDensity(double s);
   void setAccelNoiseDensity(double s);
   void setGyroRandomWalk(double s);

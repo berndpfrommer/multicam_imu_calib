@@ -34,19 +34,20 @@ static rclcpp::Logger get_logger()
 }
 using ApriltagArray = apriltag_msgs::msg::AprilTagDetectionArray;
 
-AprilTagBoardTarget::~AprilTagBoardTarget()
-{
-  detector_.reset();  // remove reference explicitly for debugging
-}
+AprilTagBoardTarget::~AprilTagBoardTarget() { detector_loader_.reset(); }
 
 static std::set<uint32_t> known_tags;
 
 AprilTagBoardTarget::Detection AprilTagBoardTarget::detect(
   const Image::ConstSharedPtr & img)
 {
+  auto detector =
+    detector_loader_->makeDetector(std::this_thread::get_id(), type_, family_);
+  detector->setBlackBorder(border_width_);
+
   const auto cvImg = cv_bridge::toCvShare(img, "mono8");
   ApriltagArray tagArray;
-  detector_->detect(cvImg->image, &tagArray);
+  detector->detect(cvImg->image, &tagArray);
   Detection det;
   det.id = getName();  // target id
   if (!tagArray.detections.empty()) {
@@ -88,8 +89,10 @@ AprilTagBoardTarget::SharedPtr AprilTagBoardTarget::make(
       known_tags.insert(id);
     }
   }
-  board->detector_ = dl->makeDetector(type, fam);
-  board->detector_->setBlackBorder(border_width);
+  board->detector_loader_ = dl;
+  board->type_ = type;
+  board->family_ = fam;
+  board->border_width_ = border_width;
   return (board);
 }
 
