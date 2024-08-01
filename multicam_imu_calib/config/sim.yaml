@@ -1,0 +1,72 @@
+#
+# Test file for stereo camera calibration from tag board including IMU
+#
+#
+targets:
+  - name: "apriltag board 00"
+    type: "apriltag_board"
+    detector: "umich"
+    family: "tf36h11"
+    starting_tag_id: 0
+    tag_size: 0.1
+    rows: 2
+    distance_rows: 0.125
+    columns: 2
+    distance_columns: 0.125
+  - name: "apriltag board 04"
+    type: "apriltag_board"
+    detector: "umich"
+    family: "tf36h11"
+    starting_tag_id: 4
+    tag_size: 0.1
+    rows: 2
+    distance_rows: 0.125
+    columns: 2
+    distance_columns: 0.125
+imus:
+  - name: "imu_0"
+    topic: "/imu"
+    use_NED: false
+    gyroscope_noise_density: 1e-6 # in rad/sec *  1/sqrt(Hz)
+    accelerometer_noise_density: 1e-6 # in m/sec^2 *  1/sqrt(Hz)
+    gyroscope_random_walk: 1e-4 # gyro bias random walk in rad/sec^2 *  1/sqrt(Hz)
+    accelerometer_random_walk: 1e-4 # accel bias in m/sec^3 *  1/sqrt(Hz)
+    gyro_bias_prior:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      sigma: 0.1 # gives strength of gyro bias prior in rad/s
+    accelerometer_bias_prior:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      sigma: 0.1 # gives strength of accelerometer bias prior in m/s^2
+cameras:
+  - name: camera_0
+    image_topic: /camera/image_raw
+    image_transport: raw
+    detections_topic: /camera/detections
+    pixel_noise: 1.0
+    intrinsics:
+      fx: 500.0
+      fy: 500.0
+      cx: 400
+      cy: 250
+    intrinsics_sigma:
+      fx: 0.01
+      fy: 0.01
+      cx: 0.01
+      cy: 0.01
+    distortion_model:
+      type: radtan
+      coefficients:
+        - 0.0
+        - 0.0
+        - 0.0
+        - 0.0
+      coefficient_mask: [1, 1, 1, 1]
+      coefficient_sigma:
+        - 0.001
+        - 0.001
+        - 0.001
+        - 0.001
