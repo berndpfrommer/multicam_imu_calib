@@ -48,10 +48,10 @@ cameras:
     detections_topic: /camera/detections
     pixel_noise: 1.0
     intrinsics:
-      fx: 500.0
-      fy: 500.0
-      cx: 400
-      cy: 250
+      fx: 2560
+      fy: 2560
+      cx: 2048
+      cy: 1280
     intrinsics_sigma:
       fx: 0.01
       fy: 0.01

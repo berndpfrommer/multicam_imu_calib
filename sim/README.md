@@ -21,7 +21,7 @@ ros2 run ros_gz_bridge parameter_bridge --ros-args -p config_file:=./bridge.yaml
 4) Start recording
 
 ```
-ros2 bag record --use-sim-time /camera/image_raw /camera/camera_info /imu /camera/odom /tf /clock
+ros2 bag record --use-sim-time /camera/image_raw /camera/camera_info /imu /rig/odom /tf /clock
 ```
 
 5) Make moves for simulation

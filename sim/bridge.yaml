@@ -24,9 +24,9 @@
   gz_topic_name: "/model/rig/pose"
   gz_type_name: "gz.msgs.Pose_V"
   direction: BIDIRECTIONAL
-- ros_topic_name: "/camera/odom"
+- ros_topic_name: "/rig/odom"
   ros_type_name: "nav_msgs/msg/Odometry"
-  gz_topic_name: "/model/camera_model/odometry"
+  gz_topic_name: "/model/rig/odometry"
   gz_type_name: "gz.msgs.Odometry"
   direction: BIDIRECTIONAL
 - ros_topic_name: "/clock"

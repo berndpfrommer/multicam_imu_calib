@@ -77,8 +77,7 @@
             <line own="right" target="right"/>
             <line own="bottom" target="bottom"/>
           </anchors>
-        </gz-
-        gui>
+        </gz-gui>
 
         <sim_time>true</sim_time>
         <real_time>true</real_time>
