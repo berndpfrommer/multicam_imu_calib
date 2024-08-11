@@ -374,10 +374,12 @@ void IMU::preintegrateUpTo(uint64_t t)
       nonNegativeDelta(t, current_data_.t));
     current_data_.t = t;  // avoids integrating twice!
   }
+  // std::cout << "IMU::preintegrated up to " << t << std::endl;
 }
 
 bool IMU::tryComputeWorldOrientation()
 {
+  // std::cout << "tryComputeWorldOrientation: " << avg_data_.t << std::endl;
   if (avg_data_.t > 50 && !world_orientation_valid_) {
     const auto acc_i = avg_data_.acceleration.normalized();
     world_orientation_ =
@@ -396,6 +398,8 @@ void IMU::addData(const IMUData & d)
   avg_data_.t++;  // abuse time as counter
   avg_data_.acceleration += d.acceleration;
   avg_data_.omega += d.omega;
+  //  std::cout << d.t << " omega: " << d.omega.transpose()
+  //          << " acc: " << d.acceleration.transpose() << std::endl;
 }
 
 gtsam::imuBias::ConstantBias IMU::getPreliminaryBiasEstimate() const

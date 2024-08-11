@@ -97,11 +97,13 @@ public:
   const auto & getSavedPreint() const { return (saved_preint_); }
   const auto & getWorldOrientation() const { return (world_orientation_); }
   const auto & getRigToObjectRotation() const { return (R_o_r_); }
+  const auto & getOldestData() const { return (data_.front()); }
   gtsam::imuBias::ConstantBias getBiasPrior() const;
   gtsam::SharedNoiseModel getBiasPriorNoise() const;
   bool hasValidPreint() const;
   bool hasWorldOrientation() const { return (world_orientation_valid_); }
   bool hasInitializedIMUGraph() const { return (has_initialized_imu_graph_); }
+  bool hasData() const { return (!data_.empty()); }
 
   // ------------ setters
   void setPose(const gtsam::Pose3 & pose);

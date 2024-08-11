@@ -178,6 +178,8 @@ std::tuple<uint64_t, factor_key_t> Optimizer::addPreintegratedFactor(
     prev_keys.world_pose_key, prev_keys.velocity_key, curr_keys.world_pose_key,
     curr_keys.velocity_key, prev_keys.bias_key, curr_keys.bias_key, accum));
 #ifdef DEBUG_IMUFACTOR
+  std::cout << "------------ times: " << prev_keys.t << " -> " << curr_keys.t
+            << std::endl;
   std::cout << "adding CombinedImuFactor(" << getLastFactorKey() << ")"
             << std::endl;
   std::cout << "accum: " << std::endl << accum << std::endl;
@@ -306,8 +308,8 @@ std::tuple<double, double> Optimizer::optimize()
     optimized_values_ = isam2_->calculateEstimate();
 #else
     gtsam::LevenbergMarquardtParams lmp;
-    lmp.setVerbosity("SUMMARY");
-    lmp.setMaxIterations(100);
+    lmp.setVerbosity("TERMINATION");
+    lmp.setMaxIterations(200);
     lmp.setAbsoluteErrorTol(1e-7);
     lmp.setRelativeErrorTol(0);
     gtsam::LevenbergMarquardtOptimizer lmo(graph_, values_, lmp);

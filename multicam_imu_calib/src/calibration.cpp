@@ -77,7 +77,9 @@ template <typename T>
 std::string fmt_fixed(const T & x, const int n)
 {
   std::ostringstream out;
-  out.precision(n);
+  // bump precision for very small numbers so we don't round to zero
+  const int prec = std::max(n, static_cast<int>(std::ceil(-std::log10(x))));
+  out.precision(prec);
   out << std::fixed << x;
   return (std::move(out).str());
 }
@@ -501,6 +503,15 @@ value_key_t Calibration::addRigPose(uint64_t t, const gtsam::Pose3 & pose)
     while (!unused_rig_pose_times_.empty() &&
            applyIMUData(unused_rig_pose_times_.front())) {
       unused_rig_pose_times_.pop_front();
+    }
+    // Drop any camera frames that arrive *before* the first IMU data.
+    for (const auto & imu : imu_list_) {
+      while (!unused_rig_pose_times_.empty() && imu->hasData() &&
+             imu->getOldestData().t > unused_rig_pose_times_.front()) {
+        LOG_INFO(
+          "dropping early image with time " << unused_rig_pose_times_.front());
+        unused_rig_pose_times_.pop_front();
+      }
     }
   }
   return (rig_pose_keys_.back());
