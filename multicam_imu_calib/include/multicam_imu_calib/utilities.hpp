@@ -18,6 +18,7 @@
 
 #include <gtsam/geometry/Pose3.h>
 #include <gtsam/linear/NoiseModel.h>
+#include <yaml-cpp/yaml.h>
 
 #include <geometry_msgs/msg/point.hpp>
 #include <multicam_imu_calib/intrinsics.hpp>
@@ -45,6 +46,9 @@ gtsam::SharedNoiseModel makeNoise6(
 gtsam::SharedNoiseModel makeNoise6(double sig_a, double sig_b);
 gtsam::SharedNoiseModel makeNoise3(double sig_a);
 geometry_msgs::msg::Point makePoint(double x, double y, double z = 0);
+gtsam::Pose3 parsePose(const YAML::Node & yn);
+gtsam::SharedNoiseModel parsePoseNoise(const YAML::Node & yn);
+
 }  // namespace utilities
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__UTILITIES_HPP_

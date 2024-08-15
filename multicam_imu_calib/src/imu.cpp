@@ -80,8 +80,10 @@ IMU::IMU(const std::string & name, size_t idx)
 
 IMU::~IMU() {}
 
-void IMU::setGravity(double g, bool use_NED)
+void IMU::parse(const YAML::Node & y)
 {
+  const bool use_NED = y["use_NED"] && y["use_NED"].as<bool>();
+  const double g = y["gravity"] ? y["gravity"].as<double>() : 9.81;
   params_ =
     use_NED ? gtsam::PreintegratedCombinedMeasurements::Params::MakeSharedD(g)
             : gtsam::PreintegratedCombinedMeasurements::Params::MakeSharedU(g);
@@ -89,10 +91,54 @@ void IMU::setGravity(double g, bool use_NED)
   params_->setUse2ndOrderCoriolis(false);
   params_->setOmegaCoriolis(gtsam::Vector3(0, 0, 0));
   // error due to integrating position from velocities
-  params_->setIntegrationCovariance(gtsam::I_3x3 * 1e-8);
+  setPreintegrationSigma(
+    y["preintegration_sigma"] ? y["preintegration_sigma"].as<double>() : 1e-4);
+
   // error in the bias used for preintegration
-  // (copied comment from CombinedImuFactorsExample.cpp)
-  params_->setBiasAccOmegaInit(gtsam::I_6x6 * 1e-5);
+  // (default value copied from CombinedImuFactorsExample.cpp)
+  setBiasAccOmegaInit(
+    y["preint_initial_bias_err"] ? y["preint_initial_bias_err"].as<double>()
+                                 : 1e-5);
+  setGyroNoiseDensity(
+    y["gyroscope_noise_density"].as<double>());  // rad/sec *  1/sqrt(Hz)
+  setAccelNoiseDensity(
+    y["accelerometer_noise_density"].as<double>());  // m/sec^2 *  1/sqrt(Hz)
+  setGyroRandomWalk(
+    y["gyroscope_random_walk"].as<double>());  // rad/sec *  1/sqrt(s)
+  setAccelRandomWalk(
+    y["accelerometer_random_walk"].as<double>());  // m/sec^2 *  1/sqrt(s)
+  if (y["gyro_bias_prior"]) {
+    const auto & p = y["gyro_bias_prior"];
+    setGyroBiasPrior(
+      p["x"].as<double>(), p["y"].as<double>(), p["z"].as<double>(),
+      p["sigma"].as<double>());  // rad/s
+  }
+  if (y["accelerometer_bias_prior"]) {
+    const auto & p = y["accelerometer_bias_prior"];
+    setAccelBiasPrior(
+      p["x"].as<double>(), p["y"].as<double>(), p["z"].as<double>(),
+      p["sigma"].as<double>());  // m/s^2
+  }
+  setTopic(y["topic"] ? y["topic"].as<std::string>() : std::string(""));
+
+  if (y["pose"]) {
+    const auto pose = utilities::parsePose(y["pose"]);
+    gtsam::SharedNoiseModel poseNoise = utilities::parsePoseNoise(y["pose"]);
+    setPoseWithNoise(pose, poseNoise);
+  }
+
+  accum_ = std::make_unique<gtsam::PreintegratedCombinedMeasurements>(
+    params_, getBiasPrior());
+}
+
+void IMU::setPreintegrationSigma(double s)
+{
+  params_->setIntegrationCovariance(gtsam::I_3x3 * s * s);
+}
+
+void IMU::setBiasAccOmegaInit(double c)
+{
+  params_->setBiasAccOmegaInit(gtsam::I_6x6 * c);
 }
 
 void IMU::setGyroNoiseDensity(double s)
@@ -146,12 +192,6 @@ void IMU::setPoseWithNoise(
   pose_ = pose;
   has_pose_prior_ = true;
   has_valid_pose_ = true;
-}
-
-void IMU::parametersComplete()
-{
-  accum_ = std::make_unique<gtsam::PreintegratedCombinedMeasurements>(
-    params_, getBiasPrior());
 }
 
 gtsam::imuBias::ConstantBias IMU::getBiasPrior() const

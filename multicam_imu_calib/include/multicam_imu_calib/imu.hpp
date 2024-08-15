@@ -22,6 +22,7 @@
 #include <gtsam/navigation/CombinedImuFactor.h>
 #include <gtsam/navigation/ImuBias.h>
 #include <gtsam/navigation/NavState.h>
+#include <yaml-cpp/yaml.h>
 
 #include <deque>
 #include <map>
@@ -112,7 +113,9 @@ public:
   void setPoseKey(value_key_t k) { pose_key_ = k; }
   void setPosePriorKey(factor_key_t k) { pose_prior_key_ = k; }
   void setTopic(const std::string & topic) { topic_ = topic; }
-  void setGravity(double g, bool use_NED);
+  void setPreintegrationSigma(double s);
+  void setBiasAccOmegaInit(double c);
+
   void setGyroNoiseDensity(double s);
   void setAccelNoiseDensity(double s);
   void setGyroRandomWalk(double s);
@@ -129,7 +132,7 @@ public:
   void setRigToObjectRotation(const gtsam::Rot3 & R) { R_o_r_ = R; }
 
   // ------------ others
-  void parametersComplete();
+  void parse(const YAML::Node & y);
   void drainOldData(uint64_t t);
   void preintegrateUpTo(uint64_t t);
   bool isPreintegratedUpTo(uint64_t t) const;

@@ -147,5 +147,37 @@ geometry_msgs::msg::Point makePoint(double x, double y, double z)
   return (p);
 }
 
+gtsam::Pose3 parsePose(const YAML::Node & yn)
+{
+  const auto p = yn["position"];
+  const auto o = yn["orientation"];
+  const auto orientation = gtsam::Rot3::Quaternion(
+    o["w"].as<double>(), o["x"].as<double>(), o["y"].as<double>(),
+    o["z"].as<double>());
+  const auto position = gtsam::Point3(
+    p["x"].as<double>(), p["y"].as<double>(), p["z"].as<double>());
+
+  return (gtsam::Pose3(orientation, position));
+}
+
+gtsam::SharedNoiseModel parsePoseNoise(const YAML::Node & yn)
+{
+  Eigen::Matrix<double, 6, 1> sig;
+  const auto o = yn["orientation_sigma"];
+  Eigen::Matrix<double, 3, 1> sig_angle =
+    Eigen::Matrix<double, 3, 1>::Ones() * 6.28;
+  if (o) {
+    sig_angle << o["x"].as<double>(), o["y"].as<double>(), o["z"].as<double>();
+  }
+  const auto p = yn["position_sigma"];
+  Eigen::Matrix<double, 3, 1> sig_pos =
+    Eigen::Matrix<double, 3, 1>::Ones() * 10;
+  if (p) {
+    sig_pos << p["x"].as<double>(), p["y"].as<double>(), p["z"].as<double>();
+  }
+  sig << sig_angle, sig_pos;
+  return (gtsam::noiseModel::Diagonal::Sigmas(sig));
+}
+
 }  // namespace utilities
 }  // namespace multicam_imu_calib

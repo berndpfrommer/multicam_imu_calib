@@ -31,6 +31,8 @@ imus:
     accelerometer_noise_density: 1e-6 # in m/sec^2 *  1/sqrt(Hz)
     gyroscope_random_walk: 1e-4 # gyro bias random walk in rad/sec^2 *  1/sqrt(Hz)
     accelerometer_random_walk: 1e-4 # accel bias in m/sec^3 *  1/sqrt(Hz)
+    preintegration_sigma: 1e-4   # default is 1e-4
+    preint_initial_bias_err: 1e-3   # default was 1e-5
     gyro_bias_prior:
       x: 0.0
       y: 0.0

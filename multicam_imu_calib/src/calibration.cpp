@@ -39,38 +39,6 @@ static rclcpp::Logger get_logger()
 Calibration::Calibration() : optimizer_(std::make_shared<Optimizer>()) {}
 Calibration::~Calibration() { targets_.clear(); }
 
-static gtsam::Pose3 parsePose(const YAML::Node & yn)
-{
-  const auto p = yn["position"];
-  const auto o = yn["orientation"];
-  const auto orientation = gtsam::Rot3::Quaternion(
-    o["w"].as<double>(), o["x"].as<double>(), o["y"].as<double>(),
-    o["z"].as<double>());
-  const auto position = gtsam::Point3(
-    p["x"].as<double>(), p["y"].as<double>(), p["z"].as<double>());
-
-  return (gtsam::Pose3(orientation, position));
-}
-
-static gtsam::SharedNoiseModel parsePoseNoise(const YAML::Node & yn)
-{
-  Eigen::Matrix<double, 6, 1> sig;
-  const auto o = yn["orientation_sigma"];
-  Eigen::Matrix<double, 3, 1> sig_angle =
-    Eigen::Matrix<double, 3, 1>::Ones() * 6.28;
-  if (o) {
-    sig_angle << o["x"].as<double>(), o["y"].as<double>(), o["z"].as<double>();
-  }
-  const auto p = yn["position_sigma"];
-  Eigen::Matrix<double, 3, 1> sig_pos =
-    Eigen::Matrix<double, 3, 1>::Ones() * 10;
-  if (p) {
-    sig_pos << p["x"].as<double>(), p["y"].as<double>(), p["z"].as<double>();
-  }
-  sig << sig_angle, sig_pos;
-  return (gtsam::noiseModel::Diagonal::Sigmas(sig));
-}
-
 static double safeSqrt(double x) { return (x > 0 ? std::sqrt(x) : x); }
 
 template <typename T>
@@ -240,8 +208,8 @@ void Calibration::parseCameras(const YAML::Node & cameras)
     LOG_INFO("found camera: " << c["name"]);
     auto cam = std::make_shared<Camera>(c["name"].as<std::string>(), cam_idx++);
     if (c["pose"]) {
-      const auto pose = parsePose(c["pose"]);
-      gtsam::SharedNoiseModel poseNoise = parsePoseNoise(c["pose"]);
+      const auto pose = utilities::parsePose(c["pose"]);
+      gtsam::SharedNoiseModel poseNoise = utilities::parsePoseNoise(c["pose"]);
       cam->setPoseWithNoise(pose, poseNoise);
       found_pose = true;
     }
@@ -287,36 +255,7 @@ void Calibration::parseIMUs(const YAML::Node & imus)
       continue;
     }
     auto imu = std::make_shared<IMU>(i["name"].as<std::string>(), idx++);
-    const bool use_NED = i["use_NED"] && i["use_NED"].as<bool>();
-    imu->setGravity(i["gravity"] ? i["gravity"].as<double>() : 9.81, use_NED);
-    imu->setGyroNoiseDensity(
-      i["gyroscope_noise_density"].as<double>());  // rad/sec *  1/sqrt(Hz)
-    imu->setAccelNoiseDensity(
-      i["accelerometer_noise_density"].as<double>());  // m/sec^2 *  1/sqrt(Hz)
-    imu->setGyroRandomWalk(
-      i["gyroscope_random_walk"].as<double>());  // rad/sec^2 *  1/sqrt(Hz)
-    imu->setAccelRandomWalk(
-      i["accelerometer_random_walk"].as<double>());  // m/sec^3 *  1/sqrt(Hz)
-    if (i["gyro_bias_prior"]) {
-      const auto & p = i["gyro_bias_prior"];
-      imu->setGyroBiasPrior(
-        p["x"].as<double>(), p["y"].as<double>(), p["z"].as<double>(),
-        p["sigma"].as<double>());  // rad/s
-    }
-    if (i["accelerometer_bias_prior"]) {
-      const auto & p = i["accelerometer_bias_prior"];
-      imu->setAccelBiasPrior(
-        p["x"].as<double>(), p["y"].as<double>(), p["z"].as<double>(),
-        p["sigma"].as<double>());  // m/s^2
-    }
-
-    if (i["pose"]) {
-      const auto pose = parsePose(i["pose"]);
-      gtsam::SharedNoiseModel poseNoise = parsePoseNoise(i["pose"]);
-      imu->setPoseWithNoise(pose, poseNoise);
-    }
-    imu->setTopic(i["topic"] ? i["topic"].as<std::string>() : std::string(""));
-    imu->parametersComplete();
+    imu->parse(i);
     optimizer_->addIMU(imu);
 
     LOG_INFO("found imu: " << i["name"]);
