@@ -12,7 +12,7 @@ targets:
 
 cameras:
   - name: "camera_0"
-    ros_topic: "/cam_sync/cam_0/image_raw"
+    image_topic: "/cam_sync/cam_0/image_raw"
     pixel_noise: 1.0
     intrinsics:
       fx: 833.0

@@ -95,18 +95,21 @@ static void decomposeHomography(const cv::Mat & H, cv::Mat * R, cv::Mat * tvec)
 
 std::optional<gtsam::Pose3> findCameraPose(
   const Camera::SharedPtr & cam,
-  const multicam_imu_calib_msgs::msg::Detection & det)
+  const multicam_imu_calib_msgs::msg::Target & target)
 {
   bool poseValid = false;
   gtsam::Pose3 pose;
-  // make 2d world points, assuming they are all in a plane at z=0
-  std::vector<cv::Point2f> wp(det.object_points.size());
-  for (size_t i = 0; i < wp.size(); i++) {
-    wp[i] = cv::Point2f(det.object_points[i].x, det.object_points[i].y);
-  }
+  std::vector<cv::Point2f> wp;
   std::vector<std::array<double, 2>> ip_d;
-  for (const auto & ip : det.image_points) {
-    ip_d.push_back({ip.x, ip.y});
+
+  for (const auto & marker : target.markers) {
+    for (const auto & op : marker.object_points) {
+      // make 2d world points, assuming they are all in a plane at z=0
+      wp.push_back(cv::Point2f(op.x, op.y));
+    }
+    for (const auto & ip : marker.image_points) {
+      ip_d.push_back({ip.x, ip.y});
+    }
   }
   const auto ip = makeUndistortedImagePoints(cam, ip_d);
 #ifdef DEBUG

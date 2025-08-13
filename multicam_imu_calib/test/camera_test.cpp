@@ -31,7 +31,7 @@ using Intrinsics = multicam_imu_calib::Intrinsics;
 using DistortionCoefficients = multicam_imu_calib::DistortionCoefficients;
 namespace utilities = multicam_imu_calib::utilities;
 namespace diagnostics = multicam_imu_calib::diagnostics;
-
+using multicam_imu_calib::DebugLevel;
 static unsigned int seed(0);  // random seed
 #undef NDEBUG
 
@@ -134,6 +134,7 @@ static void checkPose(
   EXPECT_LE(pos_error, pos_limit) << " pose position is off!";
 }
 
+#if 0
 static bool pointsAreWithinFrame(
   const std::vector<std::array<double, 2>> ip, const Intrinsics & intr,
   double fac)
@@ -149,6 +150,8 @@ static bool pointsAreWithinFrame(
   }
   return (true);
 }
+#endif
+
 using PosesAndPoints = std::tuple<
   std::vector<std::vector<std::vector<std::array<double, 3>>>>,  // world pts
   std::vector<std::vector<std::vector<std::array<double, 2>>>>,  // img pts
@@ -158,8 +161,7 @@ using PosesAndPoints = std::tuple<
 static PosesAndPoints generatePosesAndPoints(
   const std::vector<multicam_imu_calib::Camera::SharedPtr> & cams,
   multicam_imu_calib::Calibration * calib,
-  const std::vector<std::array<double, 3>> & wc,
-  const double pointsCutoffFactor)
+  const std::vector<std::array<double, 3>> & wc)
 {
   // rig starting position is rotated along x axis by pi
   // such that the camera is facing straight down.
@@ -184,14 +186,17 @@ static PosesAndPoints generatePosesAndPoints(
     // now get the camera pose from it
     bool rigPoseAdded{false};
     const auto & targ = calib->getTargets()[0];
-    targ->setPoseKey(calib->addPose(targ->getName(), targ->getPose()));
+    const auto [targ_pose_key, factor_key] = calib->addPoseWithPrior(
+      targ->getName(), targ->getPose(), utilities::makeNoise6(1e-6, 1e-6));
+    targ->setPoseKey(targ_pose_key);
+
     for (size_t cam_idx = 0; cam_idx < cams.size(); cam_idx++) {
       const auto & cam = cams[cam_idx];
       const auto T_w_c = T_w_r * cam->getPose();
       const auto ip = utilities::makeProjectedPoints(
         cam->getIntrinsics(), cam->getDistortionModel(),
         cam->getDistortionCoefficients(), T_w_c, wc);
-      if (pointsAreWithinFrame(ip, cam->getIntrinsics(), pointsCutoffFactor)) {
+      if (cam->pointsAreWithinFrame(ip)) {
         // initialize rig with pose distorted from true value
         const auto T_w_r_guess = disturbPose(T_w_r, 0.001, 0.001);
         cam_world_poses_unopt[cam_idx].push_back(T_w_r_guess * cam->getPose());
@@ -259,6 +264,7 @@ void test_single_cam(
   multicam_imu_calib::Calibration calib;
   auto dl = std::make_shared<multicam_imu_calib::DetectorLoader>();
   calib.readConfigFile(fname, dl);
+  calib.setDebugLevel(DebugLevel(DebugLevel::INFO));
   const auto cam = calib.getCameraList()[0];  // first camera
 
   cam->setPoseKey(
@@ -275,8 +281,7 @@ void test_single_cam(
 
   auto
     [world_pts, img_pts, cam_world_poses_true, cam_world_poses_unopt,
-     time_slots] =
-      generatePosesAndPoints({cam}, &calib, wc, 1.5 /*pointcutoff*/);
+     time_slots] = generatePosesAndPoints({cam}, &calib, wc);
 
   calib.runOptimizer();
   printSummary(
@@ -293,6 +298,7 @@ void test_stereo_cam(const std::string & fname)
 {
   srand(1);
   multicam_imu_calib::Calibration calib;
+  calib.setDebugLevel(DebugLevel(DebugLevel::INFO));
   auto dl = std::make_shared<multicam_imu_calib::DetectorLoader>();
   calib.readConfigFile(fname, dl);
   // world points form a square in the x/y plane
@@ -312,9 +318,7 @@ void test_stereo_cam(const std::string & fname)
   }
   auto
     [world_pts, img_pts, cam_world_poses_true, cam_world_poses_unopt,
-     time_slots] =
-      generatePosesAndPoints(
-        calib.getCameraList(), &calib, wc, 1 /*pointcutoff*/);
+     time_slots] = generatePosesAndPoints(calib.getCameraList(), &calib, wc);
   calib.runOptimizer();
 
   for (size_t cam_id = 0; cam_id < num_cams; cam_id++) {

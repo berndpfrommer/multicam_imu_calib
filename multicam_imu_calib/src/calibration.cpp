@@ -36,8 +36,20 @@ static rclcpp::Logger get_logger()
   return (rclcpp::get_logger("calibration"));
 }
 
-Calibration::Calibration() : optimizer_(std::make_shared<Optimizer>()) {}
+Calibration::Calibration() : optimizer_(std::make_shared<Optimizer>())
+{
+  optimizer_->setDebugLevel(debug_level_);
+}
+
 Calibration::~Calibration() { targets_.clear(); }
+
+void Calibration::setDebugLevel(DebugLevel d)
+{
+  debug_level_ = d;
+  if (optimizer_) {
+    optimizer_->setDebugLevel(debug_level_);
+  }
+}
 
 static double safeSqrt(double x) { return (x > 0 ? std::sqrt(x) : x); }
 
@@ -222,9 +234,22 @@ void Calibration::parseCameras(const YAML::Node & cameras)
     cam->setImageTransport(
       c["image_transport"] ? c["image_transport"].as<std::string>()
                            : std::string("raw"));
+    if (!c["resolution"]) {
+      BOMB_OUT("camera " << c["name"] << " must specify resolution");
+    }
+    cam->setResolution(c["resolution"].as<std::vector<int>>());
     cam->setDetectionsTopic(
       c["detections_topic"] ? c["detections_topic"].as<std::string>()
                             : std::string(""));
+    if (!c["detections_topic"] && !c["image_topic"]) {
+      LOG_ERROR(
+        "camera " << c["name"]
+                  << " must have image_topic or detections_topic in config!");
+      throw(std::runtime_error("missing image or detections topic!"));
+    } else {
+      LOG_INFO(
+        "topic: " << cam->getImageTopic() << " " << cam->getDetectionsTopic());
+    }
     optimizer_->addCamera(cam);
     cameras_.insert({cam->getName(), cam});
     camera_list_.push_back(cam);
@@ -405,6 +430,9 @@ void Calibration::addIntrinsics(
   const Camera::SharedPtr & cam, const Intrinsics & intr,
   const std::vector<double> & dist)
 {
+  if (debug_level_ > 2) {
+    LOG_INFO("added intrinsics " << cam->getName());
+  }
   cam->setIntrinsicsPriorKey(optimizer_->addCameraIntrinsics(
     cam, intr, cam->getDistortionModel(), dist));
 }
@@ -487,15 +515,17 @@ void Calibration::addProjectionFactors(
 
 void Calibration::addDetection(
   const Camera::SharedPtr & cam, const Target::SharedPtr & targ, uint64_t t,
-  const Detection & det)
+  const TargetMsg & det)
 {
   std::vector<std::array<double, 3>> t_pts;
-  for (const auto & op : det.object_points) {
-    t_pts.push_back({op.x, op.y, op.z});
-  }
   std::vector<std::array<double, 2>> i_pts;
-  for (const auto & ip : det.image_points) {
-    i_pts.push_back({ip.x, ip.y});
+  for (const auto & marker : det.markers) {
+    for (const auto & op : marker.object_points) {
+      t_pts.push_back({op.x, op.y, op.z});
+    }
+    for (const auto & ip : marker.image_points) {
+      i_pts.push_back({ip.x, ip.y});
+    }
   }
   addProjectionFactors(cam, targ, t, t_pts, i_pts);
 }
@@ -842,8 +872,10 @@ std::unordered_map<std::string, size_t> Calibration::getTopicToIMU() const
 std::tuple<double, double> Calibration::runOptimizer()
 {
   const auto errs = optimizer_->optimize();
-  LOG_INFO("--------------- optimized errors");
-  optimizer_->printErrors(true);
+  if (debug_level_ >= DebugLevel::DEBUG) {
+    LOG_INFO("--------------- optimized errors");
+    optimizer_->printErrors(true);
+  }
   return (errs);
 }
 
@@ -851,8 +883,10 @@ void Calibration::sanityChecks() const
 {
   optimizer_->checkForUnknownValues();
   optimizer_->checkForUnconstrainedVariables();
-  LOG_INFO("--------------- unoptimized errors");
-  optimizer_->printErrors(false);
+  if (debug_level_ > 2) {
+    LOG_INFO("--------------- unoptimized errors");
+    optimizer_->printErrors(false);
+  }
 }
 
 void Calibration::runCameraDiagnostics(const std::string & out_dir)

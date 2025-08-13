@@ -20,7 +20,7 @@
 #include <image_transport/image_transport.hpp>
 #include <map>
 #include <multicam_imu_calib/detector_loader.hpp>
-#include <multicam_imu_calib_msgs/msg/detection_array.hpp>
+#include <multicam_imu_calib_msgs/msg/target_array.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <set>
@@ -33,7 +33,7 @@ class FrontEnd;  // forward decl
 class FrontEndComponent : public rclcpp::Node
 {
 public:
-  using DetectionArray = multicam_imu_calib_msgs::msg::DetectionArray;
+  using TargetArray = multicam_imu_calib_msgs::msg::TargetArray;
   using Image = sensor_msgs::msg::Image;
   explicit FrontEndComponent(const rclcpp::NodeOptions & options);
   FrontEndComponent(const FrontEndComponent &) = delete;
@@ -61,7 +61,7 @@ private:
 
   private:
     void processingThread();
-    std::unique_ptr<DetectionArray> detect(
+    std::unique_ptr<TargetArray> detect(
       const Image::ConstSharedPtr & msg) const;
 
     void imageCallback(const ImagePtr & p);
@@ -77,7 +77,7 @@ private:
     size_t frames_processed_{0};
     std::shared_ptr<FrontEnd> front_end_;
     std::shared_ptr<image_transport::Subscriber> image_sub_;
-    std::shared_ptr<rclcpp::Publisher<DetectionArray>> detection_pub_;
+    std::shared_ptr<rclcpp::Publisher<TargetArray>> detection_pub_;
     bool keep_running_{true};
     size_t num_threads_{1};
     std::vector<std::shared_ptr<std::thread>> threads_;
@@ -93,8 +93,11 @@ private:
     try {
       return (this->declare_parameter<T>(name, def));
     } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & e) {
-      return (this->get_parameter_or<T>(name, def));
+      T param = def;
+      this->get_parameter_or(name, param, def);
+      return (param);
     }
+    return (def);
   }
   // ---------------- variables
   std::shared_ptr<FrontEnd> front_end_;

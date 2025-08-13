@@ -2,6 +2,17 @@
 # Test file for single camera + imu tests
 #
 #
+targets:
+  - name: "apriltag board"
+    type: "apriltag_board"
+    detector: "umich"
+    family: "tf36h11"
+    starting_tag_id: 0
+    tag_size: 0.07
+    rows: 3
+    distance_rows: 0.087
+    columns: 4
+    distance_columns: 0.087
 imus:
   - name: "imu_0"
     ros_topic: "/imu"
@@ -40,8 +51,9 @@ imus:
 
 cameras:
   - name: "camera_0"
-    ros_topic: "/cam_sync/cam_0/image_raw"
+    image_topic: /camera/image_raw
     pixel_noise: 1.0
+    resolution: [2048, 1024]
     intrinsics:
       fx: 1000.0
       fy: 1000.0

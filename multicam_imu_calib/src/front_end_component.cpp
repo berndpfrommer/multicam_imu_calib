@@ -35,7 +35,7 @@ FrontEndComponent::ImageHandler::ImageHandler(
         &FrontEndComponent::ImageHandler::imageCallback, this,
         std::placeholders::_1),
       transport, rmw_qos_profile_default));
-  detection_pub_ = node->create_publisher<DetectionArray>(det_topic, 100);
+  detection_pub_ = node->create_publisher<TargetArray>(det_topic, 100);
   for (size_t i = 0; i < num_threads; i++) {
     this->threads_.push_back(std::make_shared<std::thread>(
       &FrontEndComponent::ImageHandler::processingThread, this));
@@ -104,29 +104,24 @@ void FrontEndComponent::ImageHandler::processingThread()
   priority_queue_.clear();
 }
 
-std::unique_ptr<multicam_imu_calib_msgs::msg::DetectionArray>
+std::unique_ptr<multicam_imu_calib_msgs::msg::TargetArray>
 FrontEndComponent::ImageHandler::detect(const Image::ConstSharedPtr & msg) const
 {
-  auto da = std::make_unique<DetectionArray>();
-  da->header = msg->header;
+  auto ta = std::make_unique<TargetArray>();
+  ta->header = msg->header;
   for (const auto & target : front_end_->getTargets()) {
-    auto det = front_end_->detect(target, msg);
-    if (!det.image_points.empty()) {
-      da->detections.push_back(det);
+    auto targ_msg = front_end_->detect(target, msg);
+    if (!targ_msg.markers.empty()) {
+      ta->targets.push_back(targ_msg);
     }
   }
-  return (da);
+  return (ta);
 }
 
 void FrontEndComponent::ImageHandler::imageCallback(
   const Image::ConstSharedPtr & msg)
 {
   if (detection_pub_->get_subscription_count() == 0) {
-    return;
-  }
-  // XXX note: bad data 1718388188165321954-1718388188480328684 (inclusive)
-  const auto t = rclcpp::Time(msg->header.stamp).nanoseconds();
-  if (t >= 1718388188165321954 && t <= 1718388188480328684) {
     return;
   }
   if (rclcpp::Time(msg->header.stamp).nanoseconds()) {

@@ -26,13 +26,13 @@ from launch_ros.actions import Node
 def launch_setup(context, *args, **kwargs):
     """Create simple node."""
     node = Node(
-        package='multicam_imu_calib',
-        executable='multicam_imu_calib_node',
-        output='screen',
-        namespace=LaunchConfig('name'),
+        package="multicam_imu_calib",
+        executable="multicam_imu_calib_node",
+        output="screen",
+        namespace=LaunchConfig("name"),
         # prefix=['xterm -e gdb -ex run --args'],
-        name='calibration',
-        parameters=[{'config_file': LaunchConfig('config_file')}],
+        name="calibration",
+        parameters=[{"config_file": LaunchConfig("config_file")}],
     )
     return [node]
 
@@ -41,8 +41,10 @@ def generate_launch_description():
     """Create simple node by calling opaque function."""
     return launch.LaunchDescription(
         [
-            LaunchArg('name', default_value=[''], description='name of calibration node'),
-            LaunchArg('config_file', description='path to configuration file'),
+            LaunchArg(
+                "name", default_value=[""], description="name of calibration node"
+            ),
+            LaunchArg("config_file", description="path to configuration file"),
             OpaqueFunction(function=launch_setup),
         ]
     )

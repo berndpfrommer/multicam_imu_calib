@@ -30,7 +30,7 @@ public:
   using SharedPtr = std::shared_ptr<AprilTagBoardTarget>;
   ~AprilTagBoardTarget();
 
-  Detection detect(const Image::ConstSharedPtr & img) final;
+  TargetMsg detect(const Image::ConstSharedPtr & img) final;
 
   static SharedPtr make(
     const DetectorLoader::SharedPtr & dl, const std::string & type,

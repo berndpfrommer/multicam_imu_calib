@@ -15,6 +15,7 @@
 
 #include <filesystem>
 #include <multicam_imu_calib/calibration_component.hpp>
+#include <multicam_imu_calib/detection_draw.hpp>
 #include <multicam_imu_calib/enhanced_player.hpp>
 #include <multicam_imu_calib/front_end_component.hpp>
 #include <multicam_imu_calib/logging.hpp>
@@ -50,35 +51,65 @@ int main(int argc, char ** argv)
 
   auto calib_node =
     std::make_shared<multicam_imu_calib::CalibrationComponent>(node_options);
-  std::vector<std::string> recorded_topics;
-  const bool save_detections =
-    calib_node->declare_parameter<bool>("save_detections", false);
+  const bool detect_only =
+    calib_node->declare_parameter<bool>("detect_only", false);
+  const bool debug_images =
+    calib_node->declare_parameter<bool>("debug_images", true);
   const std::string out_uri =
     calib_node->declare_parameter<std::string>("out_bag", "");
+  if (out_uri.empty()) {
+    BOMB_OUT("must specify output bag!");
+  }
 
-  if (!save_detections) {
+  std::vector<std::string> recorded_topics;
+  if (!detect_only) {
     recorded_topics = calib_node->getPublishedTopics();
 #ifndef USE_RMW
     exec.add_node(calib_node);
 #endif
   } else {
-    LOG_INFO("saving detections!");
-    if (out_uri.empty()) {
-      BOMB_OUT("save_detections given, but no out_bag specified!");
-    }
+    LOG_INFO("only saving detections, no calibration!");
     recorded_topics = calib_node->getIMUTopics();
-    const auto det_topics = calib_node->getDetectionsTopics();
-    recorded_topics.insert(
-      recorded_topics.end(), std::make_move_iterator(det_topics.begin()),
-      std::make_move_iterator(det_topics.end()));
   }
-  printTopics("recorded topics", recorded_topics);
+  // always add detections to calibration output bag
+  const auto det_topics = calib_node->getDetectionsTopics();
+  recorded_topics.insert(
+    recorded_topics.end(), std::make_move_iterator(det_topics.begin()),
+    std::make_move_iterator(det_topics.end()));
 
   auto player_node =
     multicam_imu_calib::EnhancedPlayer::makePlayerNode(calib_node.get());
 #ifndef USE_RMW
   exec.add_node(player_node);
 #endif
+
+  rclcpp::NodeOptions draw_options;
+  std::shared_ptr<multicam_imu_calib::DetectionDraw> draw_node;
+  if (debug_images) {
+    const auto img_topics = calib_node->getImageTopics();
+    if (img_topics.size() != det_topics.size()) {
+      BOMB_OUT("image and detection topics must match!");
+    }
+    std::vector<std::string> remap{"--ros-args"};
+    // std::vector<std::string> remap;
+    for (size_t i = 0; i < img_topics.size(); i++) {
+      remap.push_back("--remap");
+      remap.push_back("image:=" + img_topics[i].first);
+      remap.push_back("--remap");
+      remap.push_back("tags:=" + det_topics[i]);
+      remap.push_back("--remap");
+      const auto debug_image = img_topics[i].first + "/debug_image";
+      remap.push_back("image_tags:=" + debug_image);
+      recorded_topics.push_back(debug_image);
+    }
+    draw_options.arguments(remap);
+    draw_node =
+      std::make_shared<multicam_imu_calib::DetectionDraw>(draw_options);
+#ifndef USE_RMW
+    exec.add_node(draw_node);
+#endif
+  }
+  printTopics("recorded topics", recorded_topics);
 
   rclcpp::NodeOptions frontend_options;
   frontend_options.use_intra_process_comms(use_ipc);
@@ -112,21 +143,24 @@ int main(int argc, char ** argv)
   } else {
     LOG_INFO("no out_bag parameter set, publishing as messages!");
   }
-  while (player_node->play_next() && rclcpp::ok()) {
+  while ((player_node->play_next() && rclcpp::ok())) {
 #ifndef USE_RMW
     exec.spin_some();
 #else
     rclcpp::spin_some(player_node);
-    if (!save_detections) {
+    if (!detect_only) {
       rclcpp::spin_some(calib_node);
     }
     rclcpp::spin_some(frontend_node);
+    if (draw_node) {
+      rclcpp::spin_some(draw_node);
+    }
     if (recorder_node) {
       rclcpp::spin_some(recorder_node);
     }
 #endif
   }
-  if (!save_detections) {
+  if (!detect_only) {
     auto req = std::make_shared<std_srvs::srv::Trigger::Request>();
     auto resp = std::make_shared<std_srvs::srv::Trigger::Response>();
     calib_node->calibrate(req, resp);

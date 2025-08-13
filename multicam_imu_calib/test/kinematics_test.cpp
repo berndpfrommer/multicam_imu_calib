@@ -64,7 +64,7 @@ bool testRigPoses(
   const double a_err = std::abs(err_sum_a / n);
   EXPECT_LT(v_err, 2e-3);
   EXPECT_LT(a_err, 9e-3);
-  LOG_INFO("v err: " << v_err << " acc err: " << a_err);
+  // LOG_INFO("v err: " << v_err << " acc err: " << a_err);
   return (v_err < 2e-3 && a_err < 9e-3);
 }
 
@@ -114,6 +114,7 @@ static std::vector<std::array<gtsam::Vector3, 2>> makeMoves(
 
 TEST(multicam_imu_calib, kinematics)
 {
+  LOG_INFO("running kinematics test");
   const std::array<gtsam::Unit3, 3> rots = {{{1, 0, 0}, {0, 1, 0}, {0, 1, 1}}};
   const std::array<gtsam::Vector3, 3> disps = {
     {{1, 0, 0}, {0, 1, 0}, {0, 1, 1}}};

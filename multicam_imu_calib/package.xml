@@ -13,6 +13,7 @@
   <depend>ament_cmake_auto</depend>
   <depend>apriltag_msgs</depend>
   <depend>apriltag_detector</depend>
+  <depend>apriltag_draw</depend>
   <depend>boost</depend> <!-- to work around gtsam bug on noble? -->
   <depend>cv_bridge</depend>
   <depend>eigen</depend>
@@ -36,6 +37,7 @@
   <test_depend>ament_lint_common</test_depend>
   <test_depend>ament_cmake_clang_format</test_depend>
   <test_depend>ament_cmake_gtest</test_depend>
+  <test_depend>ament_cmake_black</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

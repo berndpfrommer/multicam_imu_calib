@@ -47,6 +47,8 @@ Optimizer::Optimizer()
   isam2_ = std::make_shared<gtsam::ISAM2>(p);
 }
 
+void Optimizer::setDebugLevel(DebugLevel i) { debug_level_ = i; }
+
 factor_key_t Optimizer::addIMUPoseFactor(
   const std::string & label, value_key_t object_pose_key,
   value_key_t rig_pose_key, value_key_t imu_world_pose_key,
@@ -72,8 +74,10 @@ factor_key_t Optimizer::addIMUPoseFactor(
     values_.at<gtsam::Pose3>(object_pose_key) *
     values_.at<gtsam::Pose3>(rig_pose_key) *
     values_.at<gtsam::Pose3>(imu_rig_calib_key);
-  std::cout << label << " id pose: " << std::endl;
-  std::cout << I << std::endl;
+  if (!I.equals(gtsam::Pose3(), 1e-5)) {
+    std::cout << label << " id pose: " << std::endl;
+    std::cout << I << std::endl;
+  }
 #endif
   return (getLastFactorKey());
 }
@@ -133,6 +137,8 @@ value_key_t Optimizer::addRigPose(
   values_.insert(pose_key, pose);
 #ifdef DEBUG_SINGULARITIES
   value_to_name_.insert({pose_key, label + " (rig pose)"});
+#else
+  (void)label;
 #endif
   return (pose_key);
 }
@@ -150,6 +156,8 @@ StampedIMUValueKeys Optimizer::addIMUState(
   value_to_name_.insert({vk.world_pose_key, "T_w_i " + imu->getName() + ts});
   value_to_name_.insert({vk.velocity_key, "velocity " + imu->getName() + ts});
   value_to_name_.insert({vk.bias_key, "bias " + imu->getName() + ts});
+#else
+  (void)imu;
 #endif
   return (vk);
 }
@@ -157,23 +165,26 @@ StampedIMUValueKeys Optimizer::addIMUState(
 value_key_t Optimizer::addPose(
   const std::string & label, const gtsam::Pose3 & p)
 {
-  const auto pose_key = getNextKey();
-  values_.insert(pose_key, p);
-  auto it_bool = value_to_name_.insert({pose_key, label + " (pose)"});
+  const auto key = getNextKey();
+  values_.insert(key, p);
+  auto it_bool = value_to_name_.insert({key, label + " (pose)"});
+  if (debug_level_ >= DebugLevel::DEBUG) {
+    LOG_INFO(
+      "added pose " << label << " key " << key
+                    << " trans: " << p.translation().transpose());
+  }
   if (!it_bool.second) {
     BOMB_OUT("duplicate pose inserted: " << label);
   }
-  std::cout << "opt added pose: " << label << " key: " << pose_key << std::endl
-            << p << std::endl;
-  return (pose_key);
+  return (key);
 }
 
 std::tuple<uint64_t, factor_key_t> Optimizer::addPreintegratedFactor(
   const StampedIMUValueKeys & prev_keys, const StampedIMUValueKeys & curr_keys,
   const gtsam::PreintegratedCombinedMeasurements & accum)
 {
-// #define MOD_STATE
-#define DEBUG_IMUFACTOR
+  // #define MOD_STATE
+  // #define DEBUG_IMUFACTOR
   graph_.add(gtsam::CombinedImuFactor(
     prev_keys.world_pose_key, prev_keys.velocity_key, curr_keys.world_pose_key,
     curr_keys.velocity_key, prev_keys.bias_key, curr_keys.bias_key, accum));
@@ -266,7 +277,7 @@ std::vector<factor_key_t> Optimizer::addProjectionFactors(
     factor_to_name_.insert(
       {getLastFactorKey(), cam->getName() + ":proj_fac_t=" + std::to_string(t) +
                              ",pt:" + std::to_string(i)});
-
+    num_projection_factors_++;
     factors.push_back(getLastFactorKey());
   }
   return (factors);
@@ -293,16 +304,19 @@ std::tuple<gtsam::Point2, gtsam::Point2> Optimizer::getProjection(
   return (errs);
 }
 
-#define DEBUG_OPT
-
 std::tuple<double, double> Optimizer::optimize()
 {
   if (!graph_.empty()) {
-    LOG_INFO("running optimizer");
-#ifdef DEBUG_OPT
-    graph_.print();
-    values_.print();
-#endif
+    LOG_INFO(
+      "running optimizer (debug level " << debug_level_.toString() << ")");
+    if (debug_level_ >= DebugLevel::DEBUG) {
+      graph_.print();
+      values_.print();
+    }
+    if (debug_level_ >= DebugLevel::INFO) {
+      LOG_INFO("number of projection factors: " << num_projection_factors_);
+    }
+
 #ifdef USE_ISAM
     auto result = isam2_->update(graph_, values_);
     optimized_values_ = isam2_->calculateEstimate();
@@ -319,13 +333,13 @@ std::tuple<double, double> Optimizer::optimize()
     LOG_INFO(
       "final error: " << lmo.error() << " after iter: " << lmo.iterations());
 #endif
-#ifdef DEBUG_OPT
-    printErrors(false);
-    LOG_INFO("optimized values: ");
-    for (const auto & v : optimized_values_) {
-      v.value.print();
+    if (debug_level_ >= DebugLevel::DEBUG) {
+      printErrors(false);
+      LOG_INFO("optimized values: ");
+      for (const auto & v : optimized_values_) {
+        v.value.print();
+      }
     }
-#endif
     return {initial_error, lmo.error()};
   }
   return {-1, -1};
@@ -463,6 +477,7 @@ void Optimizer::checkForUnknownValues() const
 
 void Optimizer::checkForUnconstrainedVariables() const
 {
+#ifdef DEBUG_SINGULARITIES
   std::unordered_map<value_key_t, size_t> ref_cnt;  // ref cnt for all variables
   for (const auto & f : graph_) {
     for (auto k : f->keys()) {
@@ -485,7 +500,6 @@ void Optimizer::checkForUnconstrainedVariables() const
       ss << " " << k;
     }
     LOG_INFO(kv.first << " key: " << ss.str());
-#ifdef DEBUG_SINGULARITIES
     if (kv.first < 2) {
       for (const auto & k : kv.second) {
         const auto it = value_to_name_.find(k);
@@ -496,8 +510,8 @@ void Optimizer::checkForUnconstrainedVariables() const
         }
       }
     }
-#endif
   }
+#endif
 }
 
 }  // namespace multicam_imu_calib

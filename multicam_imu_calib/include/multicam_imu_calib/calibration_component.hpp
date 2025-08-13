@@ -22,8 +22,9 @@
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <multicam_imu_calib/calibration.hpp>
 #include <multicam_imu_calib/camera.hpp>
+#include <multicam_imu_calib/debug_level.hpp>
 #include <multicam_imu_calib/detector_loader.hpp>
-#include <multicam_imu_calib_msgs/msg/detection_array.hpp>
+#include <multicam_imu_calib_msgs/msg/target_array.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
@@ -36,7 +37,7 @@ namespace multicam_imu_calib
 class CalibrationComponent : public rclcpp::Node
 {
 public:
-  using DetectionArray = multicam_imu_calib_msgs::msg::DetectionArray;
+  using TargetArray = multicam_imu_calib_msgs::msg::TargetArray;
   using Imu = sensor_msgs::msg::Imu;
   using Odometry = nav_msgs::msg::Odometry;
   using TFMsg = geometry_msgs::msg::TransformStamped;
@@ -70,14 +71,14 @@ private:
     rcl_time_point_value_t getTime() const;
 
   private:
-    void callback(const DetectionArray::ConstSharedPtr & p);
-    void processMsg(const DetectionArray::ConstSharedPtr & msg);
+    void callback(const TargetArray::ConstSharedPtr & p);
+    void processMsg(const TargetArray::ConstSharedPtr & msg);
     void processDetections();
     CalibrationComponent * component_{nullptr};
     Camera::SharedPtr camera_;
     Calibration::SharedPtr calib_;
-    rclcpp::Subscription<DetectionArray>::SharedPtr sub_;
-    std::deque<DetectionArray::ConstSharedPtr> messages_;
+    rclcpp::Subscription<TargetArray>::SharedPtr sub_;
+    std::deque<TargetArray::ConstSharedPtr> messages_;
   };
 
   class IMUHandler
@@ -108,7 +109,7 @@ private:
     }
   }
   void subscribe();
-  void processMsg(const DetectionArray::ConstSharedPtr & msg);
+  void processMsg(const TargetArray::ConstSharedPtr & msg);
   void newDetectionArrived(DetectionHandler * handler);
   void updateHandlerQueue(DetectionHandler * handler);
   void printHandlerQueue(const std::string & tag) const;
@@ -126,6 +127,7 @@ private:
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   rclcpp::Service<Trigger>::SharedPtr srvs_calib_;
   DetectorLoader::SharedPtr detector_loader_;
+  DebugLevel debug_level_{DebugLevel::OFF};
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__CALIBRATION_COMPONENT_HPP_

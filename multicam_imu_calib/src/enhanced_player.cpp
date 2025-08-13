@@ -70,9 +70,12 @@ bool EnhancedPlayer::hasEitherTopics(
     if (pubs.find(image_topic) == pubs.end()) {
       if (pubs.find(detection_topics[i]) == pubs.end()) {
         all_there = false;
-        LOG_WARN(
-          "cannot find " << image_topic << " or " << detection_topics[i]
-                         << " in bag!");
+        if (!image_topic.empty()) {
+          LOG_WARN("no image topic: " << image_topic << " in bag!");
+        }
+        if (!detection_topics[i].empty()) {
+          LOG_WARN("no detection topic: " << detection_topics[i] << " in bag!");
+        }
         all_there = false;
       }
     }
@@ -112,6 +115,7 @@ std::shared_ptr<EnhancedPlayer> EnhancedPlayer::makePlayerNode(
     {Parameter("storage.uri", in_uri),  // Parameter("play.topics", in_topics),
      Parameter("play.clock_publish_on_topic_publish", true),
      Parameter("play.start_paused", true), Parameter("play.rate", 1000.0),
+     Parameter("play.progress_bar_update_rate", 0),
      Parameter("play.disable_keyboard_controls", true)});
   auto player_node = std::make_shared<multicam_imu_calib::EnhancedPlayer>(
     "rosbag_player", player_options);

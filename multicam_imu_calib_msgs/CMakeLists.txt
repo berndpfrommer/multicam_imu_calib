@@ -26,8 +26,9 @@ find_package(geometry_msgs REQUIRED)
 
 rosidl_generate_interfaces(
   ${PROJECT_NAME}
-  msg/Detection.msg
-  msg/DetectionArray.msg
+  msg/Marker.msg
+  msg/Target.msg
+  msg/TargetArray.msg
   DEPENDENCIES builtin_interfaces std_msgs geometry_msgs
   ADD_LINTER_TESTS)
 

@@ -1,5 +1,18 @@
+targets:
+  - name: "apriltag board"
+    type: "apriltag_board"
+    detector: "umich"
+    family: "tf36h11"
+    starting_tag_id: 0
+    tag_size: 0.07
+    rows: 3
+    distance_rows: 0.087
+    columns: 4
+    distance_columns: 0.087
 cameras:
   - name: "camera_0"
+    image_topic: /camera_0/image_raw
+    resolution: [1280, 720]
     intrinsics:
       fx: 330.0
       fy: 340.0
@@ -27,6 +40,8 @@ cameras:
         y: 0.001
         z: 0.001
   - name: "camera_1"
+    image_topic: /camera_0/image_raw
+    resolution: [1280, 720]
     intrinsics:
       fx: 350.0
       fy: 360.0

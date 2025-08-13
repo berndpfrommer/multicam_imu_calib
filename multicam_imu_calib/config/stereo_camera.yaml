@@ -16,8 +16,9 @@ targets:
 
 cameras:
   - name: "camera_0"
-    ros_topic: "/cam_sync/cam_0/image_raw"
+    image_topic: "/cam_sync/cam0/image_raw"
     pixel_noise: 1.0
+    resolution: [1440, 1080]
     intrinsics:
       fx: 833.0
       fy: 833.0
@@ -47,13 +48,14 @@ cameras:
         y: 1.e-6
         z: 1.e-6
   - name: "camera_1"
-    ros_topic: "/cam_sync/cam_1/image_raw"
+    image_topic: "/cam_sync/cam1/image_raw"
     pixel_noise: 1.0
     intrinsics:
       fx: 833.0
       fy: 833.0
       cx: 748
       cy: 550
+    resolution: [1440, 1080]
     distortion_model:
       type: "equidistant"
       coefficients: [-0.0117, -0.0091, 0.0030, 0.0002]

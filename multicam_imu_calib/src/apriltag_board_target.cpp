@@ -18,9 +18,10 @@
 #include <multicam_imu_calib/detector_loader.hpp>
 #include <multicam_imu_calib/logging.hpp>
 #include <multicam_imu_calib/utilities.hpp>
+#include <multicam_imu_calib_msgs/msg/marker.hpp>
 #include <set>
 
-#ifdef USE_CV_BRIDGE_HPP
+#if __has_include(<cv_bridge/cv_bridge.hpp>)
 #include <cv_bridge/cv_bridge.hpp>
 #else
 #include <cv_bridge/cv_bridge.h>
@@ -38,18 +39,27 @@ AprilTagBoardTarget::~AprilTagBoardTarget() { detector_loader_.reset(); }
 
 static std::set<uint32_t> known_tags;
 
-AprilTagBoardTarget::Detection AprilTagBoardTarget::detect(
+AprilTagBoardTarget::TargetMsg AprilTagBoardTarget::detect(
   const Image::ConstSharedPtr & img)
 {
   auto detector =
     detector_loader_->makeDetector(std::this_thread::get_id(), type_, family_);
   detector->setBlackBorder(border_width_);
-
-  const auto cvImg = cv_bridge::toCvShare(img, "mono8");
+  cv_bridge::CvImageConstPtr cvImg;
+  try {
+    cvImg = cv_bridge::toCvShare(img, "mono8");
+  } catch (const cv_bridge::Exception & e) {
+    if (img->encoding == "8UC1") {
+      // hack to muddle on when encoding is wrong
+      std::shared_ptr<Image> img_copy(new Image(*img));
+      img_copy->encoding = "mono8";
+      cvImg = cv_bridge::toCvShare(img_copy, "mono8");
+    }
+  }
   ApriltagArray tagArray;
   detector->detect(cvImg->image, &tagArray);
-  Detection det;
-  det.id = getName();  // target id
+  TargetMsg targ_msg;
+  targ_msg.id = getName();  // target id
   if (!tagArray.detections.empty()) {
     for (const auto & tag : tagArray.detections) {
       const auto it = id_to_wp_.find(tag.id);
@@ -59,15 +69,19 @@ AprilTagBoardTarget::Detection AprilTagBoardTarget::detect(
         }
         continue;
       }
+      multicam_imu_calib_msgs::msg::Marker marker;
+      marker.type = "apriltag";
+      marker.id = std::to_string(tag.id);
       for (const auto & wp : it->second) {
-        det.object_points.push_back(utilities::makePoint(wp[0], wp[1]));
+        marker.object_points.push_back(utilities::makePoint(wp[0], wp[1]));
       }
       for (const auto & p : tag.corners) {
-        det.image_points.push_back(utilities::makePoint(p.x, p.y));
+        marker.image_points.push_back(utilities::makePoint(p.x, p.y));
       }
+      targ_msg.markers.push_back(marker);
     }
   }
-  return (det);
+  return (targ_msg);
 }
 
 AprilTagBoardTarget::SharedPtr AprilTagBoardTarget::make(

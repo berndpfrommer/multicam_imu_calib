@@ -22,12 +22,13 @@
 #include <deque>
 #include <memory>
 #include <multicam_imu_calib/camera.hpp>
+#include <multicam_imu_calib/debug_level.hpp>
 #include <multicam_imu_calib/detector_loader.hpp>
 #include <multicam_imu_calib/imu.hpp>
 #include <multicam_imu_calib/intrinsics.hpp>
 #include <multicam_imu_calib/stamped_attitude.hpp>
 #include <multicam_imu_calib/target.hpp>
-#include <multicam_imu_calib_msgs/msg/detection.hpp>
+#include <multicam_imu_calib_msgs/msg/target_array.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <set>
 #include <string>
@@ -44,7 +45,7 @@ public:
   using SharedNoiseModel = gtsam::SharedNoiseModel;
   using CameraList = std::vector<Camera::SharedPtr>;
   using IMUList = std::vector<IMU::SharedPtr>;
-  using Detection = multicam_imu_calib_msgs::msg::Detection;
+  using TargetMsg = multicam_imu_calib_msgs::msg::Target;
   Calibration();
   ~Calibration();
   void readConfigFile(
@@ -82,7 +83,7 @@ public:
     const std::vector<std::array<double, 2>> & ic);
   void addDetection(
     const Camera::SharedPtr & cam, const Target::SharedPtr & targ, uint64_t t,
-    const Detection & detection);
+    const TargetMsg & target);
   void addIMUData(size_t imu_idx, const IMUData & data);
   void initializeCameraPosesAndIntrinsics();
   std::unordered_map<std::string, size_t> getTopicToCamera(
@@ -97,6 +98,7 @@ public:
     const Camera::SharedPtr & cam) const;
   void initializeIMUPoses();
   void printErrors(bool optimized);
+  void setDebugLevel(DebugLevel d);
   gtsam::Pose3 getRigPose(uint64_t t, bool optimized) const;
   value_key_t getRigPoseKey(uint64_t t) const;
   gtsam::Pose3 getIMUPose(size_t imu_idx, bool opt) const;
@@ -149,6 +151,7 @@ private:
   gtsam::Pose3 T_w_o_;
   value_key_t T_w_o_key_{-1};
   factor_key_t T_w_o_prior_key_{-1};
+  DebugLevel debug_level_{DebugLevel::OFF};
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__CALIBRATION_HPP_

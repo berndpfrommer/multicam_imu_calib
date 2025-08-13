@@ -30,26 +30,30 @@ def main(fname):
         pts = a[a[:, 0].astype(np.uint32) == i, 2:]
         dx = pts[:, 0] - pts[:, 2]
         dy = pts[:, 1] - pts[:, 3]
-        hx, bx = np.histogram(dx[np.abs(dx) < np.std(dx) * cutoff], bins=100, density=True)
-        plt.plot(0.5 * (bx[:-1] + bx[1:]), hx, label='error in x')
-        hy, by = np.histogram(dy[np.abs(dy) < np.std(dy) * cutoff], bins=100, density=True)
-        plt.plot(0.5 * (by[:-1] + by[1:]), hy, label='error in y')
+        hx, bx = np.histogram(
+            dx[np.abs(dx) < np.std(dx) * cutoff], bins=100, density=True
+        )
+        plt.plot(0.5 * (bx[:-1] + bx[1:]), hx, label="error in x")
+        hy, by = np.histogram(
+            dy[np.abs(dy) < np.std(dy) * cutoff], bins=100, density=True
+        )
+        plt.plot(0.5 * (by[:-1] + by[1:]), hy, label="error in y")
         plt.legend()
-        plt.title(f'error distribution for camera {i}')
+        plt.title(f"error distribution for camera {i}")
         plt.show()
 
-        plt.scatter(pts[:, 0], pts[:, 1], s=8, label='image points')
-        plt.scatter(pts[:, 2], pts[:, 3], s=8, label='projected points')
-        plt.title(f'projection error cam {i}')
+        plt.scatter(pts[:, 0], pts[:, 1], s=8, label="image points")
+        plt.scatter(pts[:, 2], pts[:, 3], s=8, label="projected points")
+        plt.title(f"projection error cam {i}")
         plt.show()
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='calibration diagnostics.')
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="calibration diagnostics.")
     parser.add_argument(
-        '--projection_file_name',
-        '-f',
-        help='name of file with projected points',
+        "--projection_file_name",
+        "-f",
+        help="name of file with projected points",
         required=True,
         default=None,
     )

@@ -25,6 +25,7 @@
 #include <array>
 #include <map>
 #include <multicam_imu_calib/camera.hpp>
+#include <multicam_imu_calib/debug_level.hpp>
 #include <multicam_imu_calib/factor_key.hpp>
 #include <multicam_imu_calib/imu.hpp>
 #include <multicam_imu_calib/intrinsics.hpp>
@@ -34,7 +35,7 @@
 #include <unordered_map>
 #include <vector>
 
-#define DEBUG_SINGULARITIES
+// #define DEBUG_SINGULARITIES
 namespace multicam_imu_calib
 {
 
@@ -125,6 +126,7 @@ public:
   void printErrors(bool optimized) const;
   void checkForUnconstrainedVariables() const;
   void checkForUnknownValues() const;
+  void setDebugLevel(DebugLevel i);
 
 private:
   value_key_t getNextKey() { return (key_++); }
@@ -142,6 +144,8 @@ private:
   gtsam::SharedNoiseModel pixel_noise_;
   std::unordered_map<factor_key_t, std::string> factor_to_name_;
   std::unordered_map<value_key_t, std::string> value_to_name_;
+  DebugLevel debug_level_;
+  size_t num_projection_factors_{0};
 };
 
 }  // namespace multicam_imu_calib

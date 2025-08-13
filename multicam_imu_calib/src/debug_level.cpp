@@ -1,5 +1,5 @@
 // -*-c++-*---------------------------------------------------------------------------------------
-// Copyright 2024 Bernd Pfrommer <bernd.pfrommer@gmail.com>
+// Copyright 2025 Bernd Pfrommer <bernd.pfrommer@gmail.com>
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,28 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <multicam_imu_calib/front_end.hpp>
-#include <multicam_imu_calib/logging.hpp>
-
+#include <multicam_imu_calib/debug_level.hpp>
 namespace multicam_imu_calib
 {
-
-// static rclcpp::Logger get_logger() { return (rclcpp::get_logger("front_end")); }
-
-FrontEnd::FrontEnd() {}
-
-FrontEnd::~FrontEnd() { targets_.clear(); }
-
-void FrontEnd::readConfigFile(
-  const std::string & file, const DetectorLoader::SharedPtr & dl)
+std::string DebugLevel::toString() const
 {
-  targets_ = Target::readConfigFile(file, dl);
+  switch (level_) {
+    case OFF:
+      return ("OFF");
+    case ERROR:
+      return ("ERROR");
+    case WARN:
+      return ("WARN");
+    case INFO:
+      return ("INFO");
+    case DEBUG:
+      return ("DEBUG");
+    default:
+      return ("INVALID");
+  }
 }
-
-FrontEnd::TargetMsg FrontEnd::detect(
-  const Target::SharedPtr & target, const Image::ConstSharedPtr & img) const
-{
-  return (target->detect(img));
-}
-
 }  // namespace multicam_imu_calib

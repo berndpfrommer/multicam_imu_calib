@@ -97,6 +97,7 @@ public:
   }
   void setIntrinsicsPriorKey(factor_key_t k) { intrinsics_prior_key_ = k; }
   void setFrameId(const std::string & id) { frame_id_ = id; }
+  void setResolution(const std::vector<int> & res) { resolution_ = res; }
 
   // ------------ other public methods
 
@@ -109,6 +110,7 @@ public:
   {
     factor_keys_.insert({t, k});
   }
+  bool pointsAreWithinFrame(const std::vector<std::array<double, 2>> ip);
 
 private:
   std::string name_;
@@ -123,6 +125,7 @@ private:
   value_key_t intrinsics_key_{-1};
   factor_key_t intrinsics_prior_key_{-1};
   Intrinsics intrinsics_{{0, 0, 0, 0}};
+  std::vector<int> resolution_;
   DistortionModel distortion_model_{INVALID};
   DistortionCoefficients distortion_coefficients_;
   std::vector<int> mask_;

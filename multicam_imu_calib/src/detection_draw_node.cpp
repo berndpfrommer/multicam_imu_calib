@@ -1,5 +1,5 @@
 // -*-c++-*---------------------------------------------------------------------------------------
-// Copyright 2024 Bernd Pfrommer <bernd.pfrommer@gmail.com>
+// Copyright 2025 Bernd Pfrommer <bernd.pfrommer@gmail.com>
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,22 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef MULTICAM_IMU_CALIB__INIT_POSE_HPP_
-#define MULTICAM_IMU_CALIB__INIT_POSE_HPP_
+#include <memory>
+#include <multicam_imu_calib/detection_draw.hpp>
+#include <rclcpp/rclcpp.hpp>
 
-#include <gtsam/geometry/Pose3.h>
-
-#include <multicam_imu_calib/camera.hpp>
-#include <multicam_imu_calib_msgs/msg/target.hpp>
-#include <optional>
-
-namespace multicam_imu_calib
+int main(int argc, char ** argv)
 {
-namespace init_pose
-{
-std::optional<gtsam::Pose3> findCameraPose(
-  const Camera::SharedPtr & cam,
-  const multicam_imu_calib_msgs::msg::Target & det);
+  rclcpp::init(argc, argv);
+  auto node =
+    std::make_shared<multicam_imu_calib::DetectionDraw>(rclcpp::NodeOptions());
+  rclcpp::spin(node);  // should not return
+  rclcpp::shutdown();
+  return 0;
 }
-}  // namespace multicam_imu_calib
-#endif  // MULTICAM_IMU_CALIB__INIT_POSE_HPP_

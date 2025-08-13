@@ -120,4 +120,15 @@ const std::string Camera::getDetectionsTopic() const
                                : image_topic_ + "/detections");
 }
 
+bool Camera::pointsAreWithinFrame(const std::vector<std::array<double, 2>> ip)
+{
+  for (const auto & p : ip) {
+    if (
+      p[0] < 0 || p[0] >= resolution_[0] || p[1] < 0 ||
+      p[1] >= resolution_[1]) {
+      return (false);
+    }
+  }
+  return (true);
+}
 }  // namespace multicam_imu_calib

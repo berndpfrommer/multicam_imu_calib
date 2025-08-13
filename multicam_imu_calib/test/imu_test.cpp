@@ -24,7 +24,7 @@
 #include <multicam_imu_calib/intrinsics.hpp>
 #include <multicam_imu_calib/logging.hpp>
 #include <multicam_imu_calib/utilities.hpp>
-#include <multicam_imu_calib_msgs/msg/detection.hpp>
+#include <multicam_imu_calib_msgs/msg/target.hpp>
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core/core.hpp>
 
@@ -39,17 +39,21 @@ namespace diagnostics = multicam_imu_calib::diagnostics;
 
 static rclcpp::Logger get_logger() { return (rclcpp::get_logger("imu_test")); }
 
-static multicam_imu_calib_msgs::msg::Detection makeDetection(
+static multicam_imu_calib_msgs::msg::Target makeTarget(
   const std::vector<std::array<double, 3>> & wp,
   const std::vector<std::array<double, 2>> & ip)
 {
-  multicam_imu_calib_msgs::msg::Detection msg;
+  multicam_imu_calib_msgs::msg::Target msg;
+  multicam_imu_calib_msgs::msg::Marker marker;
+  marker.type = "apriltag";
+  marker.id = "0";
   for (const auto & w : wp) {
-    msg.object_points.push_back(utilities::makePoint(w[0], w[1], w[2]));
+    marker.object_points.push_back(utilities::makePoint(w[0], w[1], w[2]));
   }
   for (const auto & i : ip) {
-    msg.image_points.push_back(utilities::makePoint(i[0], i[1]));
+    marker.image_points.push_back(utilities::makePoint(i[0], i[1]));
   }
+  msg.markers.push_back(marker);
   return (msg);
 }
 
@@ -58,6 +62,7 @@ TEST(multicam_imu_calib, imu_preintegration)
   // Simulate camera and IMU, build graph, and test.
   // The IMU poses are *not* yet tied to the rig poses,
   // so the first IMU pose has to be set with a prior.
+  LOG_INFO("testing imu preintegration");
 
   multicam_imu_calib::Calibration calib;
   auto dl = std::make_shared<multicam_imu_calib::DetectorLoader>();
@@ -104,7 +109,7 @@ TEST(multicam_imu_calib, imu_preintegration)
     gtsam::Vector3(0, 0, 0));
   const auto & targ = calib.getTargets()[0];
   targ->setPoseKey(calib.addPose(targ->getName(), targ->getPose()));
-
+  auto & imu = *(calib.getIMUList()[0]);
   for (int i_axis = 0; i_axis < 3; i_axis++) {
     Eigen::Vector3d axis = Eigen::Vector3d::Zero();
     axis(i_axis) = 1.0;
@@ -123,9 +128,10 @@ TEST(multicam_imu_calib, imu_preintegration)
           cam->getIntrinsics(), cam->getDistortionModel(),
           cam->getDistortionCoefficients(), T_w_c, wc);
         if (calib.hasRigPose(t)) {  // should always be true
-          auto det = makeDetection(wc, ip);
+          auto det = makeTarget(wc, ip);
           calib.addDetection(cam, targ, t, det);
         }
+        imu.saveAttitude(t);
         imu_attitudes.push_back(
           multicam_imu_calib::StampedAttitude(t, T_w_i.rotation()));
         rig_attitudes.push_back(
@@ -136,12 +142,11 @@ TEST(multicam_imu_calib, imu_preintegration)
       t += dt;
     }
   }
-  const auto & imu = *(calib.getIMUList()[0]);
   const auto T_r_i_est =
     utilities::averageRotationDifference(rig_attitudes, imu.getAttitudes());
   const double err =
     (T_r_i_est.inverse() * T_r_i.rotation()).axisAngle().second;
-  EXPECT_TRUE(std::abs(err) < 1e-6);
+  EXPECT_LT(std::abs(err), 1e-6);
   EXPECT_TRUE(imu.testAttitudes(imu_attitudes));
   // calib.printErrors(false);
   auto [init_err, final_err] = calib.runOptimizer();
@@ -214,7 +219,7 @@ TEST(multicam_imu_calib, imu_extrinsic_single_cam)
           cam->getIntrinsics(), cam->getDistortionModel(),
           cam->getDistortionCoefficients(), T_w_c, wc);
         if (calib.hasRigPose(t)) {  // should always be true
-          auto det = makeDetection(wc, ip);
+          auto det = makeTarget(wc, ip);
           calib.addDetection(cam, targ, t, det);
         }
         imu_attitudes.push_back(
@@ -330,7 +335,7 @@ static std::tuple<double, double, double, double> do_extrinsic_imu_calib(
           cam->getIntrinsics(), cam->getDistortionModel(),
           cam->getDistortionCoefficients(), T_w_r * T_r_c, wc);
         if (calib.hasRigPose(t)) {  // should always be true
-          auto det = makeDetection(wc, ip);
+          auto det = makeTarget(wc, ip);
           calib.addDetection(cam, targ, t, det);
         }
         for (size_t i_imu = 0; i_imu < imu_updates_per_frame;
@@ -409,7 +414,7 @@ TEST(multicam_imu_calib, imu_calib_displaced_init)
   EXPECT_LT(std::abs(rot_err), 2.5e-2);
   EXPECT_LT(std::abs(trans_err), 6e-3);
 }
-
+#endif
 int main(int argc, char ** argv)
 {
   testing::InitGoogleTest(&argc, argv);

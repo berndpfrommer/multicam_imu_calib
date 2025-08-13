@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <cassert>
 #include <multicam_imu_calib/utilities.hpp>
 #include <opencv2/calib3d.hpp>
 
@@ -80,7 +79,11 @@ gtsam::Rot3 averageRotationDifference(
   const std::vector<StampedAttitude> & sa1,
   const std::vector<StampedAttitude> & sa2)
 {
-  assert(sa1.size() == sa2.size());
+  if (sa1.size() != sa2.size()) {
+    std::cerr << "attitude mismatch: " << sa1.size() << " vs " << sa2.size()
+              << std::endl;
+    throw(std::runtime_error("attitude vector mismatch!"));
+  }
   Eigen::Matrix4d Q = Eigen::Matrix4d::Zero();
   for (size_t i = 0; i < sa1.size(); i++) {
     const auto dR = sa1[i].rotation.inverse() * sa2[i].rotation;

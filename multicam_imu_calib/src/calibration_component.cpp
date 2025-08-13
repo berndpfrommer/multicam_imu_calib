@@ -29,7 +29,7 @@ CalibrationComponent::DetectionHandler::DetectionHandler(
   const Calibration::SharedPtr & calib)
 : component_(comp), camera_(cam), calib_(calib)
 {
-  sub_ = component_->create_subscription<DetectionArray>(
+  sub_ = component_->create_subscription<TargetArray>(
     camera_->getDetectionsTopic(), rclcpp::QoS(10),
     std::bind(
       &CalibrationComponent::DetectionHandler::callback, this,
@@ -48,7 +48,7 @@ rcl_time_point_value_t CalibrationComponent::DetectionHandler::getTime() const
 }
 
 void CalibrationComponent::DetectionHandler::callback(
-  const DetectionArray::ConstSharedPtr & msg)
+  const TargetArray::ConstSharedPtr & msg)
 {
   messages_.push_back(msg);
   camera_->setFrameId(msg->header.frame_id);
@@ -57,11 +57,11 @@ void CalibrationComponent::DetectionHandler::callback(
 
 static std::deque<size_t> targetsWithPosesFirst(
   const Calibration::SharedPtr & calib,
-  const multicam_imu_calib_msgs::msg::DetectionArray & msg)
+  const multicam_imu_calib_msgs::msg::TargetArray & msg)
 {
   std::deque<size_t> sorted;
-  for (size_t i = 0; i < msg.detections.size(); i++) {
-    auto target = calib->getTarget(msg.detections[i].id);
+  for (size_t i = 0; i < msg.targets.size(); i++) {
+    auto target = calib->getTarget(msg.targets[i].id);
     if (target) {  // ignore unknown targets!
       if (target->hasValidPose()) {
         sorted.push_front(i);
@@ -78,19 +78,19 @@ void CalibrationComponent::DetectionHandler::processOldestMessage()
   if (messages_.empty()) {
     BOMB_OUT("empty message queue!");
   }
-  const DetectionArray::ConstSharedPtr msg = messages_.front();
+  const TargetArray::ConstSharedPtr msg = messages_.front();
   messages_.pop_front();
   const uint64_t t = rclcpp::Time(msg->header.stamp).nanoseconds();
   const auto sorted_idx = targetsWithPosesFirst(calib_, *msg);
   for (const auto & idx : sorted_idx) {
-    auto & det = msg->detections[idx];
-    const auto & target = calib_->getTarget(det.id);
+    auto & targ = msg->targets[idx];
+    const auto & target = calib_->getTarget(targ.id);
     if (!target) {
       continue;
     }
     if (!calib_->hasRigPose(t)) {
       if (camera_->hasValidPose()) {
-        const auto T_c_t = init_pose::findCameraPose(camera_, det);
+        const auto T_c_t = init_pose::findCameraPose(camera_, targ);
         if (T_c_t) {
           if (!target->hasValidPose() && !calib_->getAnyTargetHasPose()) {
             // first target object pose is initialized to identity!
@@ -120,7 +120,7 @@ void CalibrationComponent::DetectionHandler::processOldestMessage()
     } else {  // rig has valid pose
       if (!camera_->hasValidPose()) {
         if (target->hasValidPose()) {
-          const auto T_c_t = init_pose::findCameraPose(camera_, det);
+          const auto T_c_t = init_pose::findCameraPose(camera_, targ);
           if (T_c_t) {
             // rig and target pose known but not camera
             const auto T_o_r = calib_->getRigPose(t, false);
@@ -133,7 +133,7 @@ void CalibrationComponent::DetectionHandler::processOldestMessage()
         }
       } else {
         if (!target->hasValidPose()) {
-          const auto T_c_t = init_pose::findCameraPose(camera_, det);
+          const auto T_c_t = init_pose::findCameraPose(camera_, targ);
           if (T_c_t) {
             // camera and rig pose known, but not target.
             // T_o_t = T_o_r * T_r_c * T_c_t
@@ -149,7 +149,7 @@ void CalibrationComponent::DetectionHandler::processOldestMessage()
       }
     }
     if (calib_->hasRigPose(t) && camera_->hasValidPose()) {
-      calib_->addDetection(camera_, target, t, det);
+      calib_->addDetection(camera_, target, t, targ);
     }
     /*
     LOG_INFO(
@@ -190,8 +190,10 @@ CalibrationComponent::CalibrationComponent(const rclcpp::NodeOptions & opt)
   world_frame_id_ = safe_declare<std::string>("world_frame_id", "map");
   object_frame_id_ = safe_declare<std::string>("object_frame_id", "object");
   rig_frame_id_ = safe_declare<std::string>("rig_frame_id", "rig");
+  debug_level_ = DebugLevel(safe_declare<int>("debug_level", 0));
   detector_loader_ = std::make_shared<multicam_imu_calib::DetectorLoader>();
   calib_ = std::make_shared<Calibration>();
+  calib_->setDebugLevel(debug_level_);
   calib_->readConfigFile(
     safe_declare<std::string>("config_file", ""), detector_loader_);
   calib_->initializeCameraPosesAndIntrinsics();

@@ -26,32 +26,32 @@ from launch_ros.descriptions import ComposableNode
 def launch_setup(context, *args, **kwargs):
     """Create composable node."""
     container = ComposableNodeContainer(
-        name='calibration_container',
-        namespace=LaunchConfig('ns'),
-        package='rclcpp_components',
+        name="calibration_container",
+        namespace=LaunchConfig("ns"),
+        package="rclcpp_components",
         # prefix=['xterm -e gdb -ex run --args'],
-        executable='component_container',
+        executable="component_container",
         composable_node_descriptions=[
             ComposableNode(
-                name='front_end',
-                package='multicam_imu_calib',
-                plugin='multicam_imu_calib::FrontEndComponent',
-                namespace=LaunchConfig('ns'),
-                parameters=[{'config_file': LaunchConfig('config_file')}],
-                remappings=[('foo', 'bar')],
-                extra_arguments=[{'use_intra_process_comms': True}],
+                name="front_end",
+                package="multicam_imu_calib",
+                plugin="multicam_imu_calib::FrontEndComponent",
+                namespace=LaunchConfig("ns"),
+                parameters=[{"config_file": LaunchConfig("config_file")}],
+                remappings=[("foo", "bar")],
+                extra_arguments=[{"use_intra_process_comms": True}],
             ),
             ComposableNode(
-                name='calibration',
-                package='multicam_imu_calib',
-                plugin='multicam_imu_calib::CalibrationComponent',
-                namespace=LaunchConfig('ns'),
-                parameters=[{'config_file': LaunchConfig('config_file')}],
-                remappings=[('foo', 'bar')],
-                extra_arguments=[{'use_intra_process_comms': True}],
+                name="calibration",
+                package="multicam_imu_calib",
+                plugin="multicam_imu_calib::CalibrationComponent",
+                namespace=LaunchConfig("ns"),
+                parameters=[{"config_file": LaunchConfig("config_file")}],
+                remappings=[("foo", "bar")],
+                extra_arguments=[{"use_intra_process_comms": True}],
             ),
         ],
-        output='screen',
+        output="screen",
     )
     return [container]
 
@@ -61,11 +61,11 @@ def generate_launch_description():
     return launch.LaunchDescription(
         [
             LaunchArg(
-                'ns',
-                default_value=['multicam_imu_calibration'],
-                description='namespace for calibration',
+                "ns",
+                default_value=["multicam_imu_calibration"],
+                description="namespace for calibration",
             ),
-            LaunchArg('config_file', description='path to configuration file'),
+            LaunchArg("config_file", description="path to configuration file"),
             OpaqueFunction(function=launch_setup),
         ]
     )

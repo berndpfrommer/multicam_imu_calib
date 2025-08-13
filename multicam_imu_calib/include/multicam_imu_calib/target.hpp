@@ -23,7 +23,7 @@
 #include <multicam_imu_calib/detector_loader.hpp>
 #include <multicam_imu_calib/factor_key.hpp>
 #include <multicam_imu_calib/value_key.hpp>
-#include <multicam_imu_calib_msgs/msg/detection.hpp>
+#include <multicam_imu_calib_msgs/msg/target.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <string>
 #include <unordered_map>
@@ -37,10 +37,10 @@ public:
   virtual ~Target() {}
   using SharedPtr = std::shared_ptr<Target>;
   using Image = sensor_msgs::msg::Image;
-  using Detection = multicam_imu_calib_msgs::msg::Detection;
+  using TargetMsg = multicam_imu_calib_msgs::msg::Target;
   enum Type { INVALID, APRILTAG_BOARD };
 
-  virtual Detection detect(const Image::ConstSharedPtr & img) = 0;
+  virtual TargetMsg detect(const Image::ConstSharedPtr & img) = 0;
   // getters
   Type getType() const { return (type_); }
   const auto & getName() const { return (name_); }
