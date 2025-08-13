@@ -120,10 +120,10 @@ DetectionDraw::DetectionDraw(const rclcpp::NodeOptions & options)
       }
     };
   image_pub_ = image_transport::create_publisher(
-    this, "image_tags", rmw_qos_profile_default, pub_options);
+    this, "image_tags", convert_profile(rmw_qos_profile_default), pub_options);
 #else
   image_pub_ = image_transport::create_publisher(
-    this, "image_tags", rmw_qos_profile_default));
+    this, "image_tags", convert_profile(rmw_qos_profile_default));
 
   // Since the early ROS2 image transport does not call back when
   // subscribers come and go: must check by polling
