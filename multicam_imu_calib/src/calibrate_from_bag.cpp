@@ -46,11 +46,11 @@ int main(int argc, char ** argv)
   rclcpp::executors::SingleThreadedExecutor exec;
 #endif
   const bool use_ipc = false;
-  rclcpp::NodeOptions node_options;
-  node_options.use_intra_process_comms(use_ipc);
+  rclcpp::NodeOptions calib_options;
+  calib_options.use_intra_process_comms(use_ipc);
 
   auto calib_node =
-    std::make_shared<multicam_imu_calib::CalibrationComponent>(node_options);
+    std::make_shared<multicam_imu_calib::CalibrationComponent>(calib_options);
   const bool detect_only =
     calib_node->declare_parameter<bool>("detect_only", false);
   const bool debug_images =

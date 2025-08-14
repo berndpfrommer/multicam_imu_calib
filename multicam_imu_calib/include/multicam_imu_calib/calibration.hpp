@@ -56,6 +56,7 @@ public:
   void runCameraDiagnostics(const std::string & out_dir);
   void setAddInitialIMUPosePrior(bool f) { add_initial_imu_pose_prior_ = f; }
   void setAnyTargetHasPose(bool f) { any_target_has_pose_ = f; }
+  void setUseHuberNorm(bool f) { use_huber_norm_ = f; }
 
   void writeResults(const std::string & outDir);
   const auto & getCameras() { return (cameras_); }
@@ -152,6 +153,7 @@ private:
   value_key_t T_w_o_key_{-1};
   factor_key_t T_w_o_prior_key_{-1};
   DebugLevel debug_level_{DebugLevel::OFF};
+  bool use_huber_norm_{true};
 };
 }  // namespace multicam_imu_calib
 #endif  // MULTICAM_IMU_CALIB__CALIBRATION_HPP_

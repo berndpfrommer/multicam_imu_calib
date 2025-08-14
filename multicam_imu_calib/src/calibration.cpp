@@ -226,8 +226,16 @@ void Calibration::parseCameras(const YAML::Node & cameras)
       found_pose = true;
     }
     const double pxn = c["pixel_noise"] ? c["pixel_noise"].as<double>() : 1.0;
-    cam->setPixelNoise(
-      gtsam::noiseModel::Diagonal::Sigmas(gtsam::Vector2::Constant(pxn)));
+    if (use_huber_norm_) {
+      LOG_INFO("using huber norm for camera " << cam->getName());
+      cam->setPixelNoise(gtsam::noiseModel::Robust::Create(
+        gtsam::noiseModel::mEstimator::Huber::Create(1.345),
+        gtsam::noiseModel::Diagonal::Sigmas(gtsam::Vector2::Constant(pxn))));
+    } else {
+      LOG_INFO("NOT using huber norm for camera " << cam->getName());
+      cam->setPixelNoise(
+        gtsam::noiseModel::Diagonal::Sigmas(gtsam::Vector2::Constant(pxn)));
+    }
     parseIntrinsicsAndDistortionModel(cam, c);
     cam->setImageTopic(
       c["image_topic"] ? c["image_topic"].as<std::string>() : std::string(""));

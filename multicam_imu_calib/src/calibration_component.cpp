@@ -194,11 +194,13 @@ CalibrationComponent::CalibrationComponent(const rclcpp::NodeOptions & opt)
   detector_loader_ = std::make_shared<multicam_imu_calib::DetectorLoader>();
   calib_ = std::make_shared<Calibration>();
   calib_->setDebugLevel(debug_level_);
+  const bool uhn = safe_declare<bool>("use_huber_norm", true);
+  calib_->setUseHuberNorm(uhn);  // must happen before config file reading!
+  LOG_INFO((uhn ? "" : "NOT ") << "using Huber norm");
   calib_->readConfigFile(
     safe_declare<std::string>("config_file", ""), detector_loader_);
   calib_->initializeCameraPosesAndIntrinsics();
   calib_->initializeIMUPoses();
-
   srvs_calib_ = this->create_service<std_srvs::srv::Trigger>(
     "calibrate", std::bind(
                    &CalibrationComponent::calibrate, this,

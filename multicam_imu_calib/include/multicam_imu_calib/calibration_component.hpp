@@ -105,8 +105,11 @@ private:
     try {
       return (this->declare_parameter<T>(name, def));
     } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & e) {
-      return (this->get_parameter_or<T>(name, def));
+      // fallthrough here
     }
+    T v(def);
+    (void)this->get_parameter<T>(name, v);
+    return (v);
   }
   void subscribe();
   void processMsg(const TargetArray::ConstSharedPtr & msg);

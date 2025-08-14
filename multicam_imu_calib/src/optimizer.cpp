@@ -283,7 +283,8 @@ std::vector<factor_key_t> Optimizer::addProjectionFactors(
   return (factors);
 }
 
-class Foo : public gtsam::ExpressionFactor<gtsam::Point2>
+// helper class to get to the protected expression_ variable
+class ExpressionFactorDerived : public gtsam::ExpressionFactor<gtsam::Point2>
 {
 public:
   const gtsam::Expression<gtsam::Point2> & getExpression() const
@@ -296,7 +297,7 @@ std::tuple<gtsam::Point2, gtsam::Point2> Optimizer::getProjection(
   const factor_key_t & k, bool opt) const
 {
   std::tuple<gtsam::Point2, gtsam::Point2> errs;
-  const auto & f = reinterpret_cast<Foo &>(*graph_.at(k));
+  const auto & f = reinterpret_cast<ExpressionFactorDerived &>(*graph_.at(k));
   const gtsam::Point2 p_pred =
     f.getExpression().value(opt ? optimized_values_ : values_);
   std::get<0>(errs) = f.measured();
@@ -324,7 +325,7 @@ std::tuple<double, double> Optimizer::optimize()
     gtsam::LevenbergMarquardtParams lmp;
     lmp.setVerbosity("ERROR");
     lmp.setMaxIterations(200);
-    lmp.setAbsoluteErrorTol(1e-7);
+    lmp.setAbsoluteErrorTol(1e-9);
     lmp.setRelativeErrorTol(0);
     gtsam::LevenbergMarquardtOptimizer lmo(graph_, values_, lmp);
     const double initial_error = lmo.error();
