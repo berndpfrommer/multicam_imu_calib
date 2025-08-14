@@ -30,11 +30,7 @@ EnhancedPlayer::EnhancedPlayer(
 bool EnhancedPlayer::hasTopics(const std::vector<std::string> & topics)
 {
   bool all_there = true;
-#ifdef HAS_GET_PUBLISHERS
-  const auto pubs = this->get_publishers();
-#else
-  const auto pubs = this->publishers_;
-#endif
+  const auto pubs = this->getPublishers();
   for (const auto & topic : topics) {
     if (pubs.find(topic) == pubs.end()) {
       LOG_ERROR("topic " << topic << " is not in bag!");
@@ -48,7 +44,7 @@ bool EnhancedPlayer::hasImageTopics(
   const std::vector<std::pair<std::string, std::string>> & topics)
 {
   bool all_there = true;
-  const auto pubs = rosbag2_transport::Player::get_publishers();
+  const auto pubs = this->getPublishers();
   for (const auto & topic : topics) {
     const auto image_topic =
       topic.first + (topic.second == "raw" ? "" : "/" + topic.second);
@@ -66,7 +62,7 @@ bool EnhancedPlayer::hasEitherTopics(
 {
   assert(image_topics.size() == detection_topics.size());
   bool all_there = true;
-  const auto pubs = rosbag2_transport::Player::get_publishers();
+  const auto pubs = this->getPublishers();
   for (size_t i = 0; i < image_topics.size(); i++) {
     const auto itop = image_topics[i];
     const auto image_topic =
@@ -90,7 +86,7 @@ bool EnhancedPlayer::hasEitherTopics(
 std::set<std::string> EnhancedPlayer::getTopics()
 {
   std::set<std::string> topics;
-  const auto pubs = rosbag2_transport::Player::get_publishers();
+  const auto pubs = this->getPublishers();
   for (const auto & kv : pubs) {
     topics.insert(kv.first);
   }

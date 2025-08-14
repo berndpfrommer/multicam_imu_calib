@@ -39,6 +39,16 @@ public:
   std::set<std::string> getTopics();
   static std::shared_ptr<multicam_imu_calib::EnhancedPlayer> makePlayerNode(
     CalibrationComponent * calib);
+
+private:
+  auto getPublishers()
+  {
+#ifdef HAS_GET_PUBLISHERS
+    return (this->get_publishers());
+#else
+    return (publishers_);
+#endif
+  }
 };
 
 }  // namespace multicam_imu_calib
