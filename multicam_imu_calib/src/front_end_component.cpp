@@ -34,7 +34,15 @@ FrontEndComponent::ImageHandler::ImageHandler(
       std::bind(
         &FrontEndComponent::ImageHandler::imageCallback, this,
         std::placeholders::_1),
-      transport, rmw_qos_profile_default));
+      transport,
+#ifdef IMAGE_TRANSPORT_USE_QOS
+      rclcpp::QoS(
+        rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_default),
+        rmw_qos_profile_default)
+#else
+      rmw_qos_profile_default
+#endif
+        ));
   detection_pub_ = node->create_publisher<TargetArray>(det_topic, 100);
   for (size_t i = 0; i < num_threads; i++) {
     this->threads_.push_back(std::make_shared<std::thread>(

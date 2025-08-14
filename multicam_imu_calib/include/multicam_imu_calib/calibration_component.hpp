@@ -16,7 +16,11 @@
 #ifndef MULTICAM_IMU_CALIB__CALIBRATION_COMPONENT_HPP_
 #define MULTICAM_IMU_CALIB__CALIBRATION_COMPONENT_HPP_
 
+#if __has_include(<tf2_ros/transform_broadcaster.hpp>)
+#include <tf2_ros/transform_broadcaster.hpp>
+#else
 #include <tf2_ros/transform_broadcaster.h>
+#endif
 
 #include <deque>
 #include <geometry_msgs/msg/transform_stamped.hpp>

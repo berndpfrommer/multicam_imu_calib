@@ -30,7 +30,11 @@ EnhancedPlayer::EnhancedPlayer(
 bool EnhancedPlayer::hasTopics(const std::vector<std::string> & topics)
 {
   bool all_there = true;
-  const auto pubs = rosbag2_transport::Player::get_publishers();
+#ifdef HAS_GET_PUBLISHERS
+  const auto pubs = this->get_publishers();
+#else
+  const auto pubs = this->publishers_;
+#endif
   for (const auto & topic : topics) {
     if (pubs.find(topic) == pubs.end()) {
       LOG_ERROR("topic " << topic << " is not in bag!");

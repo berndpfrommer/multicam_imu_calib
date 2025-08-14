@@ -50,6 +50,10 @@ if(${image_transport_VERSION} VERSION_GREATER_EQUAL "6.3.0")
   add_definitions(-DIMAGE_TRANSPORT_USE_QOS)
 endif()
 
+if(${rosbag2_transport_VERSION} VERSION_GREATER_EQUAL "0.20.0")
+  add_definitions(-DHAS_GET_PUBLISHERS)
+endif()
+
 #
 # --------- library
 #
