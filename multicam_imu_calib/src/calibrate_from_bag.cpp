@@ -48,6 +48,7 @@ int main(int argc, char ** argv)
   const bool use_ipc = false;
   rclcpp::NodeOptions calib_options;
   calib_options.use_intra_process_comms(use_ipc);
+  calib_options.parameter_overrides({Parameter("use_sim_time", true)});
 
   auto calib_node =
     std::make_shared<multicam_imu_calib::CalibrationComponent>(calib_options);
@@ -103,6 +104,7 @@ int main(int argc, char ** argv)
       recorded_topics.push_back(debug_image);
     }
     draw_options.arguments(remap);
+    draw_options.parameter_overrides({Parameter("use_sim_time", true)});
     draw_node =
       std::make_shared<multicam_imu_calib::DetectionDraw>(draw_options);
 #ifndef USE_RMW
@@ -113,7 +115,9 @@ int main(int argc, char ** argv)
 
   rclcpp::NodeOptions frontend_options;
   frontend_options.use_intra_process_comms(use_ipc);
-  frontend_options.append_parameter_override("subscribe", false);
+  frontend_options.parameter_overrides(
+    {Parameter("subscribe", false), Parameter("use_sim_time", true)});
+
   auto frontend_node =
     std::make_shared<multicam_imu_calib::FrontEndComponent>(frontend_options);
   frontend_node->setDetectorLoader(calib_node->getDetectorLoader());
@@ -131,7 +135,7 @@ int main(int argc, char ** argv)
     rclcpp::NodeOptions recorder_options;
     recorder_options.use_intra_process_comms(use_ipc);
     recorder_options.parameter_overrides(
-      {Parameter("storage.uri", out_uri),
+      {Parameter("use_sim_time", true), Parameter("storage.uri", out_uri),
        Parameter("record.disable_keyboard_controls", true),
        Parameter("record.topics", recorded_topics)});
 
