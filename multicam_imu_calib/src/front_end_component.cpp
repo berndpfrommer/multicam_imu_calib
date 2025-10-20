@@ -30,7 +30,12 @@ FrontEndComponent::ImageHandler::ImageHandler(
 {
   image_sub_ = std::make_shared<image_transport::Subscriber>(
     image_transport::create_subscription(
-      node, img_topic,
+#ifdef IMAGE_TRANSPORT_USE_NODEINTERFACE
+      *node,
+#else
+      node,
+#endif
+      img_topic,
       std::bind(
         &FrontEndComponent::ImageHandler::imageCallback, this,
         std::placeholders::_1),

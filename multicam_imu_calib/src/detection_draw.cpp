@@ -120,7 +120,12 @@ DetectionDraw::DetectionDraw(const rclcpp::NodeOptions & options)
       }
     };
   image_pub_ = image_transport::create_publisher(
-    this, "image_tags", convert_profile(rmw_qos_profile_default), pub_options);
+#ifdef IMAGE_TRANSPORT_USE_NODEINTERFACE
+    *this,
+#else
+    this,
+#endif
+    "image_tags", convert_profile(rmw_qos_profile_default), pub_options);
 #else
   image_pub_ = image_transport::create_publisher(
     this, "image_tags", convert_profile(rmw_qos_profile_default));
@@ -148,7 +153,12 @@ void DetectionDraw::subscribe()
     std::bind(&DetectionDraw::tagCallback, this, std::placeholders::_1));
   image_sub_ = std::make_shared<image_transport::Subscriber>(
     image_transport::create_subscription(
-      this, "image",
+#ifdef IMAGE_TRANSPORT_USE_NODEINTERFACE
+      *this,
+#else
+      this,
+#endif
+      "image",
       std::bind(&DetectionDraw::imageCallback, this, std::placeholders::_1),
       transport_, convert_profile(rmw_qos_profile_default)));
   is_subscribed_ = true;

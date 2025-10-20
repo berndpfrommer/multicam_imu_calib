@@ -42,9 +42,7 @@ static void printTopics(
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
-#ifndef USE_RMW
   rclcpp::executors::SingleThreadedExecutor exec;
-#endif
   const bool use_ipc = false;
   rclcpp::NodeOptions calib_options;
   calib_options.use_intra_process_comms(use_ipc);
@@ -151,16 +149,16 @@ int main(int argc, char ** argv)
 #ifndef USE_RMW
     exec.spin_some();
 #else
-    rclcpp::spin_some(player_node);
+    exec.spin_node_some(player_node);
     if (!detect_only) {
-      rclcpp::spin_some(calib_node);
+      exec.spin_node_some(calib_node);
     }
-    rclcpp::spin_some(frontend_node);
+    exec.spin_node_some(frontend_node);
     if (draw_node) {
-      rclcpp::spin_some(draw_node);
+      exec.spin_node_some(draw_node);
     }
     if (recorder_node) {
-      rclcpp::spin_some(recorder_node);
+      exec.spin_node_some(recorder_node);
     }
 #endif
   }
