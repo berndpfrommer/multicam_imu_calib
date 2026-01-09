@@ -228,10 +228,16 @@ void CalibrationComponent::calibrate(
   LOG_INFO("calibration complete!");
   const auto out_path =
     safe_declare<std::string>("calib_output_path", "results");
-  calib_->writeResults(out_path);
-  LOG_INFO("results written to " << out_path);
-  res->success = true;
-  res->message = "calib complete";
+  try {
+    calib_->writeResults(out_path);
+    LOG_INFO("results written to " << out_path);
+    res->success = true;
+    res->message = "calib complete";
+  } catch (const std::exception & e) {
+    LOG_ERROR("exception writing results: " << e.what());
+    res->success = false;
+    res->message = "calib write failed";
+  }
 }
 
 void CalibrationComponent::runDiagnostics()

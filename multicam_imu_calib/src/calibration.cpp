@@ -383,7 +383,9 @@ static YAML::Node updateIntrinsicsAndDistortion(
   n.remove("distortion_model");
   n["intrinsics"] = makeIntrinsics(mean.block<4, 1>(0, 0));
   n["intrinsics_sigma"] = makeIntrinsics(cov.diagonal(0).block<4, 1>(0, 0));
-  const auto mask = dist["coefficient_mask"].as<std::vector<int>>();
+  std::vector<int> mask = dist["coefficient_mask"]
+                            ? dist["coefficient_mask"].as<std::vector<int>>()
+                            : std::vector<int>(reorder.size(), 1);
   dist["coefficients"] =
     coeffVectorToYaml(mean.tail(reorder.size()), reorder, 5, mask, 0.0);
   dist["coefficient_sigma"] = coeffVectorToYaml(
