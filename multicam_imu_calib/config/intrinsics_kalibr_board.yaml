@@ -1,0 +1,34 @@
+#
+# Example file for single-camera calibration with Kalibr-style board
+#
+targets:
+  - name: "apriltag board mit"
+    type: "apriltag_board"
+    detector: "mit"
+    family: "tf36h11"
+    border_width: 2
+    starting_tag_id: 0
+    tag_size: 0.1
+    rows: 9
+    distance_rows: 0.13
+    columns: 7
+    distance_columns: 0.13
+  
+cameras:
+  - name: eb_0
+    image_topic: /event_camera/events/image
+    image_transport: raw
+    pixel_noise: 1.0
+    intrinsics:
+      fx: 1272.25
+      fy: 1271.30
+      cx: 617.64
+      cy: 396.10
+    resolution: [1280, 720]
+    distortion_model:
+      type: radtan
+      coefficients:
+        - -0.23
+        - 0.25
+        - 0.0
+        - 0.0
