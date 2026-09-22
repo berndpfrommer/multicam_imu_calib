@@ -103,7 +103,14 @@ This will produce calibration output results in the output directory:
 - ``${path_to_output_bag}``: ROS messages with pose of the camera rig, transforms, apriltag detections, and debug images (with tags drawn onto)
 - ``projections.txt``: ROS header timestamps (first column), observed image points (2nd + 3rd) and projected image points (4th and 5th)
 
-Hint: when debugging outlier points (found in ``projections.txt``) make sure to look at the header stamp of the corresponding image in the rosbag. You can the header stamp with ``rqt_bag`` by looking at ``raw`` data alongside the image.
+Hint: when debugging outlier points (found in ``projections.txt``) make sure to look at the header stamp of the corresponding image in
+the rosbag. You can view the header stamp with ``rqt_bag`` by looking at ``raw`` data alongside the image.
+
+After the calibration has finished, the results can be displayed with the diagnostics python script:
+
+```bash
+ros2 run multicam_imu_calib diagnostics.py -f ./results/projections.txt
+```
 
 ### Online calibration
 
