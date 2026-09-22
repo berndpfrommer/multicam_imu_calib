@@ -308,6 +308,10 @@ void Calibration::readConfigFile(
   if (config_.IsNull()) {
     BOMB_OUT("cannot open config file: " << file);
   }
+  YAML::Node opt = config_["optimizer"];
+  if (opt.IsMap()) {
+    parseOptimizerOptions(opt);
+  }
   YAML::Node cameras = config_["cameras"];
   if (!cameras.IsSequence()) {
     BOMB_OUT("config file has no list of cameras!");
@@ -318,6 +322,18 @@ void Calibration::readConfigFile(
     parseIMUs(imus);
   }
   targets_ = Target::readConfigFile(file, dl);
+}
+
+void Calibration::parseOptimizerOptions(const YAML::Node & opt)
+{
+  if (opt["max_iterations"]) {
+    const int n = opt["max_iterations"].as<int>();
+    LOG_INFO("setting max optimizer iterations to " << n);
+    optimizer_->setMaxIterations(n);
+  }
+  if (opt["use_huber_norm"]) {
+    use_huber_norm_ = opt["use_huber_norm"].as<bool>();
+  }
 }
 
 value_key_t Calibration::addPose(
@@ -416,6 +432,7 @@ void Calibration::writeResults(const std::string & out_dir)
       default:
         BOMB_OUT("invalid distortion model!");
     }
+    LOG_INFO("getting covariances for camera " << cam->getName());
     const gtsam::Matrix intr_cov =
       optimizer_->getMarginalCovariance(cam->getIntrinsicsKey(), true);
     calib["cameras"][cam_id] = updateIntrinsicsAndDistortion(
@@ -427,6 +444,7 @@ void Calibration::writeResults(const std::string & out_dir)
   }
   for (size_t imu_id = 0; imu_id < imu_list_.size(); imu_id++) {
     const auto & imu = imu_list_[imu_id];
+    LOG_INFO("getting covariances for imu " << imu->getName());
     calib["imus"][imu_id].remove("pose");  // for pretty display in output
     calib["imus"][imu_id]["pose"] = poseWithNoiseToYaml(
       optimizer_->getPose(imu->getPoseKey(), true),

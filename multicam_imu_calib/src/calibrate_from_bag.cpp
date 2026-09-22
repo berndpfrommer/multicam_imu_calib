@@ -82,16 +82,15 @@ int main(int argc, char ** argv)
   exec.add_node(player_node);
 #endif
 
-  rclcpp::NodeOptions draw_options;
-  std::shared_ptr<multicam_imu_calib::DetectionDraw> draw_node;
+  std::vector<std::shared_ptr<multicam_imu_calib::DetectionDraw>> draw_nodes;
   if (debug_images) {
     const auto img_topics = calib_node->getImageTopics();
     if (img_topics.size() != det_topics.size()) {
       BOMB_OUT("image and detection topics must match!");
     }
-    std::vector<std::string> remap{"--ros-args"};
-    // std::vector<std::string> remap;
     for (size_t i = 0; i < img_topics.size(); i++) {
+      rclcpp::NodeOptions draw_options;
+      std::vector<std::string> remap{"--ros-args"};
       remap.push_back("--remap");
       remap.push_back("image:=" + img_topics[i].first);
       remap.push_back("--remap");
@@ -100,14 +99,15 @@ int main(int argc, char ** argv)
       const auto debug_image = img_topics[i].first + "/debug_image";
       remap.push_back("image_tags:=" + debug_image);
       recorded_topics.push_back(debug_image);
-    }
-    draw_options.arguments(remap);
-    draw_options.parameter_overrides({Parameter("use_sim_time", true)});
-    draw_node =
-      std::make_shared<multicam_imu_calib::DetectionDraw>(draw_options);
+      draw_options.arguments(remap);
+      draw_options.parameter_overrides({Parameter("use_sim_time", true)});
+      auto draw_node = std::make_shared<multicam_imu_calib::DetectionDraw>(
+        draw_options, "draw_" + std::to_string(i));
+      draw_nodes.push_back(draw_node);
 #ifndef USE_RMW
-    exec.add_node(draw_node);
+      exec.add_node(draw_nodes.back());
 #endif
+    }
   }
   printTopics("recorded topics", recorded_topics);
 
@@ -154,8 +154,12 @@ int main(int argc, char ** argv)
       exec.spin_node_some(calib_node);
     }
     exec.spin_node_some(frontend_node);
-    if (draw_node) {
+    for (const auto & draw_node : draw_nodes) {
       exec.spin_node_some(draw_node);
+      if (recorder_node) {
+        // needed some extra spins to get all messages recorded
+        exec.spin_node_some(recorder_node);
+      }
     }
     if (recorder_node) {
       exec.spin_node_some(recorder_node);

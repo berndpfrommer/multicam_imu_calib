@@ -115,6 +115,7 @@ private:
     const Camera::SharedPtr & cam, const YAML::Node & cam_node);
   void parseCameras(const YAML::Node & cameras);
   void parseIMUs(const YAML::Node & imus);
+  void parseOptimizerOptions(const YAML::Node & opt);
   bool applyIMUData(uint64_t t);
   std::vector<StampedAttitude> getRigAttitudes(
     const std::vector<uint64_t> & times) const;

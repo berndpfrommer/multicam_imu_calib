@@ -99,8 +99,9 @@ static const rmw_qos_profile_t & convert_profile(const rmw_qos_profile_t & p)
 }
 #endif
 
-DetectionDraw::DetectionDraw(const rclcpp::NodeOptions & options)
-: Node("detection_draw", options)
+DetectionDraw::DetectionDraw(
+  const rclcpp::NodeOptions & options, const std::string & name)
+: Node(name, options)
 {
   transport_ = declare_parameter<std::string>("image_transport", "raw");
   max_queue_size_ = declare_parameter<int>("max_queue_size", 200);
