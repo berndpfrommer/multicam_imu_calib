@@ -323,14 +323,17 @@ std::tuple<double, double> Optimizer::optimize()
     optimized_values_ = isam2_->calculateEstimate();
 #else
     gtsam::LevenbergMarquardtParams lmp;
-    lmp.setVerbosity("ERROR");
-    lmp.setMaxIterations(200);
+    lmp.setVerbosity("VALUES");
+    lmp.setMaxIterations(max_iterations_);
     lmp.setAbsoluteErrorTol(1e-9);
     lmp.setRelativeErrorTol(0);
     gtsam::LevenbergMarquardtOptimizer lmo(graph_, values_, lmp);
     const double initial_error = lmo.error();
     LOG_INFO("start error: " << initial_error);
     optimized_values_ = lmo.optimize();
+    if (lmo.iterations() >= lmp.getMaxIterations()) {
+      LOG_WARN("optimizer reached max iterations: " << lmp.getMaxIterations());
+    }
     LOG_INFO(
       "final error: " << lmo.error() << " after iter: " << lmo.iterations());
 #endif

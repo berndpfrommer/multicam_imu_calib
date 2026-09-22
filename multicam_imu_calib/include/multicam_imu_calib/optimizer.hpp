@@ -48,7 +48,7 @@ public:
   void addCamera(const Camera::SharedPtr & cam);
   void addIMU(const IMU::SharedPtr & imu);
   std::tuple<double, double> optimize();
-  void setPixelNoise(double noise);
+  void setMaxIterations(int n) { max_iterations_ = n; }
   value_key_t addPose(const std::string & label, const gtsam::Pose3 & p);
 
   template <class T>
@@ -146,6 +146,7 @@ private:
   std::unordered_map<value_key_t, std::string> value_to_name_;
   DebugLevel debug_level_;
   size_t num_projection_factors_{0};
+  int max_iterations_{200};
 };
 
 }  // namespace multicam_imu_calib
