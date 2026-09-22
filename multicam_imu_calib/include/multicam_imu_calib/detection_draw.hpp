@@ -31,7 +31,9 @@ using Image = sensor_msgs::msg::Image;
 class DetectionDraw : public rclcpp::Node
 {
 public:
-  explicit DetectionDraw(const rclcpp::NodeOptions & options, const std::string &name="detection_draw");
+  explicit DetectionDraw(
+    const rclcpp::NodeOptions & options,
+    const std::string & name = "detection_draw");
   ~DetectionDraw();
 
   bool isSubscribed() const { return (is_subscribed_); }

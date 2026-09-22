@@ -24,12 +24,15 @@ import numpy as np
 
 def main(fname):
     a = np.loadtxt(fname)
-    cam_idx = np.unique(a[:, 0]).astype(np.uint32)
+    cam_col = 1
+    cam_idx = np.unique(a[:, cam_col]).astype(np.uint32)
     cutoff = 5
+    start_ip = 0
+    start_pp = 2
     for i in cam_idx:
-        pts = a[a[:, 0].astype(np.uint32) == i, 2:]
-        dx = pts[:, 0] - pts[:, 2]
-        dy = pts[:, 1] - pts[:, 3]
+        pts = a[a[:, cam_col].astype(np.uint32) == i, 2:]
+        dx = pts[:, start_pp] - pts[:, start_ip]
+        dy = pts[:, start_pp + 1] - pts[:, start_ip + 1]
         hx, bx = np.histogram(
             dx[np.abs(dx) < np.std(dx) * cutoff], bins=100, density=True
         )
@@ -40,11 +43,20 @@ def main(fname):
         plt.plot(0.5 * (by[:-1] + by[1:]), hy, label="error in y")
         plt.legend()
         plt.title(f"error distribution for camera {i}")
+        plt.xlabel("error [pixels]")
+        plt.ylabel("probability density")
         plt.show()
-
+        plt.scatter(dx, dy, s=8, label="projection error")
+        plt.title(f"projection errors cam {i}")
+        plt.axis("equal")
+        plt.xlabel("error in x [pixels]")
+        plt.ylabel("error in y [pixels]")
+        plt.show()
         plt.scatter(pts[:, 0], pts[:, 1], s=8, label="image points")
         plt.scatter(pts[:, 2], pts[:, 3], s=8, label="projected points")
-        plt.title(f"projection error cam {i}")
+        plt.xlabel("x [pixels]")
+        plt.ylabel("y [pixels]")
+        plt.title(f"projections and points cam {i}")
         plt.show()
 
 

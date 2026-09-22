@@ -323,7 +323,7 @@ std::tuple<double, double> Optimizer::optimize()
     optimized_values_ = isam2_->calculateEstimate();
 #else
     gtsam::LevenbergMarquardtParams lmp;
-    lmp.setVerbosity("VALUES");
+    lmp.setVerbosity("ERROR");
     lmp.setMaxIterations(max_iterations_);
     lmp.setAbsoluteErrorTol(1e-9);
     lmp.setRelativeErrorTol(0);

@@ -938,8 +938,8 @@ void Calibration::runCameraDiagnostics(const std::string & out_dir)
         const auto [ip, proj] = optimizer_->getProjection(k, true);
         const auto res = ip - proj;
         const double err = res(0) * res(0) + res(1) * res(1);
-        err_file << t << " " << ip.transpose() << " " << proj.transpose() << " "
-                 << err << std::endl;
+        err_file << t << " " << cam_idx << " " << ip.transpose() << " "
+                 << proj.transpose() << " " << err << std::endl;
         if (err > max_err) {
           max_err = err;
           max_t = t;
