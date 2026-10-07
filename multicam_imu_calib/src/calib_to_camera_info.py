@@ -62,9 +62,7 @@ def to_camerainfo(k, camera_input_name, camera_output_name):
         distortion_model = "fisheye"
     y["image_width"] = 1920
     y["image_height"] = 1024
-    y["camera_name"] = (
-        k["image_topic"] if camera_input_name is None else camera_input_name
-    )
+    y["camera_name"] = camera_output_name
     y["camera_matrix"] = {"rows": 3, "cols": 3, "data": intrinsics.flatten()}
     y["distortion_model"] = distortion_model
     dc = k["distortion_model"]["coefficients"]
