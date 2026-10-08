@@ -168,6 +168,8 @@ def main():
             tf_idx = 1 if i == 0 else i
             tf_sym = "T_" + out_names[tf_idx] + "_" + out_names[tf_idx - 1]
             camerainfo_dict[tf_sym] = tf_to_yaml(transforms[tf_idx])
+            T_b_c = tf_to_yaml(tf_transformations.identity_matrix())
+            camerainfo_dict["T_b_c"] = tf_to_yaml(tf_transformations.identity_matrix())
             write_yaml(camerainfo_dict, out_names[i] + ".yaml")
         else:
             print(f("WARNING: camera with name {cam_name} not found in file!"))
