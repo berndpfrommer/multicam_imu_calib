@@ -60,8 +60,8 @@ def to_camerainfo(k, camera_input_name, camera_output_name):
         distortion_model = "plumb_bob"
     elif distortion_model == "equidistant":
         distortion_model = "fisheye"
-    y["image_width"] = 1920
-    y["image_height"] = 1024
+    y["image_width"] = k["resolution"][0]
+    y["image_height"] = k["resolution"][1]
     y["camera_name"] = camera_output_name
     y["camera_matrix"] = {"rows": 3, "cols": 3, "data": intrinsics.flatten()}
     y["distortion_model"] = distortion_model
